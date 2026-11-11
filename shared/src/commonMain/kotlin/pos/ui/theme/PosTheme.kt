@@ -63,7 +63,6 @@ private fun text(size: Int, lineHeight: Int, weight: FontWeight = FontWeight.Nor
     fontSize = size.sp,
     lineHeight = lineHeight.sp,
     fontWeight = weight,
-    color = PosPalette.Ink,
     fontFeatureSettings = "tnum",
 )
 
