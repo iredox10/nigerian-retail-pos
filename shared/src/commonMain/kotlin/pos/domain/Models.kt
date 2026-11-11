@@ -17,7 +17,7 @@ data class Product(
         require(id.isNotBlank() && tenantId.isNotBlank())
         require(name.isNotBlank() && unit.isNotBlank())
         require(priceMinor >= 0) { "Selling price cannot be negative." }
-        require(stock.isFinite() && stock >= 0) { "Stock must be a non-negative quantity." }
+        require(stock.isFinite() && stock >= 0 && stock <= 9_007_199_254_740_991.0) { "Stock must be a non-negative quantity within the supported exact range." }
     }
 }
 
