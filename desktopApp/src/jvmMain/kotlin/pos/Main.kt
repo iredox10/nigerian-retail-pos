@@ -18,20 +18,20 @@ import pos.domain.*
 import pos.data.PosRepository
 import pos.security.WorkspaceAccess
 import pos.screens.SellScreen
+import pos.screens.StockScreen
+import pos.screens.MoneyScreen
 import pos.ui.theme.PosTheme
 
 fun main() = application {
     val repository = remember { PosRepository(System.getProperty("pos.dataDir", System.getProperty("user.home") + "/.nigerian-retail-pos") + "/pos.db") }
-    Window(onCloseRequest = ::exitApplication, title = "Retail POS", state = rememberWindowState(width = 1440.dp, height = 900.dp)) {
-        PosTheme { App(repository) }
-    }
+    DesktopWindow(title = "Retail POS", onClose = ::exitApplication) { App(repository) }
 }
 
-@Composable internal fun App(repo: PosRepository, initialTenant: Tenant? = null) {
+@Composable internal fun App(repo: PosRepository, initialTenant: Tenant? = null, initialRoute: String = "Sell") {
     var tenant by remember { mutableStateOf<Tenant?>(initialTenant) }
     val access = remember { WorkspaceAccess() }
     var revision by remember { mutableIntStateOf(0) }
-    var route by remember { mutableStateOf("Sell") }
+    var route by remember { mutableStateOf(initialRoute) }
     var notice by remember { mutableStateOf<String?>(null) }
     val saleStates = rememberSaveableStateHolder()
     if (tenant == null) {
@@ -62,6 +62,12 @@ fun main() = application {
                 Row(Modifier.fillMaxWidth().height(64.dp).padding(horizontal = 24.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text(route, style = MaterialTheme.typography.headlineSmall)
                     Spacer(Modifier.weight(1f))
+                    if (route == "Sell") {
+                        val activeShift = remember(current.id, revision) { repo.activeCashShift(current.id) }
+                        TextButton(onClick = { route = "Money" }) {
+                            Text(if (activeShift == null) "Open today's cash" else "Cash drawer open")
+                        }
+                    }
                     Text("${current.name}  /  Counter 1", style = MaterialTheme.typography.bodyMedium)
                 }
                 HorizontalDivider()
@@ -71,11 +77,9 @@ fun main() = application {
                         "Sell" -> saleStates.SaveableStateProvider(current.id) { SellScreen(current.id, products, customers) { lines, cash, customer, operationId ->
                             try { repo.checkout(current.id, lines, cash, customer, operationId); revision++; null } catch (e: Exception) { e.message ?: "Sale not saved" }
                         } }
-                        "Stock" -> StockScreen(products) { name, unit, price, stock ->
-                            try { repo.addProduct(current.id, name, unit, price, stock); revision++; null } catch(e: Exception) { e.message }
-                        }
-                        "Customers" -> CustomerScreen(customers, { name -> repo.addCustomer(current.id, name); revision++ }, { id, amount ->
-                            try { repo.recordRepayment(current.id, id, amount); revision++; null } catch(e:Exception) { e.message ?: "Payment not saved" }
+                        "Stock" -> StockScreen(repo, current.id) { revision++ }
+                        "Customers" -> CustomerScreen(customers, { name -> repo.addCustomer(current.id, name); revision++ }, { id, amount, operationId ->
+                            try { repo.recordRepayment(current.id, id, amount, operationId); revision++; null } catch(e:Exception) { e.message ?: "Payment not saved" }
                         })
                         "Sales" -> {
                             val sales = remember(current.id, revision) { repo.sales(current.id) }
@@ -85,36 +89,27 @@ fun main() = application {
                                 items(sales) { sale -> Surface(shape = MaterialTheme.shapes.medium) { Column(Modifier.fillMaxWidth().padding(20.dp)) {
                                     Row { Text("Receipt ${sale.id.takeLast(8).uppercase()}", Modifier.weight(1f), fontWeight = FontWeight.SemiBold); Text(money(sale.totalMinor), fontWeight = FontWeight.SemiBold) }
                                     Text(sale.createdAt, style = MaterialTheme.typography.bodySmall)
-                                    Text(if(sale.creditMinor > 0) "Customer owes ${money(sale.creditMinor)}" else "Paid in cash")
+                                    Text(if(sale.creditMinor > 0) "Credit at sale: ${money(sale.creditMinor)} · See Customers for current debt" else "Paid in cash")
                                     sale.lines.forEach { Text("${it.quantity} ${it.product.unit} · ${it.product.name}") }
                                 } } }
                             }
                         }
-                        "Money" -> {
-                            val sales = repo.sales(current.id)
-                            Column(verticalArrangement = Arrangement.spacedBy(20.dp)) {
-                                Text("Money recorded", style = MaterialTheme.typography.headlineSmall)
-                                Text("All locally recorded sales · This shop only", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                MoneyRow("Sales", sales.sumOf { it.totalMinor })
-                                MoneyRow("Cash collected at checkout", sales.sumOf { it.cashMinor })
-                                MoneyRow("Customers still owe", customers.sumOf { it.balanceMinor })
-                                Text("Cash drawer counts, expenses and supplier payments are not implemented yet. These figures are not a cash reconciliation or profit report.", Modifier.widthIn(max = 680.dp))
-                            }
-                        }
+                        "Money" -> MoneyScreen(repo, current.id) { revision++ }
                         else -> Column(verticalArrangement = Arrangement.spacedBy(20.dp)) {
                             Text("Your shop tools", style = MaterialTheme.typography.headlineSmall)
-                            Text("Available now: local sales, products, customer credit and repayments, receipts, tenant workspaces.")
-                            Text("Coming next: staff roles, stock receiving, cash closing, returns, printing, backups, and authenticated cloud sync. These services are not connected yet.", Modifier.widthIn(max=680.dp))
+                            Text("Available now: local sales, products, stock receiving, customer credit and repayments, expenses, cash drawer closing, receipts, tenant workspaces.")
+                            Text("Coming next: staff roles, returns, printing, backups, and authenticated cloud sync. These services are not connected yet.", Modifier.widthIn(max=680.dp))
                             Text("Each shop's records are scoped by tenant. This local owner login is not a substitute for server authorization or device encryption.", Modifier.widthIn(max=680.dp))
+                            Text("Saved work: ${repo.pendingSyncCount(current.id)} local changes are waiting for online setup. No online backup has been created.", Modifier.widthIn(max=680.dp))
                         }
                     }
                 }
             }
         }
         Surface(color = MaterialTheme.colorScheme.surfaceVariant) { Row(Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 10.dp)) {
-            Text("Local storage active · Online sync not configured", style = MaterialTheme.typography.bodySmall)
+            Text("On this computer · Online services not connected", style = MaterialTheme.typography.bodySmall)
             Spacer(Modifier.weight(1f))
-            Text("${repo.pendingSyncCount(current.id)} changes awaiting online setup", style = MaterialTheme.typography.bodySmall)
+            Text("This shop only", style = MaterialTheme.typography.bodySmall)
         } }
     }
 }
@@ -150,21 +145,7 @@ fun main() = application {
 }
 
 @Composable private fun Empty(title:String,body:String) { Column(Modifier.padding(vertical=40.dp),verticalArrangement=Arrangement.spacedBy(8.dp)) { Text(title,style=MaterialTheme.typography.titleLarge);Text(body) } }
-@Composable private fun MoneyRow(label:String,amount:Long) { Row(Modifier.widthIn(max=680.dp).fillMaxWidth()) { Text(label,Modifier.weight(1f));Text(money(amount),fontWeight=FontWeight.SemiBold) } }
-
-@Composable private fun StockScreen(products:List<Product>, add:(String,String,Long,Double)->String?) {
-    var editing by remember { mutableStateOf(false) };var search by remember { mutableStateOf("") }
-    Column(verticalArrangement=Arrangement.spacedBy(16.dp)) {
-        Row(verticalAlignment=Alignment.CenterVertically) { OutlinedTextField(search,{search=it},label={Text("Search stock")},modifier=Modifier.weight(1f));Spacer(Modifier.width(16.dp));Button(shape=MaterialTheme.shapes.small,onClick={editing=true}){Text("Add item")} }
-        if(products.isEmpty()) Empty("Add your first item", "Give it a name, selling unit, price and opening stock to start selling.")
-        LazyColumn { items(products.filter { it.name.contains(search,true) }) { p -> Surface(Modifier.fillMaxWidth().padding(bottom=1.dp)) { Row(Modifier.padding(16.dp)) { Column(Modifier.weight(1f)){Text(p.name,fontWeight=FontWeight.Medium); Text("${p.stock} ${p.unit} available",style=MaterialTheme.typography.bodySmall)};Text("${money(p.priceMinor)} / ${p.unit}") } } } }
-    }
-    if(editing) EntryDialog("Add item",listOf("Item name","Selling unit (e.g. bottle)","Selling price in naira","Opening quantity"),{editing=false}) { fields ->
-        try { val price=java.math.BigDecimal(fields[2]).movePointRight(2).longValueExact(); val stock=fields[3].toDouble(); val error=add(fields[0],fields[1],price,stock); if(error==null)editing=false;error }catch(e:Exception){"Enter a valid price and opening quantity"}
-    }
-}
-
-@Composable private fun CustomerScreen(customers:List<Customer>,add:(String)->Unit,repay:(String,Long)->String?) {
+@Composable private fun CustomerScreen(customers:List<Customer>,add:(String)->Unit,repay:(String,Long,String)->String?) {
     var adding by remember { mutableStateOf(false) };var repayment by remember { mutableStateOf<Customer?>(null) }
     Column(verticalArrangement=Arrangement.spacedBy(16.dp)) {
         Row { Text("Who owes you",Modifier.weight(1f),style=MaterialTheme.typography.headlineSmall);Button(shape=MaterialTheme.shapes.small,onClick={adding=true}){Text("Add customer")} }
@@ -172,7 +153,17 @@ fun main() = application {
         LazyColumn { items(customers){ c -> Surface(Modifier.fillMaxWidth().padding(bottom=8.dp),shape=MaterialTheme.shapes.small) { Row(Modifier.padding(16.dp),verticalAlignment=Alignment.CenterVertically) { Column(Modifier.weight(1f)){Text(c.name,fontWeight=FontWeight.SemiBold);Text("Customer owes you ${money(c.balanceMinor)}")};OutlinedButton(shape=MaterialTheme.shapes.small,onClick={repayment=c},enabled=c.balanceMinor>0){Text("Record payment")} } } } }
     }
     if(adding) EntryDialog("Add customer",listOf("Customer name"),{adding=false}) { f -> try {require(f[0].isNotBlank());add(f[0]);adding=false;null}catch(e:Exception){"Enter a customer name"} }
-    repayment?.let { c -> EntryDialog("Record payment · ${c.name}",listOf("Cash received in naira"),{repayment=null}) { f -> try {val error=repay(c.id,java.math.BigDecimal(f[0]).movePointRight(2).longValueExact());if(error==null)repayment=null;error}catch(e:Exception){"Enter a valid amount"} } }
+    repayment?.let { c ->
+        val operationId = remember(c.id) { java.util.UUID.randomUUID().toString() }
+        EntryDialog("Record payment · ${c.name}",listOf("Cash received in naira"),{repayment=null}) { f ->
+            val amount = parseNaira(f[0])
+            if (amount == null) "Enter a valid amount with no more than two decimal places" else {
+                val error = repay(c.id, amount, operationId)
+                if (error == null) repayment = null
+                error
+            }
+        }
+    }
 }
 
 @Composable private fun EntryDialog(title:String,labels:List<String>,dismiss:()->Unit,save:(List<String>)->String?) {

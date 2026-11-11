@@ -92,7 +92,7 @@ private fun TenantStockScreen(repo: PosRepository, tenantId: String, onChanged: 
                                     }
                                     Text("Buying price ${money(receipt.unitCostMinor)} / ${receipt.unit} · Cash paid ${money(receipt.paidCashMinor)}",
                                         style = MaterialTheme.typography.bodySmall, color = PosPalette.Secondary)
-                                    if (receipt.unpaidMinor > 0) StatusPill("Supplier still owed ${money(receipt.unpaidMinor)}", NoticeTone.Warning)
+                                    if (receipt.unpaidMinor > 0) StatusPill("Unpaid at receipt: ${money(receipt.unpaidMinor)}", NoticeTone.Warning)
                                     Text("${stockReceiptDate(receipt.createdAt)} · Receipt ${receipt.id.take(8)}",
                                         style = MaterialTheme.typography.bodySmall, color = PosPalette.Secondary)
                                 }

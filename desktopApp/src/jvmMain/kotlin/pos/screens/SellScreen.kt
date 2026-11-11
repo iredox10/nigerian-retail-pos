@@ -69,9 +69,7 @@ fun SellScreen(
             error = null
         } catch(e: Exception) { error = "Item change not saved: ${e.message}" }
     }
-    val cashGiven = try {
-        cashText.takeIf { it.isNotBlank() }?.let { BigDecimal(it).movePointRight(2).longValueExact() }?.takeIf { it >= 0 }
-    } catch (_: Exception) { null }
+    val cashGiven = parseNaira(cashText)
     val appliedCash = minOf(cashGiven ?: 0, total)
     val credit = if (method == "credit") total - appliedCash else 0
     val customer = customers.find { it.id == selectedCustomer }
