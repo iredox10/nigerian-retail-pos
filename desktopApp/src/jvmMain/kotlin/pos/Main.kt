@@ -140,7 +140,7 @@ fun main() = application {
             Button(shape=MaterialTheme.shapes.small,onClick={ try {
                 if(selected==null) {
                     require(name.isNotBlank()) { "Enter your shop name" }; require(password.length>=8) { "Use at least 8 characters" }
-                    val t=repo.createTenant(name.trim()); access.register(t.id,password); tenants=repo.tenants(); onEnter(t)
+                    val t=repo.createTenant(name.trim()) { access.register(it.id,password) }; tenants=repo.tenants(); onEnter(t)
                 } else { require(access.unlock(selected!!.id,password)) { "Password not recognized for this shop" }; onEnter(selected!!) }
             } catch(e:Exception) {error=e.message ?: "Could not open shop"}},modifier=Modifier.fillMaxWidth().height(52.dp)) { Text(if(selected==null) "Create shop workspace" else "Unlock shop") }
             if(selected!=null) TextButton(shape=MaterialTheme.shapes.small,onClick={selected=null;password=""}) { Text("Create another shop") }

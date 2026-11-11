@@ -7,10 +7,11 @@ Five subagents contributed domain logic, persistence, reusable design components
 ## Verified
 
 - Shared and desktop compilation with Kotlin 2.2.20, Compose 1.9.1 and JDK 17.
-- 17 automated tests: six domain, five SQLite repository, three password-gate, and three durable-draft tests.
+- 18 automated tests: six domain, six SQLite repository, three password-gate, and three durable-draft tests.
 - Tests cover cross-tenant data access rejection, wrong passwords, tenant-specific credentials, stock rollback, persistence/reopening, debt repayments, operation retry deduplication, overflow, and independent draft recovery.
 - Native desktop application launched on Linux/JVM; onboarding and sample checkout renders were inspected. A typography/content-color issue found during visual review was corrected.
 - A separate preview entry point uses an in-memory database and temporary draft directory with explicitly labeled sample data.
+- Linux desktop distribution generated under `desktopApp/build/compose/binaries/main/app/RetailPOS`; Windows packaging remains unverified.
 
 ## Not yet verified
 

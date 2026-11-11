@@ -33,9 +33,12 @@ class PosRepository(path: String = File(System.getProperty("user.home"), ".niger
     }
 
     @Synchronized fun tenants(): List<Tenant> = query("SELECT id,name FROM tenants ORDER BY name") { Tenant(it.getString(1), it.getString(2)) }
-    @Synchronized fun createTenant(name: String): Tenant = transaction {
+    @Synchronized fun createTenant(name: String, provisionOwner: (Tenant) -> Unit = {}): Tenant = transaction {
         require(name.isNotBlank()) { "Enter your shop name." }
-        Tenant(id(), name.trim()).also { execute("INSERT INTO tenants VALUES(?,?)", it.id, it.name) }
+        Tenant(id(), name.trim()).also {
+            execute("INSERT INTO tenants VALUES(?,?)", it.id, it.name)
+            provisionOwner(it)
+        }
     }
     @Synchronized fun products(tenantId: String): List<Product> {
         requireTenant(tenantId)

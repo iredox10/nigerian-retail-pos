@@ -5,6 +5,14 @@ import pos.domain.CartLine
 import java.nio.file.Files
 
 class PosRepositoryTest {
+    @Test fun failedOwnerProvisionDoesNotLeaveUnclaimedWorkspace() {
+        PosRepository(":memory:").use { db ->
+            assertFailsWith<IllegalStateException> {
+                db.createTenant("Unclaimed shop") { error("Credential storage failed") }
+            }
+            assertTrue(db.tenants().isEmpty())
+        }
+    }
     @Test fun repeatedOperationCannotDuplicateSaleOrStockDeduction() {
         PosRepository(":memory:").use { db ->
             val tenant=db.createTenant("Shop")
