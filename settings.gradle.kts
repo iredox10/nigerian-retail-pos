@@ -1,4 +1,4 @@
-pluginManagement { repositories { gradlePluginPortal(); google(); mavenCentral() } }
-dependencyResolutionManagement { repositories { google(); mavenCentral() } }
+pluginManagement { repositories { gradlePluginPortal(); mavenCentral(); google() } }
+dependencyResolutionManagement { repositories { mavenCentral(); google() } }
 rootProject.name = "NigerianRetailPOS"
 include(":shared", ":desktopApp")
