@@ -137,13 +137,13 @@ fun main() = application {
             if(selected==null) OutlinedTextField(name,{name=it},label={Text("Shop name")},singleLine=true,modifier=Modifier.fillMaxWidth())
             OutlinedTextField(password,{password=it},label={Text("Owner password")},visualTransformation=PasswordVisualTransformation(),singleLine=true,modifier=Modifier.fillMaxWidth())
             error?.let { Text(it,color=MaterialTheme.colorScheme.error) }
-            Button(onClick={ try {
+            Button(shape=MaterialTheme.shapes.small,onClick={ try {
                 if(selected==null) {
                     require(name.isNotBlank()) { "Enter your shop name" }; require(password.length>=8) { "Use at least 8 characters" }
                     val t=repo.createTenant(name.trim()); access.register(t.id,password); tenants=repo.tenants(); onEnter(t)
                 } else { require(access.unlock(selected!!.id,password)) { "Password not recognized for this shop" }; onEnter(selected!!) }
             } catch(e:Exception) {error=e.message ?: "Could not open shop"}},modifier=Modifier.fillMaxWidth().height(52.dp)) { Text(if(selected==null) "Create shop workspace" else "Unlock shop") }
-            if(selected!=null) TextButton(onClick={selected=null;password=""}) { Text("Create another shop") }
+            if(selected!=null) TextButton(shape=MaterialTheme.shapes.small,onClick={selected=null;password=""}) { Text("Create another shop") }
             Text("No online account is created. Use a trusted computer; local database encryption is not yet enabled.",style=MaterialTheme.typography.bodySmall)
         } }
     }
@@ -155,7 +155,7 @@ fun main() = application {
 @Composable private fun StockScreen(products:List<Product>, add:(String,String,Long,Double)->String?) {
     var editing by remember { mutableStateOf(false) };var search by remember { mutableStateOf("") }
     Column(verticalArrangement=Arrangement.spacedBy(16.dp)) {
-        Row(verticalAlignment=Alignment.CenterVertically) { OutlinedTextField(search,{search=it},label={Text("Search stock")},modifier=Modifier.weight(1f));Spacer(Modifier.width(16.dp));Button({editing=true}){Text("Add item")} }
+        Row(verticalAlignment=Alignment.CenterVertically) { OutlinedTextField(search,{search=it},label={Text("Search stock")},modifier=Modifier.weight(1f));Spacer(Modifier.width(16.dp));Button(shape=MaterialTheme.shapes.small,onClick={editing=true}){Text("Add item")} }
         if(products.isEmpty()) Empty("Add your first item", "Give it a name, selling unit, price and opening stock to start selling.")
         LazyColumn { items(products.filter { it.name.contains(search,true) }) { p -> Surface(Modifier.fillMaxWidth().padding(bottom=1.dp)) { Row(Modifier.padding(16.dp)) { Column(Modifier.weight(1f)){Text(p.name,fontWeight=FontWeight.Medium); Text("${p.stock} ${p.unit} available",style=MaterialTheme.typography.bodySmall)};Text("${money(p.priceMinor)} / ${p.unit}") } } } }
     }
@@ -167,9 +167,9 @@ fun main() = application {
 @Composable private fun CustomerScreen(customers:List<Customer>,add:(String)->Unit,repay:(String,Long)->String?) {
     var adding by remember { mutableStateOf(false) };var repayment by remember { mutableStateOf<Customer?>(null) }
     Column(verticalArrangement=Arrangement.spacedBy(16.dp)) {
-        Row { Text("Who owes you",Modifier.weight(1f),style=MaterialTheme.typography.headlineSmall);Button({adding=true}){Text("Add customer")} }
+        Row { Text("Who owes you",Modifier.weight(1f),style=MaterialTheme.typography.headlineSmall);Button(shape=MaterialTheme.shapes.small,onClick={adding=true}){Text("Add customer")} }
         if(customers.isEmpty()) Empty("No customers yet","Add a customer when you need to record credit or a repayment.")
-        LazyColumn { items(customers){ c -> Surface(Modifier.fillMaxWidth().padding(bottom=8.dp),shape=MaterialTheme.shapes.small) { Row(Modifier.padding(16.dp),verticalAlignment=Alignment.CenterVertically) { Column(Modifier.weight(1f)){Text(c.name,fontWeight=FontWeight.SemiBold);Text("Customer owes you ${money(c.balanceMinor)}")};OutlinedButton({repayment=c},enabled=c.balanceMinor>0){Text("Record payment")} } } } }
+        LazyColumn { items(customers){ c -> Surface(Modifier.fillMaxWidth().padding(bottom=8.dp),shape=MaterialTheme.shapes.small) { Row(Modifier.padding(16.dp),verticalAlignment=Alignment.CenterVertically) { Column(Modifier.weight(1f)){Text(c.name,fontWeight=FontWeight.SemiBold);Text("Customer owes you ${money(c.balanceMinor)}")};OutlinedButton(shape=MaterialTheme.shapes.small,onClick={repayment=c},enabled=c.balanceMinor>0){Text("Record payment")} } } } }
     }
     if(adding) EntryDialog("Add customer",listOf("Customer name"),{adding=false}) { f -> try {require(f[0].isNotBlank());add(f[0]);adding=false;null}catch(e:Exception){"Enter a customer name"} }
     repayment?.let { c -> EntryDialog("Record payment · ${c.name}",listOf("Cash received in naira"),{repayment=null}) { f -> try {val error=repay(c.id,java.math.BigDecimal(f[0]).movePointRight(2).longValueExact());if(error==null)repayment=null;error}catch(e:Exception){"Enter a valid amount"} } }
@@ -177,5 +177,5 @@ fun main() = application {
 
 @Composable private fun EntryDialog(title:String,labels:List<String>,dismiss:()->Unit,save:(List<String>)->String?) {
     val fields=remember { mutableStateListOf<String>().apply { repeat(labels.size){add("")} } };var error by remember {mutableStateOf<String?>(null)}
-    AlertDialog(onDismissRequest=dismiss,title={Text(title)},text={Column(verticalArrangement=Arrangement.spacedBy(12.dp)){labels.forEachIndexed {i,label->OutlinedTextField(fields[i],{fields[i]=it},label={Text(label)},singleLine=true)};error?.let{Text(it,color=MaterialTheme.colorScheme.error)}}},confirmButton={Button({error=save(fields.toList())}){Text("Save")}},dismissButton={TextButton(dismiss){Text("Cancel")}})
+    AlertDialog(onDismissRequest=dismiss,title={Text(title)},text={Column(verticalArrangement=Arrangement.spacedBy(12.dp)){labels.forEachIndexed {i,label->OutlinedTextField(fields[i],{fields[i]=it},label={Text(label)},singleLine=true)};error?.let{Text(it,color=MaterialTheme.colorScheme.error)}}},confirmButton={Button(shape=MaterialTheme.shapes.small,onClick={error=save(fields.toList())}){Text("Save")}},dismissButton={TextButton(dismiss){Text("Cancel")}})
 }

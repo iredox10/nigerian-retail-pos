@@ -98,7 +98,7 @@ fun SellScreen(
                         Column(Modifier.padding(28.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             Text(if (products.isEmpty()) "Add your first item" else "No matching items", style = MaterialTheme.typography.titleLarge)
                             Text(if (products.isEmpty()) "Open Stock → Add item to enter goods, selling prices and opening quantities." else "Try a different name or clear your search.")
-                            if (search.isNotEmpty()) TextButton(onClick = { search = "" }) { Text("Clear search") }
+                            if (search.isNotEmpty()) TextButton(shape = MaterialTheme.shapes.small, onClick = { search = "" }) { Text("Clear search") }
                         }
                     }
                     LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -115,7 +115,7 @@ fun SellScreen(
                                         Text("${money(product.priceMinor)} / ${product.unit}", style = MaterialTheme.typography.bodyMedium)
                                         Text(if ((quantities[product.id] ?: 0) > 0) "In this sale: ${quantities[product.id]} ${product.unit}" else "${formatStock(product.stock)} ${product.unit} available", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                     }
-                                    OutlinedButton(onClick = { update(product, (quantities[product.id] ?: 0) + 1) }, enabled = stage != "saved" && (quantities[product.id] ?: 0) < product.stock) {
+                                    OutlinedButton(shape = MaterialTheme.shapes.small, onClick = { update(product, (quantities[product.id] ?: 0) + 1) }, enabled = stage != "saved" && (quantities[product.id] ?: 0) < product.stock) {
                                         Text("Add to sale")
                                     }
                                 }
@@ -141,7 +141,7 @@ fun SellScreen(
                             Text("Saved on this computer. Find this receipt in Sales.", Modifier.padding(top = 24.dp), style = MaterialTheme.typography.bodyMedium)
                             Text("Receipt printing and online sync are not connected yet.", Modifier.padding(top = 12.dp), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             Spacer(Modifier.weight(1f))
-                            Button({ encodedCart = ""; operationId = UUID.randomUUID().toString(); stage = "items"; cashText = ""; selectedCustomer = null; method = "cash"; showSaleOnly = false }, Modifier.fillMaxWidth().height(56.dp)) { Text("New sale") }
+                            Button(onClick = { encodedCart = ""; operationId = UUID.randomUUID().toString(); stage = "items"; cashText = ""; selectedCustomer = null; method = "cash"; showSaleOnly = false }, shape = MaterialTheme.shapes.small, modifier = Modifier.fillMaxWidth().height(56.dp)) { Text("New sale") }
                         } else {
                             Text("${lines.sumOf { it.quantity }} units · ${lines.size} items", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             Spacer(Modifier.height(16.dp))
@@ -160,9 +160,9 @@ fun SellScreen(
                                             Text(money(line.totalMinor), fontWeight = FontWeight.Medium)
                                         }
                                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                                            OutlinedButton({ update(line.product, line.quantity - 1) }, contentPadding = PaddingValues(horizontal = 12.dp)) { Text(if (line.quantity == 1) "Remove" else "−") }
+                                            OutlinedButton(shape = MaterialTheme.shapes.small, onClick = { update(line.product, line.quantity - 1) }, contentPadding = PaddingValues(horizontal = 12.dp)) { Text(if (line.quantity == 1) "Remove" else "−") }
                                             Text("${line.quantity}")
-                                            OutlinedButton({ update(line.product, line.quantity + 1) }, enabled = line.quantity < line.product.stock, contentPadding = PaddingValues(horizontal = 12.dp)) { Text("+") }
+                                            OutlinedButton(shape = MaterialTheme.shapes.small, onClick = { update(line.product, line.quantity + 1) }, enabled = line.quantity < line.product.stock, contentPadding = PaddingValues(horizontal = 12.dp)) { Text("+") }
                                         }
                                         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                                     }
@@ -197,7 +197,7 @@ fun SellScreen(
                             Spacer(Modifier.height(16.dp))
                             Text("Total", color = MaterialTheme.colorScheme.onSurfaceVariant)
                             Text(money(total), fontSize = 40.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(bottom = 16.dp))
-                            Button(onClick = {
+                            Button(shape = MaterialTheme.shapes.small, onClick = {
                                 if (stage == "items") { stage = "payment"; return@Button }
                                 val cash = cashGiven
                                 when {
