@@ -12,6 +12,8 @@ Requires a JDK 17 installation (set `JAVA_HOME`), network access for the first d
 
 Create a shop workspace and owner password, add goods under Stock, add a customer if credit is needed, then make a sale. Each shop has isolated records and a separate owner password. Local data is stored under `~/.nigerian-retail-pos` and is not encrypted; use a trusted workstation. Keep this directory for persistence. Do not treat pending outbox entries as online backups.
 
+The app opens in fullscreen. Press **F11** or use **Exit fullscreen** to switch to a window. The title strip provides Minimize and Close, and can be dragged in windowed mode.
+
 For an explicitly isolated sample workspace with an in-memory database and temporary draft directory:
 
 ```sh
@@ -19,6 +21,8 @@ For an explicitly isolated sample workspace with an in-memory database and tempo
 ```
 
 The preview bypasses workspace onboarding only for its own sample database. It never opens normal shop records or calls a payment service. Preview data is discarded when the process ends.
+
+To review a particular screen, set `POS_PREVIEW_SCREEN=Stock` or `POS_PREVIEW_SCREEN=Money`. For explicitly windowed layout checks, also set `POS_PREVIEW_WIDTH` and `POS_PREVIEW_HEIGHT`. The default preview opens fullscreen just like the regular app.
 
 ```sh
 ./gradlew :shared:jvmTest :desktopApp:jvmTest
@@ -36,13 +40,19 @@ Desktop distributions are built for the host operating system. Build and test th
 - Atomic stock/debt/sale writes and retry deduplication with stable operation identifiers.
 - Tenant-scoped basket recovery after restart, and screen-state retention across navigation.
 - Saved receipts, customer repayments, and clearly scoped money summaries.
+- Stock receiving with buying cost, cash paid, and the unpaid amount at the time of receipt.
+- Cash expenses, reasoned cash additions/withdrawals, opening counts, and immutable closing counts with shortage/excess.
+- Automatic drawer activity for new cash sales and repayments while a shift is open; older cash remains explicitly unassigned.
+- Retry protection for checkout, repayments, stock receiving, expenses, and manual cash movements.
+- Shared exact-naira input parsing across checkout, stock, repayments, and cash management.
 - Shared semantic theme, offline IBM Plex Sans fonts, and reusable Compose components.
 
 ## Important boundaries
 
 - Local tenant isolation and owner passwords are implemented. Online identity, staff roles/memberships, server authorization, remote tenant administration, and encrypted local storage are not yet implemented. This is not ready for untrusted shared-computer or multi-user SaaS production deployment.
 - No cloud sync transport, Heroku backend, bank/card verification, printing, backup service, or external messages are connected. The status bar explicitly says so.
-- Current stock uses one configured selling unit per product and integer checkout quantities. Packaging conversions, fractional checkout, returns, receiving, cash closing, supplier accounting, and other advanced modules remain future work.
+- Current stock uses one configured selling unit per product and integer checkout/receiving quantities. Packaging conversions, fractional checkout, returns, full supplier accounting, and other advanced modules remain future work. Stock receipts preserve purchase balances; they are not a live supplier ledger and later supplier payments cannot yet be allocated to them.
+- Only one cash shift per shop is supported in this build. Open Money → Today's cash and enter the cash physically counted. Cash paid out for expenses or stock requires that open drawer and sufficient recorded cash. Sales/repayments made without an open drawer remain unassigned and are not automatically added to a later shift's opening count.
 - Draft recovery saves item IDs and quantities; it does not yet retain tendered cash, customer selection, or a frozen price snapshot across restart. Checkout revalidates current price and stock. Review restored goods before payment.
 - UI currently performs short local repository operations synchronously; large-catalogue profiling, background database execution, complete keyboard shortcuts, screen-reader review, and merchant usability testing remain outstanding.
 
@@ -54,7 +64,7 @@ shared/src/commonMain/kotlin/pos/ui/           Reusable theme and components
 shared/src/commonMain/composeResources/       Bundled fonts and license
 desktopApp/src/jvmMain/kotlin/pos/data/        SQLite persistence and durable drafts
 desktopApp/src/jvmMain/kotlin/pos/security/    Local workspace password gate
-desktopApp/src/jvmMain/kotlin/pos/screens/     Desktop checkout
+desktopApp/src/jvmMain/kotlin/pos/screens/     Checkout, stock, and cash workspaces
 desktopApp/src/jvmMain/kotlin/pos/Main.kt      Desktop shell and shop tools
 ```
 

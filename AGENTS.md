@@ -25,4 +25,4 @@
 
 ## Current repository state
 
-This folder initially contains planning documents only. A design guide is not an implemented or merchant-tested application. Inspect the current files before making assumptions about code or build tools.
+This folder contains a working Kotlin desktop build with shared domain/UI modules and local SQLite persistence. Read README and BUILD_STATUS.md for the implemented scope and evidence; do not mistake the complete feature specification for completed code. Merchant testing and Windows packaging remain outstanding.

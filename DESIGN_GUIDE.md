@@ -190,7 +190,7 @@ Primary review size: **1440 × 900 logical units**. Also review **1366 × 768**,
 
 ### Standard desktop shell
 
-- Preserve OS title-bar/window controls, maximize, resize, and standard keyboard behavior.
+- Desktop starts in true fullscreen at the user's request. Provide a 40-unit draggable title strip with Minimize, Exit fullscreen/Fullscreen, and Close, plus F11 to toggle. Windowed mode remains available; never trap users in fullscreen. Do not hardcode the display resolution or change the user's monitor settings.
 - Left navigation: 208 units; minimum labeled width 176. Do not automatically collapse it into unexplained icons.
 - At compact widths, replace it with a clearly labeled **Menu** button opening the same labeled navigation. An icon-only rail is not the default.
 - Top context bar: 56 units. Show page identity and staff/lock; shop location/counter is quiet context, not a prominent selector during a sale.
