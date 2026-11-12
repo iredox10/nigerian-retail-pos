@@ -38,12 +38,18 @@ class PosRepository(path: String = File(System.getProperty("user.home"), ".niger
             "CREATE TABLE IF NOT EXISTS return_lines(id INTEGER PRIMARY KEY AUTOINCREMENT,return_id TEXT NOT NULL,tenant_id TEXT NOT NULL,product_id TEXT NOT NULL,name TEXT NOT NULL,unit TEXT NOT NULL,quantity INTEGER NOT NULL CHECK(quantity>0),unit_price_minor INTEGER NOT NULL CHECK(unit_price_minor>=0),FOREIGN KEY(tenant_id,return_id) REFERENCES sale_returns(tenant_id,id))",
             "CREATE TABLE IF NOT EXISTS supplier_payments(id TEXT NOT NULL,tenant_id TEXT NOT NULL,receipt_id TEXT NOT NULL,supplier_name TEXT NOT NULL,amount_minor INTEGER NOT NULL CHECK(amount_minor>0),created_at TEXT NOT NULL,PRIMARY KEY(tenant_id,id),FOREIGN KEY(tenant_id,receipt_id) REFERENCES stock_receipts(tenant_id,id))",
             "CREATE TABLE IF NOT EXISTS catalogue_changes(id TEXT NOT NULL,tenant_id TEXT NOT NULL,product_id TEXT NOT NULL,kind TEXT NOT NULL CHECK(kind IN('edit','archive')),name TEXT NOT NULL,unit TEXT NOT NULL,price_minor INTEGER NOT NULL CHECK(price_minor>=0),previous_price_minor INTEGER NOT NULL CHECK(previous_price_minor>=0),barcode TEXT,archived INTEGER NOT NULL CHECK(archived IN(0,1)),created_at TEXT NOT NULL,PRIMARY KEY(tenant_id,id),FOREIGN KEY(tenant_id,product_id) REFERENCES products(tenant_id,id))",
+            "CREATE TABLE IF NOT EXISTS purchase_units(id TEXT NOT NULL,tenant_id TEXT NOT NULL,product_id TEXT NOT NULL,name TEXT NOT NULL,base_unit TEXT NOT NULL,base_units_per_unit INTEGER NOT NULL CHECK(base_units_per_unit>0),archived INTEGER NOT NULL DEFAULT 0 CHECK(archived IN(0,1)),created_at TEXT NOT NULL,PRIMARY KEY(tenant_id,id),UNIQUE(tenant_id,product_id,name COLLATE NOCASE),FOREIGN KEY(tenant_id,product_id) REFERENCES products(tenant_id,id))",
             "CREATE TABLE IF NOT EXISTS stock_adjustments(id TEXT NOT NULL,tenant_id TEXT NOT NULL,product_id TEXT NOT NULL,product_name TEXT NOT NULL,unit TEXT NOT NULL,previous_stock REAL NOT NULL CHECK(previous_stock>=0),counted_stock INTEGER NOT NULL CHECK(counted_stock>=0),reason TEXT NOT NULL,created_at TEXT NOT NULL,PRIMARY KEY(tenant_id,id),FOREIGN KEY(tenant_id,product_id) REFERENCES products(tenant_id,id))"
         ).forEach { sql -> db.createStatement().use { it.execute(sql) } }
         transaction {
             val productColumns=query("PRAGMA table_info(products)") { it.getString("name") }
             if("barcode" !in productColumns) db.createStatement().use { it.execute("ALTER TABLE products ADD COLUMN barcode TEXT") }
             if("archived" !in productColumns) db.createStatement().use { it.execute("ALTER TABLE products ADD COLUMN archived INTEGER NOT NULL DEFAULT 0 CHECK(archived IN(0,1))") }
+            val receiptColumns=query("PRAGMA table_info(stock_receipts)") { it.getString("name") }
+            if("base_unit" !in receiptColumns) db.createStatement().use { it.execute("ALTER TABLE stock_receipts ADD COLUMN base_unit TEXT") }
+            if("base_units_per_unit" !in receiptColumns) db.createStatement().use { it.execute("ALTER TABLE stock_receipts ADD COLUMN base_units_per_unit INTEGER NOT NULL DEFAULT 1 CHECK(base_units_per_unit>0)") }
+            if("purchase_unit_id" !in receiptColumns) db.createStatement().use { it.execute("ALTER TABLE stock_receipts ADD COLUMN purchase_unit_id TEXT") }
+            execute("UPDATE stock_receipts SET base_unit=unit WHERE base_unit IS NULL")
             execute("CREATE UNIQUE INDEX IF NOT EXISTS product_barcode_per_tenant ON products(tenant_id,barcode) WHERE barcode IS NOT NULL")
             if(query("PRAGMA table_info(repayments)") { it.getInt("pk") }.count { it>0 }==1) {
                 execute("CREATE TABLE repayments_scoped(id TEXT NOT NULL,tenant_id TEXT NOT NULL,customer_id TEXT NOT NULL,amount_minor INTEGER NOT NULL CHECK(amount_minor>0),created_at TEXT NOT NULL,PRIMARY KEY(tenant_id,id),FOREIGN KEY(tenant_id,customer_id) REFERENCES customers(tenant_id,id))")
@@ -276,11 +282,44 @@ class PosRepository(path: String = File(System.getProperty("user.home"), ".niger
             }
         }
     }
+    @Synchronized fun purchaseUnits(tenantId:String,productId:String?=null,includeArchived:Boolean=false):List<PurchaseUnit> {
+        requireTenant(tenantId)
+        if(productId!=null) requireProduct(tenantId,productId)
+        return query("SELECT * FROM purchase_units WHERE tenant_id=?"+(if(productId!=null) " AND product_id=?" else "")+(if(includeArchived) "" else " AND archived=0")+" ORDER BY name",*listOfNotNull(tenantId,productId).toTypedArray(),map=::purchaseUnit)
+    }
+    /** Buying factors are immutable: archive an old definition rather than rewriting received history. */
+    @Synchronized fun addPurchaseUnit(tenantId:String,productId:String,name:String,baseUnitsPerUnit:Int,operationId:String?=null):PurchaseUnit = transaction {
+        requireTenant(tenantId)
+        require(operationId==null || operationId.isNotBlank()) { "Operation identifier cannot be blank." }
+        val item=requireProduct(tenantId,productId)
+        val candidate=PurchaseUnit(operationId?:id(),tenantId,productId,name.trim(),item.unit,baseUnitsPerUnit,false,Instant.now().toString())
+        if(operationId!=null) {
+            val previous=query("SELECT * FROM purchase_units WHERE tenant_id=? AND id=?",tenantId,operationId,map=::purchaseUnit).singleOrNull()
+            if(previous!=null) {
+                require(previous.productId==productId && previous.name==candidate.name && previous.baseUnitsPerUnit==baseUnitsPerUnit) { "This buying unit was already saved with different details." }
+                return@transaction previous
+            }
+        }
+        require(!item.archived) { "Restore this item before adding buying units." }
+        require(!candidate.name.equals(item.unit,ignoreCase=true)) { "This name is already the selling unit. Use it directly when receiving stock." }
+        require(purchaseUnits(tenantId,productId,true).none { it.name.lowercase(java.util.Locale.ROOT)==candidate.name.lowercase(java.util.Locale.ROOT) }) { "This buying unit name is already used for the item, including archived units. Use a different name for a different package size." }
+        execute("INSERT INTO purchase_units VALUES(?,?,?,?,?,?,?,?)",candidate.id,tenantId,productId,candidate.name,candidate.baseUnit,baseUnitsPerUnit,0,candidate.createdAt)
+        enqueue(tenantId,"purchase_unit.created",candidate.id)
+        candidate
+    }
+    @Synchronized fun archivePurchaseUnit(tenantId:String,unitId:String,archived:Boolean) = transaction {
+        requireTenant(tenantId)
+        val item=requirePurchaseUnit(tenantId,unitId)
+        if(item.archived!=archived) {
+            execute("UPDATE purchase_units SET archived=? WHERE tenant_id=? AND id=?",if(archived) 1 else 0,tenantId,unitId)
+            enqueue(tenantId,if(archived) "purchase_unit.archived" else "purchase_unit.restored",unitId)
+        }
+    }
     @Synchronized fun stockReceipts(tenantId: String): List<StockReceipt> {
         requireTenant(tenantId)
         return query("SELECT * FROM stock_receipts WHERE tenant_id=? ORDER BY created_at DESC",tenantId,map=::stockReceipt)
     }
-    @Synchronized fun receiveStock(tenantId:String,productId:String,quantity:Int,unitCostMinor:Long,paidCashMinor:Long,supplierName:String,operationId:String?=null):StockReceipt = transaction {
+    @Synchronized fun receiveStock(tenantId:String,productId:String,quantity:Int,unitCostMinor:Long,paidCashMinor:Long,supplierName:String,operationId:String?=null,purchaseUnitId:String?=null,expectedBaseUnitsPerUnit:Int?=null):StockReceipt = transaction {
         requireTenant(tenantId)
         require(quantity>0 && unitCostMinor>=0) { "Enter a positive quantity and non-negative buying cost." }
         require(operationId==null || operationId.isNotBlank()) { "Operation identifier cannot be blank." }
@@ -290,19 +329,26 @@ class PosRepository(path: String = File(System.getProperty("user.home"), ".niger
         if(operationId!=null) {
             val previous=stockReceipts(tenantId).find { it.id==operationId }
             if(previous!=null) {
-                require(previous.productId==productId && previous.quantity==quantity && previous.unitCostMinor==unitCostMinor && previous.paidCashMinor==paidCashMinor && previous.supplierName==supplierName.trim()) { "This receipt was already saved with different details." }
+                require(previous.productId==productId && previous.quantity==quantity && previous.unitCostMinor==unitCostMinor && previous.paidCashMinor==paidCashMinor && previous.supplierName==supplierName.trim() && previous.purchaseUnitId==purchaseUnitId && (expectedBaseUnitsPerUnit==null || previous.baseUnitsPerUnit==expectedBaseUnitsPerUnit)) { "This receipt was already saved with different details." }
                 return@transaction previous
             }
         }
         val item=query("SELECT * FROM products WHERE tenant_id=? AND id=?",tenantId,productId,map=::product).singleOrNull()
             ?: throw IllegalArgumentException("Item not found in this shop.")
         require(!item.archived) { "Restore this archived item before adding stock." }
-        val newStock=item.stock+quantity
-        require(newStock.isFinite() && newStock<=9_007_199_254_740_991.0) { "Stock quantity exceeds the supported range." }
+        val buyingUnit=purchaseUnitId?.let { requirePurchaseUnit(tenantId,it) }
+        require(buyingUnit==null || (buyingUnit.productId==productId && buyingUnit.baseUnit==item.unit && !buyingUnit.archived)) { "Choose an active buying unit belonging to this item." }
+        val factor=buyingUnit?.baseUnitsPerUnit ?: 1
+        require(expectedBaseUnitsPerUnit==null || expectedBaseUnitsPerUnit==factor) { "The buying unit does not match the conversion reviewed. Choose it again." }
+        val baseQuantity=Math.multiplyExact(quantity.toLong(),factor.toLong())
+        require(baseQuantity<=9_007_199_254_740_991L) { "Converted stock quantity exceeds the supported exact range." }
+        val exactStock=java.math.BigDecimal.valueOf(item.stock).add(java.math.BigDecimal.valueOf(baseQuantity))
+        val newStock=exactStock.toDouble()
+        require(newStock.isFinite() && newStock<=9_007_199_254_740_991.0 && java.math.BigDecimal.valueOf(newStock).compareTo(exactStock)==0) { "Stock quantity exceeds the supported exact range." }
         val shift=if(paidCashMinor>0) requireCashShift(tenantId) else null
         if(shift!=null) requireCashAvailable(tenantId,shift.id,paidCashMinor)
-        val receipt=StockReceipt(operationId?:id(),tenantId,productId,item.name,item.unit,quantity,unitCostMinor,total,paidCashMinor,supplierName.trim(),Instant.now().toString())
-        execute("INSERT INTO stock_receipts VALUES(?,?,?,?,?,?,?,?,?,?,?)",receipt.id,tenantId,productId,item.name,item.unit,quantity,unitCostMinor,total,paidCashMinor,receipt.supplierName,receipt.createdAt)
+        val receipt=StockReceipt(operationId?:id(),tenantId,productId,item.name,buyingUnit?.name ?: item.unit,quantity,unitCostMinor,total,paidCashMinor,supplierName.trim(),Instant.now().toString(),item.unit,factor,purchaseUnitId)
+        execute("INSERT INTO stock_receipts(id,tenant_id,product_id,product_name,unit,quantity,unit_cost_minor,total_cost_minor,paid_cash_minor,supplier_name,created_at,base_unit,base_units_per_unit,purchase_unit_id) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)",receipt.id,tenantId,productId,item.name,receipt.unit,quantity,unitCostMinor,total,paidCashMinor,receipt.supplierName,receipt.createdAt,receipt.baseUnit,factor,purchaseUnitId)
         execute("UPDATE products SET stock=? WHERE tenant_id=? AND id=?",newStock,tenantId,productId)
         if(paidCashMinor>0) appendCash(tenantId,shift!!.id,"stock_purchase",-paidCashMinor,if(receipt.supplierName.isBlank()) "Cash stock purchase" else "Stock from ${receipt.supplierName}",receipt.id)
         enqueue(tenantId,"stock.received",receipt.id)
@@ -499,7 +545,7 @@ class PosRepository(path: String = File(System.getProperty("user.home"), ".niger
     }
     private fun supplierPayment(r:ResultSet)=SupplierPayment(r.getString("id"),r.getString("tenant_id"),r.getString("receipt_id"),r.getString("supplier_name"),r.getLong("amount_minor"),r.getString("created_at"))
 
-    private val snapshotTableOrder get() = listOf("products","customers","cash_shifts","sales","sale_lines","repayments","stock_receipts","expenses","sale_returns","return_lines","supplier_payments","cash_entries","catalogue_changes","stock_adjustments","outbox")
+    private val snapshotTableOrder get() = listOf("products","purchase_units","customers","cash_shifts","sales","sale_lines","repayments","stock_receipts","expenses","sale_returns","return_lines","supplier_payments","cash_entries","catalogue_changes","stock_adjustments","outbox")
     @Synchronized fun exportTenantSnapshot(tenantId:String):TenantSnapshot = transaction {
         requireTenant(tenantId)
         val tenant=tenants().single { it.id==tenantId }
@@ -523,12 +569,13 @@ class PosRepository(path: String = File(System.getProperty("user.home"), ".niger
                 schema.values.forEach { (name,type,required) ->
                     val value=row[name]
                     val generatedId=(table=="sale_lines" || table=="return_lines") && name=="id"
-                    require(!required || value!=null || generatedId || (table=="products" && name=="archived" && name !in row)) { "Backup is missing a required value in $table." }
+                    require(!required || value!=null || generatedId || (table=="products" && name=="archived" && name !in row) || (table=="stock_receipts" && name=="base_units_per_unit" && name !in row)) { "Backup is missing a required value in $table." }
                     if(value!=null && type=="INTEGER") require(value.toLongOrNull()!=null) { "Backup has invalid integer data in $table." }
                     if(value!=null && name=="quantity" && table in setOf("sale_lines","stock_receipts","return_lines")) {
                         val quantity=value.toLongOrNull()
                         require(quantity!=null && quantity in 1L..Int.MAX_VALUE.toLong()) { "Backup quantity exceeds the supported integer range." }
                     }
+                    if(value!=null && name=="base_units_per_unit") require(value.toLongOrNull() in 1L..Int.MAX_VALUE.toLong()) { "Backup buying unit factor exceeds the supported integer range." }
                     if(value!=null && name=="counted_stock") require(value.toLongOrNull() in 0L..Int.MAX_VALUE.toLong()) { "Backup counted stock exceeds the supported integer range." }
                     if(value!=null && name=="previous_stock") require(value.toDoubleOrNull()?.let { it in 0.0..9_007_199_254_740_991.0 }==true) { "Backup previous stock exceeds the supported range." }
                     if(value!=null && type=="REAL") require(value.toDoubleOrNull()?.isFinite()==true) { "Backup has invalid numeric data in $table." }
@@ -541,6 +588,7 @@ class PosRepository(path: String = File(System.getProperty("user.home"), ".niger
             snapshot.tables[table].orEmpty().forEach { row ->
                 val data=row.filterKeys { !((table=="sale_lines" || table=="return_lines") && it=="id") }.toMutableMap()
                 data["tenant_id"]=tenant.id
+                if(table=="stock_receipts" && "base_unit" !in data) data["base_unit"]=data["unit"]
                 val columns=data.keys.toList()
                 execute("INSERT INTO $table (${columns.joinToString(",")}) VALUES(${columns.joinToString(",") { "?" }})",*columns.map { data[it] }.toTypedArray())
             }
@@ -548,6 +596,16 @@ class PosRepository(path: String = File(System.getProperty("user.home"), ".niger
         // Reconstruct domain records to enforce cross-field invariants as well as SQL constraints.
         products(tenant.id,includeArchived=true); customers(tenant.id); sales(tenant.id); stockReceipts(tenant.id)
         stockAdjustments(tenant.id); priceHistory(tenant.id); repayments(tenant.id)
+        val restoredUnits=purchaseUnits(tenant.id,includeArchived=true)
+        restoredUnits.forEach { unit -> require(unit.baseUnit==requireProduct(tenant.id,unit.productId).unit) { "Backup buying unit does not match the item's selling unit." } }
+        require(restoredUnits.map { it.productId to it.name.lowercase(java.util.Locale.ROOT) }.distinct().size==restoredUnits.size) { "Backup contains duplicate buying unit names." }
+        stockReceipts(tenant.id).forEach { receipt ->
+            require(receipt.baseUnit==requireProduct(tenant.id,receipt.productId).unit) { "Backup stock receipt uses a different selling unit." }
+            receipt.purchaseUnitId?.let { unitId ->
+                val unit=requirePurchaseUnit(tenant.id,unitId)
+                require(unit.productId==receipt.productId && unit.name==receipt.unit && unit.baseUnit==receipt.baseUnit && unit.baseUnitsPerUnit==receipt.baseUnitsPerUnit) { "Backup stock receipt conversion does not match its buying unit." }
+            }
+        }
         query("SELECT * FROM catalogue_changes WHERE tenant_id=?",tenant.id) { r -> Product(r.getString("product_id"),tenant.id,r.getString("name"),r.getString("unit"),r.getLong("price_minor"),0.0,r.getString("barcode"),r.getInt("archived")==1) }
         expenses(tenant.id); cashShifts(tenant.id); cashEntries(tenant.id); saleReturns(tenant.id); supplierPayments(tenant.id)
         customers(tenant.id).forEach { customer ->
@@ -599,7 +657,9 @@ class PosRepository(path: String = File(System.getProperty("user.home"), ".niger
         execute("INSERT INTO cash_entries VALUES(?,?,?,?,?,?,?,?)",entry.id,tenantId,shiftId,kind,amountMinor,description,entry.createdAt,sourceId)
         return entry
     }
-    private fun stockReceipt(r:ResultSet)=StockReceipt(r.getString("id"),r.getString("tenant_id"),r.getString("product_id"),r.getString("product_name"),r.getString("unit"),r.getInt("quantity"),r.getLong("unit_cost_minor"),r.getLong("total_cost_minor"),r.getLong("paid_cash_minor"),r.getString("supplier_name"),r.getString("created_at"))
+    private fun stockReceipt(r:ResultSet)=StockReceipt(r.getString("id"),r.getString("tenant_id"),r.getString("product_id"),r.getString("product_name"),r.getString("unit"),r.getInt("quantity"),r.getLong("unit_cost_minor"),r.getLong("total_cost_minor"),r.getLong("paid_cash_minor"),r.getString("supplier_name"),r.getString("created_at"),r.getString("base_unit") ?: r.getString("unit"),r.getInt("base_units_per_unit"),r.getString("purchase_unit_id"))
+    private fun purchaseUnit(r:ResultSet)=PurchaseUnit(r.getString("id"),r.getString("tenant_id"),r.getString("product_id"),r.getString("name"),r.getString("base_unit"),r.getInt("base_units_per_unit"),r.getInt("archived")==1,r.getString("created_at"))
+    private fun requirePurchaseUnit(tenantId:String,unitId:String):PurchaseUnit=query("SELECT * FROM purchase_units WHERE tenant_id=? AND id=?",tenantId,unitId,map=::purchaseUnit).singleOrNull() ?: throw IllegalArgumentException("Buying unit not found in this shop.")
     private fun expense(r:ResultSet)=Expense(r.getString("id"),r.getString("tenant_id"),r.getString("category"),r.getString("description"),r.getLong("amount_minor"),r.getString("created_at"))
     private fun cashShift(r:ResultSet)=CashShift(r.getString("id"),r.getString("tenant_id"),r.getLong("opening_minor"),r.getString("opened_at"),r.getString("closed_at"),r.getObject("expected_minor")?.let { (it as Number).toLong() },r.getObject("counted_minor")?.let { (it as Number).toLong() })
     private fun cashEntry(r:ResultSet)=CashEntry(r.getString("id"),r.getString("tenant_id"),r.getString("shift_id"),r.getString("kind"),r.getLong("amount_minor"),r.getString("description"),r.getString("created_at"))

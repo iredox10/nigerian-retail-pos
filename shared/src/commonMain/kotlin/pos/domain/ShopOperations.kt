@@ -5,14 +5,20 @@ data class StockReceipt(
     val id: String, val tenantId: String, val productId: String, val productName: String,
     val unit: String, val quantity: Int, val unitCostMinor: Long, val totalCostMinor: Long,
     val paidCashMinor: Long, val supplierName: String, val createdAt: String,
+    val baseUnit: String = unit, val baseUnitsPerUnit: Int = 1, val purchaseUnitId: String? = null,
 ) {
     init {
         require(id.isNotBlank() && tenantId.isNotBlank() && productId.isNotBlank())
         require(productName.isNotBlank() && unit.isNotBlank() && quantity > 0)
+        require(baseUnit.isNotBlank() && baseUnitsPerUnit > 0)
+        require(purchaseUnitId == null || purchaseUnitId.isNotBlank())
+        require(purchaseUnitId != null || (baseUnitsPerUnit == 1 && unit == baseUnit)) { "A converted receipt must identify its buying unit." }
+        require(baseQuantity <= 9_007_199_254_740_991L) { "Converted stock exceeds the exact supported range." }
         require(unitCostMinor >= 0 && totalCostMinor == multiplyMoney(unitCostMinor, quantity))
         require(paidCashMinor in 0..totalCostMinor)
         require((paidCashMinor == totalCostMinor || supplierName.isNotBlank()) && createdAt.isNotBlank())
     }
+    val baseQuantity: Long get() = quantity.toLong() * baseUnitsPerUnit.toLong()
     val unpaidMinor: Long get() = totalCostMinor - paidCashMinor
 }
 
