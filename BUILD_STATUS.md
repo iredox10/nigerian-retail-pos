@@ -1,17 +1,29 @@
 # Desktop build status
 
-12 November 2026 · Catalogue, stock counts, customer history and held-sales update
+12 November 2026 · Buying-package conversion update
 
 ## Verified
 
 - Shared and desktop compilation with Kotlin 2.2.20, Compose 1.9.1 and JDK 17.
-- **95 automated tests pass**, with zero failures or errors: 39 prior tests plus six after-sales, four tenant-snapshot, four receipt, six CSV/report-date, eight encrypted-backup, three restore-regression, four product-import tests, eight catalogue/stock/customer-query tests, eight held-sale/recovery tests, and five customer-statement tests.
+- **112 automated tests pass**, with zero failures or errors: 39 prior tests plus six after-sales, four tenant-snapshot, four receipt, six CSV/report-date, eight encrypted-backup, three restore-regression, four product-import tests, eight catalogue/stock/customer-query tests, eight held-sale/recovery tests, five customer-statement tests, five purchase-unit persistence/migration tests, ten independent conversion-integrity tests, and two purchase CSV tests.
 - Coverage includes cross-tenant rejection, exact kobo amounts, retry deduplication, return limits/restocking, supplier overpayment, atomic import rejection, WAT date boundaries, spreadsheet formula protection, encrypted tenant-only backup, wrong passwords, corrupted input, repeated restore and cash/debt-history consistency.
 - Linux desktop distribution rebuilt successfully using `gradle :desktopApp:createDistributable` at `desktopApp/build/compose/binaries/main/app/RetailPOS`.
 - Native isolated previews rendered for Reports, Sales, Suppliers, Backup and Import. Reports filled the 1920 × 1080 display; Sales and Suppliers were also inspected in the compositor-provided narrower window. See [Reports](artifacts/desktop-reports.png), [Sales](artifacts/desktop-sales.png), and [Suppliers](artifacts/desktop-suppliers.png), [Backup](artifacts/desktop-backup.png), and [Import](artifacts/desktop-import.png).
 - Previous fullscreen verification remains recorded in [the fullscreen render](artifacts/desktop-fullscreen.png). Startup requests true fullscreen with F11 and visible window controls. Window-manager behavior still needs Windows and multi-monitor verification.
 
-## Latest daily-shop additions
+## Latest buying-package additions
+
+- Define merchant-specific buying units under Stock → Manage → Buying units, for example 1 carton = 24 bottles. Names/factors are immutable; archive and create a new definition when package sizes change.
+- Receive stock in a chosen buying unit, with quantity and cost labeled per carton/pack and an explicit base-stock preview before saving.
+- Record both purchased quantity and base quantity added on historical receipts, supplier views and CSV exports. The base selling unit and ordinary checkout remain unchanged.
+- Stock precision, stale conversion, tenant/product ownership, retry and archival checks run in one transaction. A failure leaves stock, cash, supplier receipt and outbox unchanged.
+- Additive database migrations and legacy-backup defaults preserve old one-to-one receiving records. Encrypted backups now include buying definitions and receipt conversion snapshots.
+- The independent integration test receives 2 cartons × 24 bottles, sells 3 bottles and verifies 45 remain, together with exact drawer cash and supplier debt.
+- Product CSV exports now include archived goods and their archive flag; this is labeled on the Reports screen.
+- Native preview check: opened Buying units, selected carton, entered 2 cartons at ₦10,000 each with ₦0 paid, and saved the receipt. Malt stock increased from 237 to 285 bottles, with a ₦20,000 purchase/credit preview. See [buying units](artifacts/desktop-buying-units.png), [conversion](artifacts/desktop-carton-receiving.png), [cost preview](artifacts/desktop-carton-cost-preview.png), and [saved stock](artifacts/desktop-carton-stock-saved.png).
+- Selling whole packages, packaging-specific sale prices/barcodes, fractional checkout and repacking remain pending.
+
+## Previous daily-shop additions
 
 - Barcode assignment and exact barcode + Enter lookup at checkout; barcodes remain unique within each shop, including archived items.
 - Product name/price/barcode editing, archive/restore and immutable price history. Completed receipts retain their original name, price and unit.
@@ -48,4 +60,4 @@ Local business queries and mutations are tenant-scoped. Composite relationships 
 
 This remains a trusted-device owner application. The working SQLite database is unencrypted. Local owner gates are not a network authorization boundary. Production online operation requires authenticated identities, tenant memberships, server-side authorization, roles, device enrollment and a reviewed synchronization protocol.
 
-See [the full implementation audit](IMPLEMENTATION_STATUS.md) for coverage of every specification section. Staff roles, packaging conversions/fractional sales, catalogue categories/variants and bulk edits, credit returns/exchanges, advanced stock/accounting, online services and mobile apps remain among the material outstanding work. The long-term feature specification is not complete.
+See [the full implementation audit](IMPLEMENTATION_STATUS.md) for coverage of every specification section. Staff roles, packaging conversions at checkout/fractional sales, catalogue categories/variants and bulk edits, credit returns/exchanges, advanced stock/accounting, online services and mobile apps remain among the material outstanding work. The long-term feature specification is not complete.

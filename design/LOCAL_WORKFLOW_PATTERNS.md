@@ -29,3 +29,15 @@
 - Customer statement exports include complete locally saved history. Repayments are not allocated to individual invoices, and no invoice balance or running balance is guessed.
 
 Merchant testing, hardware scanner verification and full accessibility checks remain required. Use BUILD_STATUS.md for executed build/test/render evidence.
+
+## Buying packaging conversions
+
+The next local workflow adds buying units while leaving the base selling unit unchanged. Its authority is specification section 5 (merchant-defined measures and preserved conversion history), the existing Stock contextual-detail pattern, and the design guide's rule against silently reinterpreting quantities.
+
+- Define a named buying unit under Stock → Manage → Buying units: for example, 1 carton contains 24 bottles. The app does not assign a universal size to cartons, bags, paint buckets or other local measures.
+- Definitions preserve name and factor. Archive a definition and add another when packaging changes; old receipts keep their own conversion snapshots.
+- Receiving asks for the buying unit before quantity and buying price. A price per carton must never be labeled as a price per bottle.
+- Before saving, show purchased quantity × conversion = base stock added, alongside total buying cost, cash paid and supplier balance.
+- Completed purchase history, supplier receipt details and CSV output show both buying quantity and base stock added. Opening/counting stock still uses the base unit.
+- Archive hides a buying unit from new receipts without deleting history. A retry of an already-saved receipt remains a retry, even if the buying unit has since been archived.
+- Stock remains a shared base-unit pool for ordinary sales. Pack sales, separate packaging barcodes/prices, fractional checkout and repacking movements are not implemented by this receiving workflow.
