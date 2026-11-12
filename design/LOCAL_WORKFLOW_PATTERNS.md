@@ -41,3 +41,15 @@ The next local workflow adds buying units while leaving the base selling unit un
 - Completed purchase history, supplier receipt details and CSV output show both buying quantity and base stock added. Opening/counting stock still uses the base unit.
 - Archive hides a buying unit from new receipts without deleting history. A retry of an already-saved receipt remains a retry, even if the buying unit has since been archived.
 - Stock remains a shared base-unit pool for ordinary sales. Pack sales, separate packaging barcodes/prices, fractional checkout and repacking movements are not implemented by this receiving workflow.
+
+## Customer credit controls
+
+This extends the existing Customer contextual-detail pattern and the checkout guide's question-led payment form. The Refero reference lock remains unchanged: readable neutral surfaces, labeled fields, teal commit action and explicit financial consequences.
+
+- Edit contact details and the owner-set limit inside the customer profile. A blank limit means unlimited; zero means no new credit. Lowering a limit below existing debt does not write off debt.
+- In Pay later, show existing debt, the limit and debt after the sale before saving. The repository rechecks current debt and limit in the same transaction as the sale.
+- Ask for an optional agreed repayment due date. Leaving it blank does not imply today's date. Preserve it in active/held drafts and completed receipts.
+- New due dates use the business's WAT calendar and must be today or later. Historical due dates remain historical on restore; migrations do not manufacture dates for old sales.
+- Due-date review shows original dated credit sales, later repayments and current total customer debt separately. Repayment allocation to invoices is still unavailable; no exact unpaid overdue invoice balance is inferred.
+- Phone normalization accepts local Nigerian format and +234 format; it establishes formatting only, not ownership or reachability.
+- Contact/profile changes keep local history and enqueue local events. They do not send messages or create online accounts.

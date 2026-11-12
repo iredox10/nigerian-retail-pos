@@ -42,6 +42,8 @@ Desktop distributions are built for the host operating system. Build and test th
 - Tenant-scoped active and named held basket recovery after restart, including payment-entry text/customer/method; screen-state retention across navigation.
 - Keyboard barcode entry with Enter adds one item; physical scanner testing remains outstanding.
 - Searchable sales and receipt details, customer repayments/history, reconciled CSV statements, and clearly scoped money summaries.
+- Customer phone/address and credit limits, with live transaction checks against new debt. Blank limit means unlimited; zero prevents new credit. Profile edits preserve change history.
+- Optional agreed repayment due dates on credit sales, retained in active/held baskets, receipts and exports. More → Review customer credit separates original due dates from repayments and current debt.
 - Linked cash-sale returns with explicit restocking choice and duplicate-refund protection.
 - Receipt text export and operating-system print dialog with pagination.
 - Supplier receipt balances, later cash payments, and payment history.

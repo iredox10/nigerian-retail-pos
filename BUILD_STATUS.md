@@ -1,17 +1,27 @@
 # Desktop build status
 
-12 November 2026 · Buying-package conversion update
+12 November 2026 · Customer credit controls update
 
 ## Verified
 
 - Shared and desktop compilation with Kotlin 2.2.20, Compose 1.9.1 and JDK 17.
-- **112 automated tests pass**, with zero failures or errors: 39 prior tests plus six after-sales, four tenant-snapshot, four receipt, six CSV/report-date, eight encrypted-backup, three restore-regression, four product-import tests, eight catalogue/stock/customer-query tests, eight held-sale/recovery tests, five customer-statement tests, five purchase-unit persistence/migration tests, ten independent conversion-integrity tests, and two purchase CSV tests.
+- **132 automated tests pass**, with zero failures or errors: 39 prior tests plus six after-sales, four tenant-snapshot, four receipt, six CSV/report-date, eight encrypted-backup, three restore-regression, four product-import tests, eight catalogue/stock/customer-query tests, eight held-sale/recovery tests, five customer-statement tests, five purchase-unit persistence/migration tests, ten independent conversion-integrity tests, two purchase CSV tests, three credit-domain tests, seven customer-credit persistence tests, eight credit-review tests and two credit-output/draft tests.
 - Coverage includes cross-tenant rejection, exact kobo amounts, retry deduplication, return limits/restocking, supplier overpayment, atomic import rejection, WAT date boundaries, spreadsheet formula protection, encrypted tenant-only backup, wrong passwords, corrupted input, repeated restore and cash/debt-history consistency.
 - Linux desktop distribution rebuilt successfully using `gradle :desktopApp:createDistributable` at `desktopApp/build/compose/binaries/main/app/RetailPOS`.
 - Native isolated previews rendered for Reports, Sales, Suppliers, Backup and Import. Reports filled the 1920 × 1080 display; Sales and Suppliers were also inspected in the compositor-provided narrower window. See [Reports](artifacts/desktop-reports.png), [Sales](artifacts/desktop-sales.png), and [Suppliers](artifacts/desktop-suppliers.png), [Backup](artifacts/desktop-backup.png), and [Import](artifacts/desktop-import.png).
 - Previous fullscreen verification remains recorded in [the fullscreen render](artifacts/desktop-fullscreen.png). Startup requests true fullscreen with F11 and visible window controls. Window-manager behavior still needs Windows and multi-monitor verification.
 
-## Latest buying-package additions
+## Latest customer-credit additions
+
+- Customer phone/address editing with Nigerian-format phone normalization, clear unlimited/zero credit-limit states and immutable before/after edit history.
+- New customer debt is checked against the current stored limit inside the sale transaction. Lowering a limit does not write off existing debt; cash sales and repayments remain available.
+- Optional agreed due dates on new credit sales use the WAT calendar; malformed or past dates reject the new transaction. Existing/historical dates remain valid records on restore.
+- Active and held baskets retain due-date text, including unfinished input. Receipts, sale/customer CSVs and statements preserve the saved due date.
+- More → Review customer credit separates past-due original sale dates, today/future/undated sales, current all-date customer debt and total repayments. It does not invent payment allocations or an exact overdue invoice balance.
+- Legacy database and backup migrations retain old balances and leave absent contact/limit/date fields unset. Profile credentials and online membership remain outside this workflow.
+- Native isolated preview renders inspected for the [customer credit editor](artifacts/desktop-customer-credit-editor.png) and [credit review](artifacts/desktop-credit-review.png). No complete end-to-end interaction or merchant study is claimed.
+
+## Previous buying-package additions
 
 - Define merchant-specific buying units under Stock → Manage → Buying units, for example 1 carton = 24 bottles. Names/factors are immutable; archive and create a new definition when package sizes change.
 - Receive stock in a chosen buying unit, with quantity and cost labeled per carton/pack and an explicit base-stock preview before saving.
