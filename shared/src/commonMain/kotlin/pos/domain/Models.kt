@@ -12,11 +12,14 @@ data class Product(
     val unit: String,
     val priceMinor: Long,
     val stock: Double,
+    val barcode: String? = null,
+    val archived: Boolean = false,
 ) {
     init {
         require(id.isNotBlank() && tenantId.isNotBlank())
         require(name.isNotBlank() && unit.isNotBlank())
         require(priceMinor >= 0) { "Selling price cannot be negative." }
+        require(barcode == null || (barcode.isNotBlank() && barcode == barcode.trim() && barcode.length <= 128 && barcode.none { it.isISOControl() })) { "Use a non-empty barcode of at most 128 characters." }
         require(stock.isFinite() && stock >= 0 && stock <= 9_007_199_254_740_991.0) { "Stock must be a non-negative quantity within the supported exact range." }
     }
 }
