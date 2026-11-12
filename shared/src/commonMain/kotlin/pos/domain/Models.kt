@@ -24,10 +24,16 @@ data class Product(
     }
 }
 
-data class Customer(val id: String, val tenantId: String, val name: String, val balanceMinor: Long) {
+data class Customer(
+    val id: String, val tenantId: String, val name: String, val balanceMinor: Long,
+    val phone: String? = null, val address: String? = null, val creditLimitMinor: Long? = null,
+) {
     init {
         require(id.isNotBlank() && tenantId.isNotBlank() && name.isNotBlank())
         require(balanceMinor >= 0) { "Customer debt cannot be negative." }
+        require(creditLimitMinor == null || creditLimitMinor >= 0) { "Credit limit cannot be negative." }
+        require(phone == null || normalizeNigerianPhone(phone) == phone) { "Customer phone must be stored in international format." }
+        require(address == null || (address.isNotBlank() && address == address.trim() && address.length <= 1000)) { "Use an address of at most 1000 characters, or leave it empty." }
     }
 }
 
@@ -46,8 +52,10 @@ data class Sale(
     val creditMinor: Long,
     val customerId: String?,
     val createdAt: String,
+    val dueDate: String? = null,
 ) {
     init {
+        require(dueDate == null || (creditMinor > 0 && isValidCreditDueDate(dueDate))) { "A due date must be a valid YYYY-MM-DD date for a credit sale." }
         require(id.isNotBlank() && tenantId.isNotBlank() && createdAt.isNotBlank())
         require(lines.isNotEmpty()) { "Add an item before taking payment." }
         require(lines.all { it.product.tenantId == tenantId }) { "Items belong to another shop." }
@@ -74,6 +82,7 @@ fun checkout(
     customer: Customer? = null,
     allowCredit: Boolean = false,
     createdAt: String,
+    dueDate: String? = null,
 ): CheckoutResult {
     require(tenantId.isNotBlank())
     require(cashGivenMinor >= 0) { "Enter a non-negative cash amount." }
@@ -87,9 +96,12 @@ fun checkout(
     require(credit == 0L || (allowCredit && customer != null)) {
         "Still to pay: choose another payment or explicitly allow customer credit."
     }
-    if (customer != null) addMoney(customer.balanceMinor, credit)
+    if (customer != null) {
+        val debt=addMoney(customer.balanceMinor, credit)
+        require(credit == 0L || customer.creditLimitMinor == null || debt <= customer.creditLimitMinor) { "This sale would exceed the customer's credit limit." }
+    }
     return CheckoutResult(
-        Sale(id, tenantId, lines.toList(), total, appliedCash, credit, customer?.id, createdAt),
+        Sale(id, tenantId, lines.toList(), total, appliedCash, credit, customer?.id, createdAt, dueDate),
         cashGivenMinor - appliedCash,
     )
 }
