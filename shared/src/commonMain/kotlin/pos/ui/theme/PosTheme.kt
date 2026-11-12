@@ -99,6 +99,13 @@ private val PosColorScheme = lightColorScheme(
     surface = PosPalette.Surface,
     onSurface = PosPalette.Ink,
     surfaceVariant = PosPalette.SurfaceSubtle,
+    // Material overlays must use our existing neutral surfaces, not its default purple containers.
+    surfaceTint = PosPalette.Accent,
+    surfaceContainerLowest = PosPalette.Surface,
+    surfaceContainerLow = PosPalette.SurfaceSubtle,
+    surfaceContainer = PosPalette.Surface,
+    surfaceContainerHigh = PosPalette.Surface,
+    surfaceContainerHighest = PosPalette.SurfaceSubtle,
     onSurfaceVariant = PosPalette.Secondary,
     outline = PosPalette.ControlBorder,
     outlineVariant = PosPalette.Border,

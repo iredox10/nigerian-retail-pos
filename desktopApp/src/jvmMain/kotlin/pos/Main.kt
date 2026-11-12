@@ -26,6 +26,7 @@ import pos.screens.SuppliersScreen
 import pos.screens.BackupPanel
 import pos.screens.RestoreBackupDialog
 import pos.screens.ProductImportScreen
+import pos.screens.CustomerWorkspace
 import pos.ui.theme.PosTheme
 
 fun main() = application {
@@ -85,9 +86,7 @@ fun main() = application {
                             try { repo.checkout(current.id, lines, cash, customer, operationId); revision++; null } catch (e: Exception) { e.message ?: "Sale not saved" }
                         } }
                         "Stock" -> StockScreen(repo, current.id, onChanged={ revision++ }, onImport={ route="Import" })
-                        "Customers" -> CustomerScreen(customers, { name -> repo.addCustomer(current.id, name); revision++ }, { id, amount, operationId ->
-                            try { repo.recordRepayment(current.id, id, amount, operationId); revision++; null } catch(e:Exception) { e.message ?: "Payment not saved" }
-                        })
+                        "Customers" -> CustomerWorkspace(repo,current.id) { revision++ }
                         "Sales" -> SalesScreen(repo, current.id) { revision++ }
                         "Reports" -> ReportsScreen(repo, current.id)
                         "Suppliers" -> SuppliersScreen(repo, current.id) { revision++ }
@@ -147,31 +146,4 @@ fun main() = application {
             Text("No online account is created. Use a trusted computer; local database encryption is not yet enabled.",style=MaterialTheme.typography.bodySmall)
         } }
     }
-}
-
-@Composable private fun Empty(title:String,body:String) { Column(Modifier.padding(vertical=40.dp),verticalArrangement=Arrangement.spacedBy(8.dp)) { Text(title,style=MaterialTheme.typography.titleLarge);Text(body) } }
-@Composable private fun CustomerScreen(customers:List<Customer>,add:(String)->Unit,repay:(String,Long,String)->String?) {
-    var adding by remember { mutableStateOf(false) };var repayment by remember { mutableStateOf<Customer?>(null) }
-    Column(verticalArrangement=Arrangement.spacedBy(16.dp)) {
-        Row { Text("Who owes you",Modifier.weight(1f),style=MaterialTheme.typography.headlineSmall);Button(shape=MaterialTheme.shapes.small,onClick={adding=true}){Text("Add customer")} }
-        if(customers.isEmpty()) Empty("No customers yet","Add a customer when you need to record credit or a repayment.")
-        LazyColumn { items(customers){ c -> Surface(Modifier.fillMaxWidth().padding(bottom=8.dp),shape=MaterialTheme.shapes.small) { Row(Modifier.padding(16.dp),verticalAlignment=Alignment.CenterVertically) { Column(Modifier.weight(1f)){Text(c.name,fontWeight=FontWeight.SemiBold);Text("Customer owes you ${money(c.balanceMinor)}")};OutlinedButton(shape=MaterialTheme.shapes.small,onClick={repayment=c},enabled=c.balanceMinor>0){Text("Record payment")} } } } }
-    }
-    if(adding) EntryDialog("Add customer",listOf("Customer name"),{adding=false}) { f -> try {require(f[0].isNotBlank());add(f[0]);adding=false;null}catch(e:Exception){"Enter a customer name"} }
-    repayment?.let { c ->
-        val operationId = remember(c.id) { java.util.UUID.randomUUID().toString() }
-        EntryDialog("Record payment · ${c.name}",listOf("Cash received in naira"),{repayment=null}) { f ->
-            val amount = parseNaira(f[0])
-            if (amount == null) "Enter a valid amount with no more than two decimal places" else {
-                val error = repay(c.id, amount, operationId)
-                if (error == null) repayment = null
-                error
-            }
-        }
-    }
-}
-
-@Composable private fun EntryDialog(title:String,labels:List<String>,dismiss:()->Unit,save:(List<String>)->String?) {
-    val fields=remember { mutableStateListOf<String>().apply { repeat(labels.size){add("")} } };var error by remember {mutableStateOf<String?>(null)}
-    AlertDialog(onDismissRequest=dismiss,title={Text(title)},text={Column(verticalArrangement=Arrangement.spacedBy(12.dp)){labels.forEachIndexed {i,label->OutlinedTextField(fields[i],{fields[i]=it},label={Text(label)},singleLine=true)};error?.let{Text(it,color=MaterialTheme.colorScheme.error)}}},confirmButton={Button(shape=MaterialTheme.shapes.small,onClick={error=save(fields.toList())}){Text("Save")}},dismissButton={TextButton(dismiss){Text("Cancel")}})
 }

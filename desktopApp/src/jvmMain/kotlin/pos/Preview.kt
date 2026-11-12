@@ -15,7 +15,7 @@ fun main() {
         val repo = remember { PosRepository(":memory:") }
         val tenant = remember {
             repo.createTenant("Practice shop · Sample data").also { t ->
-                val malt=repo.addProduct(t.id,"Malt drink · 330 ml","bottle",50000,240.0)
+                val malt=repo.addProduct(t.id,"Malt drink · 330 ml","bottle",50000,240.0,"6150000000010")
                 val rice=repo.addProduct(t.id,"Premium rice · 5 kg","bag",1250000,32.0)
                 repo.addProduct(t.id,"Vegetable oil · 1 litre","bottle",380000,48.0)
                 repo.addProduct(t.id,"Laundry soap · 200 g","piece",45000,96.0)
@@ -29,6 +29,9 @@ fun main() {
                 repo.recordExpense(t.id,"Fuel","Generator fuel",125000,"sample-fuel")
                 repo.recordCashMovement(t.id,250000,"Owner added cash","sample-contribution")
                 repo.receiveStock(t.id,rice.id,2,1000000,200000,"Sample wholesaler","sample-stock")
+                val held=SaleDraft("${malt.id}:2",java.util.UUID.randomUUID().toString())
+                DraftStore(t.id).save(held)
+                DraftStore(t.id).hold("Sample · collect later",held)
                 DraftStore(t.id).save(SaleDraft("${malt.id}:3;${rice.id}:1",java.util.UUID.randomUUID().toString()))
             }
         }
