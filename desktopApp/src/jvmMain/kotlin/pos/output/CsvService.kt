@@ -45,8 +45,8 @@ object CsvService {
 
     fun products(tenantId: String, values: List<Product>): String {
         require(values.all { it.tenantId == tenantId }) { "Export includes another shop's stock." }
-        return encode(listOf("Product ID", "Name", "Selling unit", "Selling price NGN", "Current stock quantity"), values.map {
-            listOf(text(it.id), text(it.name), text(it.unit), naira(it.priceMinor), CsvCell.Number(BigDecimal.valueOf(it.stock).toPlainString()))
+        return encode(listOf("Product ID", "Name", "Selling unit", "Selling price NGN", "Current stock quantity", "Barcode", "Archived"), values.map {
+            listOf(text(it.id), text(it.name), text(it.unit), naira(it.priceMinor), CsvCell.Number(BigDecimal.valueOf(it.stock).toPlainString()), text(it.barcode.orEmpty()), text(it.archived.toString()))
         })
     }
 

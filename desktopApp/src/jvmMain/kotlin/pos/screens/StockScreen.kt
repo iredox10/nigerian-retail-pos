@@ -1,6 +1,7 @@
 package pos.screens
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -33,43 +34,60 @@ fun StockScreen(repo: PosRepository, tenantId: String, onChanged: () -> Unit, on
 @Composable
 private fun TenantStockScreen(repo: PosRepository, tenantId: String, onChanged: () -> Unit, onImport: (() -> Unit)?) {
     var revision by remember { mutableStateOf(0) }
-    val products = remember(tenantId, revision) { repo.products(tenantId) }
+    val allProducts = remember(tenantId, revision) { repo.products(tenantId, includeArchived = true) }
+    val products = allProducts.filterNot { it.archived }
     val receipts = remember(tenantId, revision) { repo.stockReceipts(tenantId) }
     var search by remember { mutableStateOf("") }
     var history by remember { mutableStateOf(false) }
+    var archived by remember { mutableStateOf(false) }
     var editor by remember { mutableStateOf<String?>(null) }
     var selectedProductId by remember { mutableStateOf<String?>(null) }
     var savedMessage by remember { mutableStateOf<String?>(null) }
     fun refresh(message: String) { revision++; savedMessage = message; editor = null; onChanged() }
 
     Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(20.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            SectionHeader("Stock", "Know what is available and record what came in.", Modifier.weight(1f))
-            if (editor == null) {
-                if(onImport!=null) NeutralButton("Import CSV",onImport)
-                NeutralButton("Add item", { savedMessage = null; editor = "item" })
-                PosButton("Add stock", {
-                    selectedProductId = null; savedMessage = null; editor = "receive"
-                }, enabled = products.isNotEmpty())
-            } else NeutralButton("Back to stock", { editor = null })
+        BoxWithConstraints(Modifier.fillMaxWidth()) {
+            val compact = maxWidth < 900.dp
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                if (compact) SectionHeader("Stock", "Know what is available and record what came in.")
+                val toolbarScroll = rememberScrollState()
+                Row(if (compact) Modifier.fillMaxWidth().horizontalScroll(toolbarScroll) else Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    if (!compact) SectionHeader("Stock", "Know what is available and record what came in.", Modifier.weight(1f))
+                    if (editor == null) {
+                        if(onImport!=null) NeutralButton("Import CSV",onImport)
+                        NeutralButton("Add item", { savedMessage = null; editor = "item" })
+                        PosButton("Add stock", {
+                            selectedProductId = null; savedMessage = null; editor = "receive"
+                        }, enabled = products.isNotEmpty())
+                    } else NeutralButton("Back to stock", { editor = null })
+                }
+            }
         }
         when (editor) {
-            "item" -> AddItemForm { name, unit, price, quantity ->
-                repo.addProduct(tenantId, name, unit, price, quantity.toDouble())
+            "item" -> AddItemForm { name, unit, price, quantity, barcode ->
+                repo.addProduct(tenantId, name, unit, price, quantity.toDouble(), barcode)
                 refresh("Item saved on this computer")
             }
             "receive" -> ReceiveStockForm(products, selectedProductId) { product, quantity, cost, paid, supplier, operation ->
                 repo.receiveStock(tenantId, product.id, quantity, cost, paid, supplier, operation)
                 refresh("Stock received and saved on this computer")
             }
+            "manage" -> {
+                val selected = allProducts.find { it.id == selectedProductId }
+                if (selected == null) EmptyState("Item is no longer available", "Return to stock and select the item again.")
+                else ProductManagementPanel(repo, tenantId, selected, ::refresh) {
+                    selectedProductId = selected.id; editor = "receive"
+                }
+            }
             else -> {
                 savedMessage?.let { InlineNotice(it, tone = NoticeTone.Success, modifier = Modifier.fillMaxWidth()) }
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    FilterChip(selected = !history, onClick = { history = false }, label = { Text("Items in stock") })
+                Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    FilterChip(selected = !history && !archived, onClick = { history = false; archived = false }, label = { Text("Items in stock") })
+                    FilterChip(selected = !history && archived, onClick = { history = false; archived = true }, label = { Text("Archived items") })
                     FilterChip(selected = history, onClick = { history = true }, label = { Text("Stock received (${receipts.size})") })
                 }
                 PosTextField(search, { search = it }, if (history) "Search stock received" else "Search for an item",
-                    Modifier.fillMaxWidth(), hint = if (history) "Item name or supplier" else "Item name or selling unit")
+                    Modifier.fillMaxWidth(), hint = if (history) "Item name or supplier" else "Item name, selling unit or barcode")
                 if (history) {
                     val matching = receipts.filter {
                         it.productName.contains(search, true) || it.supplierName.contains(search, true)
@@ -101,29 +119,50 @@ private fun TenantStockScreen(repo: PosRepository, tenantId: String, onChanged: 
                         }
                     }
                 } else {
-                    val matching = products.filter { it.name.contains(search, true) || it.unit.contains(search, true) }
+                    val visible = allProducts.filter { it.archived == archived }
+                    val matching = visible.filter { it.name.contains(search, true) || it.unit.contains(search, true) || it.barcode?.contains(search, true) == true }
+                    if (archived) Text("Archived items stay in saved sales and stock history. Restore an item to sell or receive it again.", style = MaterialTheme.typography.bodySmall, color = PosPalette.Secondary)
                     if (matching.isEmpty()) {
-                        EmptyState(if (products.isEmpty()) "Add your first item" else "No matching items",
-                            if (products.isEmpty()) "Give it a name, selling unit, selling price and a counted opening quantity."
-                            else "Try another name or selling unit, or clear the search.")
-                    } else {
-                        Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp), horizontalArrangement = Arrangement.spacedBy(20.dp)) {
-                            Text("Item", Modifier.weight(1f), style = MaterialTheme.typography.labelMedium)
-                            Text("Available", Modifier.width(130.dp), style = MaterialTheme.typography.labelMedium)
-                            Text("Selling price", Modifier.width(170.dp), style = MaterialTheme.typography.labelMedium)
-                            Spacer(Modifier.width(110.dp))
-                        }
-                        LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
-                            items(matching, key = { it.id }) { product ->
-                                Surface(color = PosPalette.Surface) {
-                                    Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp),
-                                        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(20.dp)) {
-                                        Text(product.name, Modifier.weight(1f), fontWeight = FontWeight.Medium)
-                                        Text("${stockQuantity(product.stock)} ${product.unit}", Modifier.width(130.dp))
-                                        Text("${money(product.priceMinor)} / ${product.unit}", Modifier.width(170.dp))
-                                        NeutralButton("Add stock", {
-                                            selectedProductId = product.id; savedMessage = null; editor = "receive"
-                                        }, Modifier.width(110.dp))
+                        EmptyState(if (visible.isEmpty()) (if(archived) "No archived items" else "Add your first item") else "No matching items",
+                            if (visible.isEmpty()) (if(archived) "Items you archive will appear here." else "Give it a name, selling unit, selling price and a counted opening quantity.")
+                            else "Try another name, selling unit or barcode, or clear the search.")
+                    } else BoxWithConstraints(Modifier.weight(1f)) {
+                        val compact = maxWidth < 900.dp
+                        Column(Modifier.fillMaxSize()) {
+                            if (!compact) Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp), horizontalArrangement = Arrangement.spacedBy(20.dp)) {
+                                Text("Item", Modifier.weight(1f), style = MaterialTheme.typography.labelMedium)
+                                Text("Available", Modifier.width(130.dp), style = MaterialTheme.typography.labelMedium)
+                                Text("Selling price", Modifier.width(170.dp), style = MaterialTheme.typography.labelMedium)
+                                Spacer(Modifier.width(230.dp))
+                            }
+                            LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
+                                items(matching, key = { it.id }) { product ->
+                                    Surface(color = PosPalette.Surface) {
+                                        Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(20.dp)) {
+                                                Column(Modifier.weight(1f)) {
+                                                    Text(product.name, fontWeight = FontWeight.Medium)
+                                                    product.barcode?.let { Text("Barcode $it", style = MaterialTheme.typography.bodySmall, color = PosPalette.Secondary) }
+                                                }
+                                                if (!compact) {
+                                                    Text("${stockQuantity(product.stock)} ${product.unit}", Modifier.width(130.dp))
+                                                    Text("${money(product.priceMinor)} / ${product.unit}", Modifier.width(170.dp))
+                                                    NeutralButton("Manage", {
+                                                        selectedProductId = product.id; savedMessage = null; editor = "manage"
+                                                    }, Modifier.width(100.dp))
+                                                    NeutralButton("Add stock", {
+                                                        selectedProductId = product.id; savedMessage = null; editor = "receive"
+                                                    }, Modifier.width(110.dp), enabled = !product.archived)
+                                                }
+                                            }
+                                            if (compact) {
+                                                Text("${stockQuantity(product.stock)} ${product.unit} available · ${money(product.priceMinor)} / ${product.unit}", color = PosPalette.Secondary)
+                                                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                                                    NeutralButton("Manage", { selectedProductId = product.id; savedMessage = null; editor = "manage" })
+                                                    NeutralButton("Add stock", { selectedProductId = product.id; savedMessage = null; editor = "receive" }, enabled = !product.archived)
+                                                }
+                                            }
+                                        }
                                     }
                                 }
                             }
@@ -136,11 +175,12 @@ private fun TenantStockScreen(repo: PosRepository, tenantId: String, onChanged: 
 }
 
 @Composable
-private fun AddItemForm(save: (String, String, Long, Int) -> Unit) {
+private fun AddItemForm(save: (String, String, Long, Int, String?) -> Unit) {
     var name by remember { mutableStateOf("") }
     var unit by remember { mutableStateOf("") }
     var price by remember { mutableStateOf("") }
     var quantity by remember { mutableStateOf("") }
+    var barcode by remember { mutableStateOf("") }
     var error by remember { mutableStateOf<String?>(null) }
     var saving by remember { mutableStateOf(false) }
     Surface(color = PosPalette.Surface, shape = MaterialTheme.shapes.large) {
@@ -151,6 +191,7 @@ private fun AddItemForm(save: (String, String, Long, Int) -> Unit) {
                 PosTextField(name, { name = it }, "Item name", hint = "For example, Malt drink 330 ml")
                 PosTextField(unit, { unit = it }, "Selling unit", hint = "For example, bottle, pack or piece")
                 PosTextField(price, { price = it }, "Selling price per unit (₦)", hint = "Enter an amount, for example 500.00")
+                PosTextField(barcode, { barcode = it }, "Barcode (optional)", hint = "Scan or type the code on the item")
                 PosTextField(quantity, { quantity = it }, "Counted opening quantity", hint = "Whole units; enter 0 only if you have none")
                 Text("This first version records one selling unit per item and whole-unit quantities. Carton conversions and fractional stock are not available yet.",
                     style = MaterialTheme.typography.bodySmall, color = PosPalette.Secondary)
@@ -163,7 +204,7 @@ private fun AddItemForm(save: (String, String, Long, Int) -> Unit) {
                         val amount = parseStockMoney(price, "selling price")
                         val count = quantity.trim().toIntOrNull()
                         require(count != null && count >= 0) { "Enter the counted opening quantity as a whole number, or 0 if you have none." }
-                        save(name.trim(), unit.trim(), amount, count)
+                        save(name.trim(), unit.trim(), amount, count, barcode.trim().ifBlank { null })
                     } catch (e: Exception) { error = e.message ?: "The item could not be saved. Your entries are still here." }
                     finally { saving = false }
                 }, enabled = !saving)
