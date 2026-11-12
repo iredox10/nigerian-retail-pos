@@ -49,8 +49,8 @@ object CustomerStatementService {
         val customer = statement.customer
         val rows = statement.events.map { event ->
             listOf(text(customer.id), text(customer.name), text(event.createdAt), text(if (event.sale != null) "Original sale" else "Cash debt repayment"), text(event.id),
-                amount(event.sale?.totalMinor ?: 0), amount(event.sale?.cashMinor ?: 0), amount(event.sale?.creditMinor ?: 0), amount(event.repayment?.amountMinor ?: 0), text(""))
-        } + listOf(listOf(text(customer.id), text(customer.name), text(""), text("Current debt — all dates"), text(""), text(""), text(""), text(""), text(""), amount(customer.balanceMinor)))
-        return CsvService.encode(listOf("Customer ID", "Customer name", "Recorded at UTC", "Activity", "Record ID", "Original sale total NGN", "Cash applied at sale NGN", "Credit added at sale NGN", "Later repayment NGN", "Current debt NGN"), rows)
+                amount(event.sale?.totalMinor ?: 0), amount(event.sale?.cashMinor ?: 0), amount(event.sale?.creditMinor ?: 0), amount(event.repayment?.amountMinor ?: 0), text(""),text(event.sale?.dueDate.orEmpty()))
+        } + listOf(listOf(text(customer.id), text(customer.name), text(""), text("Current debt — all dates"), text(""), text(""), text(""), text(""), text(""), amount(customer.balanceMinor),text("")))
+        return CsvService.encode(listOf("Customer ID", "Customer name", "Recorded at UTC", "Activity", "Record ID", "Original sale total NGN", "Cash applied at sale NGN", "Credit added at sale NGN", "Later repayment NGN", "Current debt NGN", "Agreed repayment due date WAT"), rows)
     }
 }

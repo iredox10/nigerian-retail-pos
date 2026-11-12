@@ -12,7 +12,7 @@ import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.locks.ReentrantLock
 import kotlin.concurrent.withLock
 
-data class SaleDraft(val cart: String, val operationId: String, val cashText: String = "", val customerId: String? = null, val method: String = "cash")
+data class SaleDraft(val cart: String, val operationId: String, val cashText: String = "", val customerId: String? = null, val method: String = "cash", val dueDateText:String="")
 data class HeldSale(val id: String, val name: String, val savedAt: String, val draft: SaleDraft)
 
 /** Active and held baskets share one atomic, tenant-specific file; no stock is reserved. */
@@ -60,7 +60,7 @@ class DraftStore(tenantId: String, directory: Path = Path.of(System.getProperty(
     }
     private fun validate(draft: SaleDraft) {
         require(draft.operationId.isNotBlank() && draft.operationId.length<=200) { "Saved draft has an invalid operation reference." }
-        require(draft.method in setOf("cash","credit") && draft.cashText.length<=1024 && (draft.customerId==null || draft.customerId.isNotBlank())) { "Saved payment details are invalid." }
+        require(draft.method in setOf("cash","credit") && draft.cashText.length<=1024 && draft.dueDateText.length<=32 && (draft.customerId==null || draft.customerId.isNotBlank())) { "Saved payment details are invalid." }
         require(draft.cart.length<=1_000_000) { "Saved draft is too large." }
         if(draft.cart.isNotEmpty()) {
             val rows=draft.cart.split(';'); require(rows.size<=10_000)
@@ -78,10 +78,10 @@ class DraftStore(tenantId: String, directory: Path = Path.of(System.getProperty(
         val p=Properties().apply { Files.newInputStream(file).use { load(it) } }
         require(p.getProperty("version","1") in setOf("1","2")) { "Saved basket version is not supported." }
         fun draft(prefix:String):SaleDraft {
-            val value=SaleDraft(requireNotNull(p.getProperty(prefix+"cart")) { "Saved draft is incomplete." },requireNotNull(p.getProperty(prefix+"operationId")) { "Saved draft has no operation reference." },p.getProperty(prefix+"cashText",""),p.getProperty(prefix+"customerId"),p.getProperty(prefix+"method","cash"))
+            val value=SaleDraft(requireNotNull(p.getProperty(prefix+"cart")) { "Saved draft is incomplete." },requireNotNull(p.getProperty(prefix+"operationId")) { "Saved draft has no operation reference." },p.getProperty(prefix+"cashText",""),p.getProperty(prefix+"customerId"),p.getProperty(prefix+"method","cash"),p.getProperty(prefix+"dueDateText",""))
             validate(value);return value
         }
-        val activeFields=setOf("operationId","cart","cashText","customerId","method")
+        val activeFields=setOf("operationId","cart","cashText","customerId","method","dueDateText")
         val hasActive=activeFields.any { p.containsKey(it) }
         require(!hasActive || (p.containsKey("operationId") && p.containsKey("cart"))) { "Saved active sale is incomplete. The file has not been changed." }
         require(p.isNotEmpty()) { "Saved basket file is empty. It has not been changed." }
@@ -104,7 +104,7 @@ class DraftStore(tenantId: String, directory: Path = Path.of(System.getProperty(
         if(state.active==null && state.held.isEmpty()) { Files.deleteIfExists(file); return }
         val p=Properties().apply { setProperty("version","2");setProperty("heldCount",state.held.size.toString()) }
         fun put(prefix:String,draft:SaleDraft) {
-            p.setProperty(prefix+"operationId",draft.operationId);p.setProperty(prefix+"cart",draft.cart);p.setProperty(prefix+"cashText",draft.cashText);p.setProperty(prefix+"method",draft.method)
+            p.setProperty(prefix+"operationId",draft.operationId);p.setProperty(prefix+"cart",draft.cart);p.setProperty(prefix+"cashText",draft.cashText);p.setProperty(prefix+"method",draft.method);p.setProperty(prefix+"dueDateText",draft.dueDateText)
             draft.customerId?.let { p.setProperty(prefix+"customerId",it) }
         }
         state.active?.let { put("",it) }

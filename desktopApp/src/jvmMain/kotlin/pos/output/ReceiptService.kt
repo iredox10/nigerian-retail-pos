@@ -45,6 +45,7 @@ object ReceiptService {
             if (sale.creditMinor > 0) {
                 appendLine("Customer owed at sale: ${money(sale.creditMinor)}")
                 appendLine("This is not the customer's current debt.")
+                appendLine(sale.dueDate?.let { "Agreed repayment due date: $it (WAT)" } ?: "No repayment due date recorded")
             } else appendLine("Paid in cash")
             // Tender/change are not stored by the initial sale model; never invent them.
             if (returns.isNotEmpty()) {

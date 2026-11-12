@@ -38,8 +38,8 @@ object CsvService {
 
     fun sales(tenantId: String, values: List<Sale>): String {
         require(values.all { it.tenantId == tenantId }) { "Export includes another shop's sales." }
-        return encode(listOf("Sale ID", "Recorded at UTC", "Sale total NGN", "Cash applied at sale NGN", "Credit granted at sale NGN", "Customer ID"), values.map {
-            listOf(text(it.id), text(it.createdAt), naira(it.totalMinor), naira(it.cashMinor), naira(it.creditMinor), text(it.customerId.orEmpty()))
+        return encode(listOf("Sale ID", "Recorded at UTC", "Sale total NGN", "Cash applied at sale NGN", "Credit granted at sale NGN", "Customer ID", "Agreed repayment due date WAT"), values.map {
+            listOf(text(it.id), text(it.createdAt), naira(it.totalMinor), naira(it.cashMinor), naira(it.creditMinor), text(it.customerId.orEmpty()), text(it.dueDate.orEmpty()))
         })
     }
 
@@ -52,7 +52,7 @@ object CsvService {
 
     fun customers(tenantId: String, values: List<Customer>): String {
         require(values.all { it.tenantId == tenantId }) { "Export includes another shop's customers." }
-        return encode(listOf("Customer ID", "Name", "Current debt NGN"), values.map { listOf(text(it.id), text(it.name), naira(it.balanceMinor)) })
+        return encode(listOf("Customer ID", "Name", "Current debt NGN", "Phone", "Address", "Credit limit NGN (blank means no limit)"), values.map { listOf(text(it.id), text(it.name), naira(it.balanceMinor), text(it.phone.orEmpty()), text(it.address.orEmpty()), it.creditLimitMinor?.let(::naira) ?: text("")) })
     }
 
     fun expenses(tenantId: String, values: List<Expense>): String {

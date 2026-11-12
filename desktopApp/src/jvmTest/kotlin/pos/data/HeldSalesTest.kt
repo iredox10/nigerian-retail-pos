@@ -10,7 +10,7 @@ class HeldSalesTest {
         try {block(DraftStore("a",directory),directory)} finally {directory.toFile().deleteRecursively()}
     }
     @Test fun multipleHeldSalesSurviveRestartWithPaymentDetails()=withStore { store,dir ->
-        val first=SaleDraft("malt:2","first","500.00","amina","credit")
+        val first=SaleDraft("malt:2","first","500.00","amina","credit","2026-12-30")
         store.save(first);val a=store.hold("Amina",first)
         val second=SaleDraft("rice:1","second")
         store.save(second);store.hold("Collection later",second)
