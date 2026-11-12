@@ -47,7 +47,7 @@ fun ReportsScreen(repo: PosRepository, tenantId: String) {
     var message by remember { mutableStateOf<String?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
     val loaded = remember(tenantId, revision) { runCatching {
-        ReportRecords(repo.sales(tenantId), repo.customers(tenantId), repo.products(tenantId), repo.expenses(tenantId), repo.cashEntries(tenantId), repo.stockReceipts(tenantId), repo.saleReturns(tenantId), repo.supplierPayments(tenantId))
+        ReportRecords(repo.sales(tenantId), repo.customers(tenantId), repo.products(tenantId,includeArchived=true), repo.expenses(tenantId), repo.cashEntries(tenantId), repo.stockReceipts(tenantId), repo.saleReturns(tenantId), repo.supplierPayments(tenantId))
     } }
     val rangeResult = remember(start, end) { runCatching { ReportDateRange(LocalDate.parse(start), LocalDate.parse(end)) } }
     val range = rangeResult.getOrNull()
@@ -108,7 +108,7 @@ fun ReportsScreen(repo: PosRepository, tenantId: String) {
             }
 
             Surface(shape = MaterialTheme.shapes.medium) { Column(Modifier.fillMaxWidth().padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                SectionHeader("Export this shop's records", "CSV for a spreadsheet · Customer and stock exports are current snapshots, not historical views")
+                SectionHeader("Export this shop's records", "CSV for a spreadsheet · Current product export includes archived items; customer and stock snapshots are not historical views")
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     Box {
                         NeutralButton("$selectedExport ▾", { exportMenu = true })

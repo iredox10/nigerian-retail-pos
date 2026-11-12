@@ -71,8 +71,8 @@ object CsvService {
 
     fun stockReceipts(tenantId: String, values: List<StockReceipt>): String {
         require(values.all { it.tenantId == tenantId }) { "Export includes another shop's purchases." }
-        return encode(listOf("Receipt ID", "Recorded at UTC", "Product ID", "Item", "Buying unit", "Quantity", "Buying price per unit NGN", "Purchase total NGN", "Cash paid at purchase NGN", "Credit at purchase NGN", "Supplier"), values.map {
-            listOf(text(it.id), text(it.createdAt), text(it.productId), text(it.productName), text(it.unit), CsvCell.Number(it.quantity.toString()), naira(it.unitCostMinor), naira(it.totalCostMinor), naira(it.paidCashMinor), naira(it.unpaidMinor), text(it.supplierName))
+        return encode(listOf("Receipt ID", "Recorded at UTC", "Product ID", "Item", "Buying unit", "Quantity", "Buying price per unit NGN", "Purchase total NGN", "Cash paid at purchase NGN", "Credit at purchase NGN", "Supplier", "Base selling unit", "Base units per buying unit", "Base quantity added", "Buying unit ID"), values.map {
+            listOf(text(it.id), text(it.createdAt), text(it.productId), text(it.productName), text(it.unit), CsvCell.Number(it.quantity.toString()), naira(it.unitCostMinor), naira(it.totalCostMinor), naira(it.paidCashMinor), naira(it.unpaidMinor), text(it.supplierName), text(it.baseUnit), CsvCell.Number(it.baseUnitsPerUnit.toString()), CsvCell.Number(it.baseQuantity.toString()), text(it.purchaseUnitId.orEmpty()))
         })
     }
 

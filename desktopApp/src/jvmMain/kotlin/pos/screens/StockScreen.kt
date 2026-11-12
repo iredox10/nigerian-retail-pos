@@ -15,6 +15,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import pos.data.PosRepository
 import pos.domain.Product
+import pos.domain.PurchaseUnit
 import pos.domain.money
 import pos.domain.parseNaira
 import pos.ui.components.*
@@ -68,8 +69,9 @@ private fun TenantStockScreen(repo: PosRepository, tenantId: String, onChanged: 
                 repo.addProduct(tenantId, name, unit, price, quantity.toDouble(), barcode)
                 refresh("Item saved on this computer")
             }
-            "receive" -> ReceiveStockForm(products, selectedProductId) { product, quantity, cost, paid, supplier, operation ->
-                repo.receiveStock(tenantId, product.id, quantity, cost, paid, supplier, operation)
+            "receive" -> ReceiveStockForm(repo, tenantId, products, selectedProductId) { product, quantity, cost, paid, supplier, operation, buyingUnit ->
+                repo.receiveStock(tenantId, product.id, quantity, cost, paid, supplier, operation,
+                    purchaseUnitId = buyingUnit?.id, expectedBaseUnitsPerUnit = buyingUnit?.baseUnitsPerUnit ?: 1)
                 refresh("Stock received and saved on this computer")
             }
             "manage" -> {
@@ -106,6 +108,8 @@ private fun TenantStockScreen(repo: PosRepository, tenantId: String, onChanged: 
                                         Column(Modifier.weight(1f)) {
                                             Text(receipt.productName, fontWeight = FontWeight.SemiBold)
                                             Text("${receipt.quantity} ${receipt.unit} · ${receipt.supplierName}", color = PosPalette.Secondary)
+                                            if (receipt.purchaseUnitId != null || receipt.baseUnitsPerUnit != 1)
+                                                Text("Added ${receipt.baseQuantity} ${receipt.baseUnit} to stock · 1 ${receipt.unit} = ${receipt.baseUnitsPerUnit} ${receipt.baseUnit}", style = MaterialTheme.typography.bodySmall, color = PosPalette.Secondary)
                                         }
                                         Text(money(receipt.totalCostMinor), fontWeight = FontWeight.SemiBold)
                                     }
@@ -193,7 +197,7 @@ private fun AddItemForm(save: (String, String, Long, Int, String?) -> Unit) {
                 PosTextField(price, { price = it }, "Selling price per unit (₦)", hint = "Enter an amount, for example 500.00")
                 PosTextField(barcode, { barcode = it }, "Barcode (optional)", hint = "Scan or type the code on the item")
                 PosTextField(quantity, { quantity = it }, "Counted opening quantity", hint = "Whole units; enter 0 only if you have none")
-                Text("This first version records one selling unit per item and whole-unit quantities. Carton conversions and fractional stock are not available yet.",
+                Text("Stock and checkout use this selling unit. After saving, open Manage → Buying units to define cartons or packs for receiving stock. Fractional quantities and selling by another unit are not available yet.",
                     style = MaterialTheme.typography.bodySmall, color = PosPalette.Secondary)
                 error?.let { InlineNotice("Item not saved", it, NoticeTone.Danger, Modifier.fillMaxWidth()) }
                 PosButton(if (saving) "Saving item…" else "Save item", {
@@ -215,9 +219,11 @@ private fun AddItemForm(save: (String, String, Long, Int, String?) -> Unit) {
 
 @Composable
 private fun ReceiveStockForm(
+    repo: PosRepository,
+    tenantId: String,
     products: List<Product>,
     initialProductId: String?,
-    save: (Product, Int, Long, Long, String, String) -> Unit,
+    save: (Product, Int, Long, Long, String, String, PurchaseUnit?) -> Unit,
 ) {
     var selectedId by remember { mutableStateOf(initialProductId) }
     var choosing by remember { mutableStateOf(initialProductId == null) }
@@ -228,8 +234,20 @@ private fun ReceiveStockForm(
     var supplier by remember { mutableStateOf("") }
     var error by remember { mutableStateOf<String?>(null) }
     var saving by remember { mutableStateOf(false) }
-    val operationId = remember { UUID.randomUUID().toString() }
+    var buyingUnitId by remember { mutableStateOf<String?>(null) }
     val product = products.find { it.id == selectedId }
+    val buyingUnitsResult = remember(tenantId, selectedId) { runCatching {
+        if (product == null) emptyList() else repo.purchaseUnits(tenantId, product.id)
+    } }
+    val buyingUnits = buyingUnitsResult.getOrDefault(emptyList())
+    val buyingUnit = buyingUnits.find { it.id == buyingUnitId }
+    val selectedUnitMissing = buyingUnitId != null && buyingUnit == null
+    val unitName = buyingUnit?.name ?: product?.unit ?: "unit"
+    val factor = buyingUnit?.baseUnitsPerUnit ?: 1
+    val operationId = remember(selectedId, buyingUnitId, quantity, cost, paid, supplier) { UUID.randomUUID().toString() }
+    val count = quantity.trim().takeIf { it.matches(Regex("[0-9]+")) }?.toIntOrNull()?.takeIf { it > 0 }
+    val addedBaseQuantity = if (count != null) runCatching { Math.multiplyExact(count.toLong(), factor.toLong()) }.getOrNull() else null
+    val conversionSupported = addedBaseQuantity == null || addedBaseQuantity <= 9_007_199_254_740_991L
     val total = runCatching {
         val count = quantity.trim().toIntOrNull() ?: return@runCatching null
         if (count <= 0) return@runCatching null
@@ -254,7 +272,7 @@ private fun ReceiveStockForm(
                     PosTextField(itemSearch, { itemSearch = it }, "Choose an item", hint = "Search by name")
                     LazyColumn(Modifier.fillMaxWidth().heightIn(max = 200.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         items(products.filter { it.name.contains(itemSearch, true) }, key = { it.id }) { choice ->
-                            OutlinedButton(onClick = { selectedId = choice.id; choosing = false; cost = ""; quantity = "" },
+                            OutlinedButton(onClick = { selectedId = choice.id; choosing = false; buyingUnitId = null; cost = ""; quantity = ""; paid = ""; error = null },
                                 modifier = Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.small,
                                 border = BorderStroke(1.dp, PosPalette.Border)) {
                                 Text("${choice.name} · ${choice.unit}", Modifier.fillMaxWidth(), color = PosPalette.Ink)
@@ -263,8 +281,36 @@ private fun ReceiveStockForm(
                     }
                     if (products.none { it.name.contains(itemSearch, true) }) Text("No matching items. Try another name.", color = PosPalette.Secondary)
                 }
-                PosTextField(quantity, { quantity = it }, "Quantity received${product?.let { " (${it.unit})" } ?: ""}", hint = "Whole units greater than 0")
-                PosTextField(cost, { cost = it }, "Buying price per ${product?.unit ?: "unit"} (₦)", hint = "Enter the supplier's unit price")
+                if (product != null) {
+                    Text("How did these goods arrive?", style = MaterialTheme.typography.titleMedium)
+                    Text("Choose the buying unit before entering quantities and cost. Stock and checkout remain in ${product.unit}.", style = MaterialTheme.typography.bodySmall, color = PosPalette.Secondary)
+                    Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        FilterChip(buyingUnitId == null, {
+                            if (buyingUnitId != null) { buyingUnitId = null; quantity = ""; cost = ""; paid = ""; error = null }
+                        }, label = { Text(product.unit) })
+                        buyingUnits.forEach { choice ->
+                            FilterChip(buyingUnitId == choice.id, {
+                                if (buyingUnitId != choice.id) { buyingUnitId = choice.id; quantity = ""; cost = ""; paid = ""; error = null }
+                            }, label = { Text("${choice.name} · ${choice.baseUnitsPerUnit} ${product.unit}") })
+                        }
+                    }
+                    buyingUnit?.let { Text("1 ${it.name} contains ${it.baseUnitsPerUnit} ${product.unit}.", style = MaterialTheme.typography.bodyMedium) }
+                    if (buyingUnits.isEmpty() && buyingUnitsResult.isSuccess) Text("Need a carton or pack? Return to Stock → Manage → Buying units to define what it contains.", style = MaterialTheme.typography.bodySmall, color = PosPalette.Secondary)
+                }
+                buyingUnitsResult.exceptionOrNull()?.let { InlineNotice("Buying units could not be loaded", it.message ?: "Return to Stock and open this item again.", NoticeTone.Danger) }
+                if (selectedUnitMissing) InlineNotice("Choose the buying unit again", "The selected buying unit is no longer available. No stock has been recorded.", NoticeTone.Danger)
+                PosTextField(quantity, { quantity = it; error = null }, "Quantity received ($unitName)", hint = "Whole units greater than 0")
+                PosTextField(cost, { cost = it; error = null }, "Buying price per $unitName (₦)", hint = "Enter the supplier's price for one $unitName")
+                if (product != null && addedBaseQuantity != null && !selectedUnitMissing) {
+                    Surface(color = PosPalette.SurfaceSubtle, shape = MaterialTheme.shapes.small) {
+                        Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Text("Stock to add", style = MaterialTheme.typography.titleMedium)
+                            Text("$count $unitName × $factor ${product.unit} = $addedBaseQuantity ${product.unit}")
+                            Text("The receipt keeps this unit and conversion. The selling unit stays ${product.unit}.", style = MaterialTheme.typography.bodySmall, color = PosPalette.Secondary)
+                        }
+                    }
+                }
+                if (!conversionSupported) InlineNotice("Quantity is too large", "Reduce the received quantity. Its conversion exceeds the supported stock range.", NoticeTone.Danger)
                 PosTextField(supplier, { supplier = it }, "Who supplied it?", hint = "Supplier name")
                 PosTextField(paid, { paid = it }, "Cash paid now (₦)", hint = "Enter 0 only if fully on supplier credit")
                 Text("Cash paid is taken from the open cash shift. Open Today's cash first if you are paying cash. Other payment methods are not supported in this form yet.",
@@ -287,10 +333,11 @@ private fun ReceiveStockForm(
                         val buyingTotal = Math.multiplyExact(unitCost, count.toLong())
                         require(cashPaid <= buyingTotal) { "Cash paid cannot exceed the total buying cost." }
                         require(supplier.isNotBlank()) { "Enter who supplied these goods." }
-                        save(chosen, count, unitCost, cashPaid, supplier.trim(), operationId)
+                        require(buyingUnitsResult.isSuccess && !selectedUnitMissing && conversionSupported) { "Choose an available buying unit before saving." }
+                        save(chosen, count, unitCost, cashPaid, supplier.trim(), operationId, buyingUnit)
                     } catch (e: Exception) { error = e.message ?: "Stock could not be saved. Your entries are still here." }
                     finally { saving = false }
-                }, enabled = !saving)
+                }, enabled = !saving && product != null && buyingUnitsResult.isSuccess && !selectedUnitMissing && conversionSupported)
             }
         }
     }

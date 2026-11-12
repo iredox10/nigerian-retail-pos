@@ -105,6 +105,7 @@ private fun SupplierReceipt(row: ReceiptBalance, canPay: Boolean, pay: () -> Uni
                 }
                 StatusPill(if (row.outstanding > 0) "Money owed" else "Fully paid", if (row.outstanding > 0) NoticeTone.Warning else NoticeTone.Success)
             }
+            if(receipt.purchaseUnitId!=null) Text("${receipt.quantity} ${receipt.unit} × ${receipt.baseUnitsPerUnit} ${receipt.baseUnit} = ${receipt.baseQuantity} ${receipt.baseUnit} added to stock",style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
             LabelValueRow("Purchase total", money(receipt.totalCostMinor))
             LabelValueRow("Cash paid when stock arrived", money(receipt.paidCashMinor))
             val laterPaid = row.payments.fold(0L) { sum, payment -> Math.addExact(sum, payment.amountMinor) }
