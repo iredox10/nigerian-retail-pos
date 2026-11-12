@@ -35,11 +35,13 @@ Desktop distributions are built for the host operating system. Build and test th
 
 - Local shop creation and password-gated workspace selection.
 - Tenant-scoped SQLite products, customers, sales, repayments, and outbox entries.
-- Product creation/search, stock availability and integer selling quantities.
+- Product creation, name/unit/barcode search, price/name/barcode edits, archive/restore and preserved price history.
+- Whole-unit stock counts with previous/count/difference history, reason and stale-count rejection.
 - Cash checkout, exact amount/change, and explicit named-customer partial credit.
 - Atomic stock/debt/sale writes and retry deduplication with stable operation identifiers.
-- Tenant-scoped basket recovery after restart, and screen-state retention across navigation.
-- Searchable sales and receipt details, customer repayments, and clearly scoped money summaries.
+- Tenant-scoped active and named held basket recovery after restart, including payment-entry text/customer/method; screen-state retention across navigation.
+- Keyboard barcode entry with Enter adds one item; physical scanner testing remains outstanding.
+- Searchable sales and receipt details, customer repayments/history, reconciled CSV statements, and clearly scoped money summaries.
 - Linked cash-sale returns with explicit restocking choice and duplicate-refund protection.
 - Receipt text export and operating-system print dialog with pagination.
 - Supplier receipt balances, later cash payments, and payment history.
@@ -60,7 +62,7 @@ Desktop distributions are built for the host operating system. Build and test th
 - Current stock uses one configured selling unit per product and integer checkout/receiving quantities. Packaging conversions, fractional checkout, credit-sale returns/exchanges, full supplier accounting, and other advanced modules remain future work. Later cash supplier payments are allocated to individual stock receipts; supplier master profiles, credits and statements remain pending.
 - Backups exclude unfinished baskets, owner credentials and device settings. Restore creates a separate shop and preserves historical cash counts; verify physical cash before trading. Backup encryption does not encrypt the working database.
 - Only one cash shift per shop is supported in this build. Open Money → Today's cash and enter the cash physically counted. Cash paid out for expenses or stock requires that open drawer and sufficient recorded cash. Sales/repayments made without an open drawer remain unassigned and are not automatically added to a later shift's opening count.
-- Draft recovery saves item IDs and quantities; it does not yet retain tendered cash, customer selection, or a frozen price snapshot across restart. Checkout revalidates current price and stock. Review restored goods before payment.
+- Active and held baskets retain item IDs/quantities and payment-entry text/customer/method, without a frozen price snapshot. Holding reserves no stock. Checkout revalidates current price and stock. Review restored goods before payment. A held basket is not an order, a completed sale or a payment record.
 - UI currently performs short local repository operations synchronously; large-catalogue profiling, background database execution, complete keyboard shortcuts, screen-reader review, and merchant usability testing remain outstanding.
 
 ## Project structure
