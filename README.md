@@ -22,7 +22,7 @@ For an explicitly isolated sample workspace with an in-memory database and tempo
 
 The preview bypasses workspace onboarding only for its own sample database. It never opens normal shop records or calls a payment service. Preview data is discarded when the process ends.
 
-To review a particular screen, set `POS_PREVIEW_SCREEN=Stock` or `POS_PREVIEW_SCREEN=Money`. For explicitly windowed layout checks, also set `POS_PREVIEW_WIDTH` and `POS_PREVIEW_HEIGHT`. The default preview opens fullscreen just like the regular app.
+To review a particular screen, set `POS_PREVIEW_SCREEN=Stock`, `Money`, `Sales`, `Reports`, `Suppliers`, `Backup`, or `Import`. For explicitly windowed layout checks, also set `POS_PREVIEW_WIDTH` and `POS_PREVIEW_HEIGHT`. The default preview opens fullscreen just like the regular app.
 
 ```sh
 ./gradlew :shared:jvmTest :desktopApp:jvmTest
@@ -39,7 +39,13 @@ Desktop distributions are built for the host operating system. Build and test th
 - Cash checkout, exact amount/change, and explicit named-customer partial credit.
 - Atomic stock/debt/sale writes and retry deduplication with stable operation identifiers.
 - Tenant-scoped basket recovery after restart, and screen-state retention across navigation.
-- Saved receipts, customer repayments, and clearly scoped money summaries.
+- Searchable sales and receipt details, customer repayments, and clearly scoped money summaries.
+- Linked cash-sale returns with explicit restocking choice and duplicate-refund protection.
+- Receipt text export and operating-system print dialog with pagination.
+- Supplier receipt balances, later cash payments, and payment history.
+- WAT date-range reports and spreadsheet-safe CSV exports.
+- Product CSV template, preview and atomic add-only import (up to 10,000 whole-unit products, 5 MB).
+- Password-encrypted, tenant-only backup files; restore into a new password-gated shop with validated history.
 - Stock receiving with buying cost, cash paid, and the unpaid amount at the time of receipt.
 - Cash expenses, reasoned cash additions/withdrawals, opening counts, and immutable closing counts with shortage/excess.
 - Automatic drawer activity for new cash sales and repayments while a shift is open; older cash remains explicitly unassigned.
@@ -50,8 +56,9 @@ Desktop distributions are built for the host operating system. Build and test th
 ## Important boundaries
 
 - Local tenant isolation and owner passwords are implemented. Online identity, staff roles/memberships, server authorization, remote tenant administration, and encrypted local storage are not yet implemented. This is not ready for untrusted shared-computer or multi-user SaaS production deployment.
-- No cloud sync transport, Heroku backend, bank/card verification, printing, backup service, or external messages are connected. The status bar explicitly says so.
-- Current stock uses one configured selling unit per product and integer checkout/receiving quantities. Packaging conversions, fractional checkout, returns, full supplier accounting, and other advanced modules remain future work. Stock receipts preserve purchase balances; they are not a live supplier ledger and later supplier payments cannot yet be allocated to them.
+- No cloud sync transport, Heroku backend, bank/card verification, or external messages are connected. Native print submission is implemented; real printer output remains unverified. Manual encrypted backups are local files, not cloud backups. The status bar explicitly says so.
+- Current stock uses one configured selling unit per product and integer checkout/receiving quantities. Packaging conversions, fractional checkout, credit-sale returns/exchanges, full supplier accounting, and other advanced modules remain future work. Later cash supplier payments are allocated to individual stock receipts; supplier master profiles, credits and statements remain pending.
+- Backups exclude unfinished baskets, owner credentials and device settings. Restore creates a separate shop and preserves historical cash counts; verify physical cash before trading. Backup encryption does not encrypt the working database.
 - Only one cash shift per shop is supported in this build. Open Money → Today's cash and enter the cash physically counted. Cash paid out for expenses or stock requires that open drawer and sufficient recorded cash. Sales/repayments made without an open drawer remain unassigned and are not automatically added to a later shift's opening count.
 - Draft recovery saves item IDs and quantities; it does not yet retain tendered cash, customer selection, or a frozen price snapshot across restart. Checkout revalidates current price and stock. Review restored goods before payment.
 - UI currently performs short local repository operations synchronously; large-catalogue profiling, background database execution, complete keyboard shortcuts, screen-reader review, and merchant usability testing remain outstanding.
@@ -81,4 +88,4 @@ The shared module currently declares a JVM target while keeping domain/UI code i
 - [Merchant usability test plan](design/USABILITY_TEST_PLAN.md): first-glance and practical task checks; no tests have been run yet.
 - [Contributor instructions](AGENTS.md): entry-point rules for developers and AI contributors.
 
-The chosen stack direction is Kotlin Multiplatform/Compose for installed apps, React/TypeScript with TanStack for web, and Heroku for online services. Backend synchronization architecture remains open. Product name, pricing, and delivery schedule are not yet decided. See [build verification](BUILD_STATUS.md) for current evidence and limitations.
+The chosen stack direction is Kotlin Multiplatform/Compose for installed apps, React/TypeScript with TanStack for web, and Heroku for online services. Backend synchronization architecture remains open. Product name, pricing, and delivery schedule are not yet decided. See the [full implementation audit](IMPLEMENTATION_STATUS.md) for remaining requirements and [build verification](BUILD_STATUS.md) for current evidence and limitations.
