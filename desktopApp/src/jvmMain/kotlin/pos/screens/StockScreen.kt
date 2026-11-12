@@ -26,12 +26,12 @@ import java.util.UUID
 
 /** Every read and write remains scoped to the selected business, including editor state. */
 @Composable
-fun StockScreen(repo: PosRepository, tenantId: String, onChanged: () -> Unit) {
-    key(tenantId) { TenantStockScreen(repo, tenantId, onChanged) }
+fun StockScreen(repo: PosRepository, tenantId: String, onChanged: () -> Unit, onImport: (() -> Unit)? = null) {
+    key(tenantId) { TenantStockScreen(repo, tenantId, onChanged, onImport) }
 }
 
 @Composable
-private fun TenantStockScreen(repo: PosRepository, tenantId: String, onChanged: () -> Unit) {
+private fun TenantStockScreen(repo: PosRepository, tenantId: String, onChanged: () -> Unit, onImport: (() -> Unit)?) {
     var revision by remember { mutableStateOf(0) }
     val products = remember(tenantId, revision) { repo.products(tenantId) }
     val receipts = remember(tenantId, revision) { repo.stockReceipts(tenantId) }
@@ -46,6 +46,7 @@ private fun TenantStockScreen(repo: PosRepository, tenantId: String, onChanged: 
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             SectionHeader("Stock", "Know what is available and record what came in.", Modifier.weight(1f))
             if (editor == null) {
+                if(onImport!=null) NeutralButton("Import CSV",onImport)
                 NeutralButton("Add item", { savedMessage = null; editor = "item" })
                 PosButton("Add stock", {
                     selectedProductId = null; savedMessage = null; editor = "receive"

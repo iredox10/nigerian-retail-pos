@@ -20,6 +20,12 @@ import pos.security.WorkspaceAccess
 import pos.screens.SellScreen
 import pos.screens.StockScreen
 import pos.screens.MoneyScreen
+import pos.screens.SalesScreen
+import pos.screens.ReportsScreen
+import pos.screens.SuppliersScreen
+import pos.screens.BackupPanel
+import pos.screens.RestoreBackupDialog
+import pos.screens.ProductImportScreen
 import pos.ui.theme.PosTheme
 
 fun main() = application {
@@ -49,7 +55,7 @@ fun main() = application {
                 Text("Owner workspace", style = MaterialTheme.typography.labelMedium)
                 Spacer(Modifier.height(20.dp))
                 listOf("Sell", "Sales", "Stock", "Customers", "Money", "More").forEach { item ->
-                    val selected = route == item
+                    val selected = route == item || (item == "More" && route in setOf("Reports","Suppliers","Backup","Import"))
                     Surface(onClick = { route = item; notice = null }, color = if (selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface, shape = MaterialTheme.shapes.small) {
                         Text(item, Modifier.fillMaxWidth().padding(14.dp), color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface, fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal)
                     }
@@ -61,6 +67,7 @@ fun main() = application {
             Column(Modifier.weight(1f).fillMaxHeight()) {
                 Row(Modifier.fillMaxWidth().height(64.dp).padding(horizontal = 24.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text(route, style = MaterialTheme.typography.headlineSmall)
+                    if (route in setOf("Reports","Suppliers","Backup","Import")) TextButton({ route = if(route=="Import") "Stock" else "More" }) { Text(if(route=="Import") "Back to stock" else "Back to shop tools") }
                     Spacer(Modifier.weight(1f))
                     if (route == "Sell") {
                         val activeShift = remember(current.id, revision) { repo.activeCashShift(current.id) }
@@ -77,30 +84,25 @@ fun main() = application {
                         "Sell" -> saleStates.SaveableStateProvider(current.id) { SellScreen(current.id, products, customers) { lines, cash, customer, operationId ->
                             try { repo.checkout(current.id, lines, cash, customer, operationId); revision++; null } catch (e: Exception) { e.message ?: "Sale not saved" }
                         } }
-                        "Stock" -> StockScreen(repo, current.id) { revision++ }
+                        "Stock" -> StockScreen(repo, current.id, onChanged={ revision++ }, onImport={ route="Import" })
                         "Customers" -> CustomerScreen(customers, { name -> repo.addCustomer(current.id, name); revision++ }, { id, amount, operationId ->
                             try { repo.recordRepayment(current.id, id, amount, operationId); revision++; null } catch(e:Exception) { e.message ?: "Payment not saved" }
                         })
-                        "Sales" -> {
-                            val sales = remember(current.id, revision) { repo.sales(current.id) }
-                            LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                                item { Text("Sales & receipts", style = MaterialTheme.typography.headlineSmall); Text("Saved on this computer · ${sales.size} sales") }
-                                if(sales.isEmpty()) item { Empty("No sales yet", "Completed sales appear here after you take payment.") }
-                                items(sales) { sale -> Surface(shape = MaterialTheme.shapes.medium) { Column(Modifier.fillMaxWidth().padding(20.dp)) {
-                                    Row { Text("Receipt ${sale.id.takeLast(8).uppercase()}", Modifier.weight(1f), fontWeight = FontWeight.SemiBold); Text(money(sale.totalMinor), fontWeight = FontWeight.SemiBold) }
-                                    Text(sale.createdAt, style = MaterialTheme.typography.bodySmall)
-                                    Text(if(sale.creditMinor > 0) "Credit at sale: ${money(sale.creditMinor)} · See Customers for current debt" else "Paid in cash")
-                                    sale.lines.forEach { Text("${it.quantity} ${it.product.unit} · ${it.product.name}") }
-                                } } }
-                            }
-                        }
+                        "Sales" -> SalesScreen(repo, current.id) { revision++ }
+                        "Reports" -> ReportsScreen(repo, current.id)
+                        "Suppliers" -> SuppliersScreen(repo, current.id) { revision++ }
+                        "Backup" -> BackupPanel(repo, current)
+                        "Import" -> ProductImportScreen(repo, current.id) { revision++ }
                         "Money" -> MoneyScreen(repo, current.id) { revision++ }
                         else -> Column(verticalArrangement = Arrangement.spacedBy(20.dp)) {
                             Text("Your shop tools", style = MaterialTheme.typography.headlineSmall)
-                            Text("Available now: local sales, products, stock receiving, customer credit and repayments, expenses, cash drawer closing, receipts, tenant workspaces.")
-                            Text("Coming next: staff roles, returns, printing, backups, and authenticated cloud sync. These services are not connected yet.", Modifier.widthIn(max=680.dp))
-                            Text("Each shop's records are scoped by tenant. This local owner login is not a substitute for server authorization or device encryption.", Modifier.widthIn(max=680.dp))
+                            Text("Choose the work you need to do.")
+                            pos.ui.components.NeutralButton("Suppliers & payments", { route = "Suppliers" })
+                            pos.ui.components.NeutralButton("Reports & CSV exports", { route = "Reports" })
+                            pos.ui.components.NeutralButton("Encrypted shop backup", { route = "Backup" })
+                            pos.ui.components.NeutralButton("Import new items from CSV", { route = "Import" })
                             Text("Saved work: ${repo.pendingSyncCount(current.id)} local changes are waiting for online setup. No online backup has been created.", Modifier.widthIn(max=680.dp))
+                            Text("Online accounts, staff roles, packaging conversions and external payment services remain under development.", Modifier.widthIn(max=680.dp))
                         }
                     }
                 }
@@ -120,6 +122,8 @@ fun main() = application {
     var name by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var error by remember { mutableStateOf<String?>(null) }
+    var restoring by remember { mutableStateOf(false) }
+    if(restoring) RestoreBackupDialog(repo,access,{restoring=false}) { restoring=false; onEnter(it) }
     Row(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).padding(64.dp), horizontalArrangement=Arrangement.spacedBy(64.dp), verticalAlignment=Alignment.CenterVertically) {
         Column(Modifier.weight(1f), verticalArrangement=Arrangement.spacedBy(24.dp)) {
             Text("Your shop.\nYour records.", style=MaterialTheme.typography.displaySmall, fontWeight=FontWeight.SemiBold)
@@ -139,6 +143,7 @@ fun main() = application {
                 } else { require(access.unlock(selected!!.id,password)) { "Password not recognized for this shop" }; onEnter(selected!!) }
             } catch(e:Exception) {error=e.message ?: "Could not open shop"}},modifier=Modifier.fillMaxWidth().height(52.dp)) { Text(if(selected==null) "Create shop workspace" else "Unlock shop") }
             if(selected!=null) TextButton(shape=MaterialTheme.shapes.small,onClick={selected=null;password=""}) { Text("Create another shop") }
+            TextButton({ restoring=true }) { Text("Restore an encrypted backup") }
             Text("No online account is created. Use a trusted computer; local database encryption is not yet enabled.",style=MaterialTheme.typography.bodySmall)
         } }
     }

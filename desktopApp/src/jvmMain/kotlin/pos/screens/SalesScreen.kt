@@ -1,0 +1,219 @@
+package pos.screens
+
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.selection.SelectionContainer
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import pos.data.PosRepository
+import pos.domain.Sale
+import pos.domain.money
+import pos.output.ReceiptService
+import pos.output.receiptDate
+import pos.ui.components.*
+import pos.ui.theme.PosPalette
+import java.util.UUID
+
+@Composable
+fun SalesScreen(repo: PosRepository, tenantId: String, onChanged: () -> Unit) {
+    key(tenantId) { TenantSalesScreen(repo, tenantId, onChanged) }
+}
+
+@Composable
+private fun TenantSalesScreen(repo: PosRepository, tenantId: String, onChanged: () -> Unit) {
+    var revision by remember { mutableStateOf(0) }
+    val sales = remember(tenantId, revision) { repo.sales(tenantId) }
+    val tenant = remember(tenantId) { repo.tenants().single { it.id == tenantId } }
+    var search by remember { mutableStateOf("") }
+    var selectedId by remember { mutableStateOf<String?>(null) }
+    var returning by remember { mutableStateOf(false) }
+    var notice by remember { mutableStateOf<String?>(null) }
+    var noticeError by remember { mutableStateOf(false) }
+    var outputBusy by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
+    val selected = sales.find { it.id == selectedId }
+    val returns = remember(tenantId, selectedId, revision) { selectedId?.let { repo.saleReturns(tenantId, it) } ?: emptyList() }
+    val receipt = selected?.let { ReceiptService.format(tenant, it, returns) }
+    val returnable = remember(tenantId, selectedId, revision) {
+        selectedId?.let { repo.returnableQuantities(tenantId, it) } ?: emptyMap()
+    }
+    val filtered = sales.filter { sale ->
+        search.isBlank() || sale.id.contains(search, true) || sale.lines.any { it.product.name.contains(search, true) } ||
+            money(sale.totalMinor).contains(search, true) || receiptDate(sale.createdAt).contains(search, true)
+    }
+
+    Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        SectionHeader("Sales", "Find a saved sale, print a receipt or record returned items.")
+        notice?.let {
+            InlineNotice(if (noticeError) "Action not completed" else "Receipt update", it,
+                if (noticeError) NoticeTone.Danger else NoticeTone.Neutral, Modifier.fillMaxWidth())
+        }
+        BoxWithConstraints(Modifier.weight(1f)) {
+            val compact = maxWidth < 800.dp
+            Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                if (!compact || selected == null) {
+                    Column(Modifier.weight(1f).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        PosTextField(search, { search = it }, "Find a receipt", hint = "Receipt number, item name, amount or date")
+                        Text("${filtered.size} saved ${if (filtered.size == 1) "sale" else "sales"}", style = MaterialTheme.typography.bodySmall,
+                            color = PosPalette.Secondary)
+                        if (filtered.isEmpty()) EmptyState(if (sales.isEmpty()) "No sales yet" else "No matching receipts",
+                            if (sales.isEmpty()) "Completed sales from this shop will appear here, even without internet."
+                            else "Try another receipt number, item or amount, or clear your search.")
+                        else LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            items(filtered, key = { it.id }) { sale ->
+                                Surface(onClick = { selectedId = sale.id; notice = null },
+                                    color = if (sale.id == selectedId) PosPalette.AccentTint else PosPalette.Surface,
+                                    shape = MaterialTheme.shapes.medium) {
+                                    Column(Modifier.fillMaxWidth().padding(18.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                        Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                                            Text("Receipt ${sale.id.take(8)}", Modifier.weight(1f), fontWeight = FontWeight.SemiBold)
+                                            Text(money(sale.totalMinor), fontWeight = FontWeight.SemiBold)
+                                        }
+                                        Text(receiptDate(sale.createdAt), style = MaterialTheme.typography.bodySmall, color = PosPalette.Secondary)
+                                        Text(sale.lines.joinToString { "${it.quantity} ${it.product.unit} ${it.product.name}" },
+                                            maxLines = 2, style = MaterialTheme.typography.bodySmall, color = PosPalette.Secondary)
+                                        StatusPill(if (sale.creditMinor > 0) "Part paid / pay later at sale" else "Paid in cash",
+                                            if (sale.creditMinor > 0) NoticeTone.Warning else NoticeTone.Neutral)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                if (selected != null && receipt != null) {
+                    Surface(Modifier.then(if (compact) Modifier.weight(1f) else Modifier.width(400.dp)).fillMaxHeight(),
+                        color = PosPalette.Surface, shape = MaterialTheme.shapes.large) {
+                        Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text("Saved receipt", Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
+                                TextButton({ selectedId = null }) { Text(if (compact) "Back to sales" else "Close") }
+                            }
+                            SelectionContainer(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState())) {
+                                Text(receipt, style = MaterialTheme.typography.bodySmall)
+                            }
+                            HorizontalDivider(color = PosPalette.Border)
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                NeutralButton("Print receipt", {
+                                    outputBusy = true
+                                    scope.launch {
+                                        try {
+                                            val submitted = withContext(Dispatchers.IO) { ReceiptService.printReceipt(receipt) }
+                                            noticeError = false
+                                            notice = if (submitted) "Receipt sent to the printer. Check the printer for delivery." else "Printing cancelled. The sale is unchanged."
+                                        } catch (e: Exception) { noticeError = true; notice = e.message ?: "Printing failed. You can export the receipt instead." }
+                                        finally { outputBusy = false }
+                                    }
+                                }, Modifier.weight(1f), enabled = !outputBusy)
+                                NeutralButton("Export text", {
+                                    outputBusy = true
+                                    scope.launch {
+                                        try {
+                                            val file = withContext(Dispatchers.IO) { ReceiptService.exportReceipt(receipt) }
+                                            noticeError = false
+                                            notice = file?.let { "Receipt exported to ${it.absolutePath}" } ?: "Export cancelled. The sale is unchanged."
+                                        } catch (e: Exception) { noticeError = true; notice = e.message ?: "The receipt could not be exported." }
+                                        finally { outputBusy = false }
+                                    }
+                                }, Modifier.weight(1f), enabled = !outputBusy)
+                            }
+                            if (selected.creditMinor > 0) {
+                                Text("Returns for receipts with customer credit are not available yet. No debt or payment will be changed here.",
+                                    style = MaterialTheme.typography.bodySmall, color = PosPalette.Secondary)
+                            } else if (returnable.values.any { it > 0 }) {
+                                NeutralButton("Return items", { returning = true }, Modifier.fillMaxWidth(), enabled = !outputBusy)
+                                Text("Cash refunds require an open shift with enough cash.", style = MaterialTheme.typography.bodySmall, color = PosPalette.Secondary)
+                            } else Text("All items from this sale have been returned.", style = MaterialTheme.typography.bodySmall, color = PosPalette.Secondary)
+                        }
+                    }
+                } else if (!compact) {
+                    Surface(Modifier.width(400.dp).fillMaxHeight(), color = PosPalette.Surface, shape = MaterialTheme.shapes.large) {
+                        EmptyState("Choose a sale", "Its original items, payment amounts and any returns will appear here.")
+                    }
+                }
+            }
+        }
+    }
+    if (returning && selected != null) {
+        ReturnItemsDialog(selected, returnable, { returning = false }) { quantities, restock, reason, operation ->
+            repo.returnItems(tenantId, selected.id, quantities, restock, reason, operation)
+            returning = false
+            revision++
+            noticeError = false
+            notice = "Return and cash refund saved. The original sale remains in its history."
+            onChanged()
+        }
+    }
+}
+
+@Composable
+private fun ReturnItemsDialog(
+    sale: Sale,
+    returnable: Map<String, Int>,
+    dismiss: () -> Unit,
+    save: (Map<String, Int>, Boolean, String, String) -> Unit,
+) {
+    val quantities = remember(sale.id) { mutableStateMapOf<String, String>() }
+    var restock by remember(sale.id) { mutableStateOf(false) }
+    var reason by remember(sale.id) { mutableStateOf("") }
+    var error by remember(sale.id) { mutableStateOf<String?>(null) }
+    var saving by remember { mutableStateOf(false) }
+    val operation = remember(sale.id) { UUID.randomUUID().toString() }
+    val preview = runCatching {
+        sale.lines.fold(0L) { sum, line ->
+            val input = quantities[line.product.id].orEmpty()
+            val count = if (input.isBlank()) 0 else input.toIntOrNull() ?: error("Invalid quantity")
+            require(count in 0..(returnable[line.product.id] ?: 0))
+            Math.addExact(sum, Math.multiplyExact(count.toLong(), line.product.priceMinor))
+        }
+    }.getOrNull()
+    AlertDialog(onDismissRequest = { if (!saving) dismiss() }, title = { Text("Return items · ${sale.id.take(8)}") },
+        text = {
+            Column(Modifier.heightIn(max = 460.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text("Enter only the goods being returned. Blank quantities mean no return for that item.", color = PosPalette.Secondary)
+                sale.lines.filter { (returnable[it.product.id] ?: 0) > 0 }.forEach { line ->
+                    PosTextField(quantities[line.product.id].orEmpty(), { quantities[line.product.id] = it },
+                        "${line.product.name} (${line.product.unit})", hint = "Up to ${returnable[line.product.id]} ${line.product.unit}")
+                }
+                PosTextField(reason, { reason = it }, "Why are the goods being returned?", singleLine = false)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Checkbox(restock, { restock = it })
+                    Text("Add these goods back to sellable stock", Modifier.weight(1f))
+                }
+                Text("Leave unchecked for damaged or unsellable goods. This choice applies to all goods in this return.",
+                    style = MaterialTheme.typography.bodySmall, color = PosPalette.Secondary)
+                LabelValueRow("Cash refund", preview?.let(::money) ?: "Check quantities", emphasized = true)
+                Text("Cash leaves the current open shift. A saved return stays linked to the original sale.", style = MaterialTheme.typography.bodySmall, color = PosPalette.Secondary)
+                error?.let { InlineNotice("Return not saved", it, NoticeTone.Danger) }
+            }
+        },
+        confirmButton = {
+            PosButton(if (saving) "Saving return…" else "Save return & cash refund", {
+                saving = true
+                try {
+                    val entries = sale.lines.associate { line ->
+                        val input = quantities[line.product.id].orEmpty().trim()
+                        val quantity = if (input.isBlank()) 0 else input.toIntOrNull()
+                            ?: throw IllegalArgumentException("Enter return quantities as whole numbers.")
+                        require(quantity in 0..(returnable[line.product.id] ?: 0)) { "Return quantity exceeds the items still available to return." }
+                        line.product.id to quantity
+                    }.filterValues { it > 0 }
+                    require(entries.isNotEmpty()) { "Enter at least one item to return." }
+                    require(reason.isNotBlank()) { "Enter why the goods are being returned." }
+                    save(entries, restock, reason.trim(), operation)
+                } catch (e: Exception) { error = e.message ?: "The return could not be saved. Your entries are still here." }
+                finally { saving = false }
+            }, enabled = !saving)
+        },
+        dismissButton = { TextButton(dismiss, enabled = !saving) { Text("Cancel") } },
+    )
+}
