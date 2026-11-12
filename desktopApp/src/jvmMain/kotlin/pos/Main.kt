@@ -27,6 +27,7 @@ import pos.screens.BackupPanel
 import pos.screens.RestoreBackupDialog
 import pos.screens.ProductImportScreen
 import pos.screens.CustomerWorkspace
+import pos.screens.CreditReviewScreen
 import pos.ui.theme.PosTheme
 
 fun main() = application {
@@ -56,7 +57,7 @@ fun main() = application {
                 Text("Owner workspace", style = MaterialTheme.typography.labelMedium)
                 Spacer(Modifier.height(20.dp))
                 listOf("Sell", "Sales", "Stock", "Customers", "Money", "More").forEach { item ->
-                    val selected = route == item || (item == "More" && route in setOf("Reports","Suppliers","Backup","Import"))
+                    val selected = route == item || (item == "More" && route in setOf("Reports","Suppliers","Backup","Import","Credit review"))
                     Surface(onClick = { route = item; notice = null }, color = if (selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface, shape = MaterialTheme.shapes.small) {
                         Text(item, Modifier.fillMaxWidth().padding(14.dp), color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface, fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal)
                     }
@@ -68,7 +69,7 @@ fun main() = application {
             Column(Modifier.weight(1f).fillMaxHeight()) {
                 Row(Modifier.fillMaxWidth().height(64.dp).padding(horizontal = 24.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text(route, style = MaterialTheme.typography.headlineSmall)
-                    if (route in setOf("Reports","Suppliers","Backup","Import")) TextButton({ route = if(route=="Import") "Stock" else "More" }) { Text(if(route=="Import") "Back to stock" else "Back to shop tools") }
+                    if (route in setOf("Reports","Suppliers","Backup","Import","Credit review")) TextButton({ route = if(route=="Import") "Stock" else "More" }) { Text(if(route=="Import") "Back to stock" else "Back to shop tools") }
                     Spacer(Modifier.weight(1f))
                     if (route == "Sell") {
                         val activeShift = remember(current.id, revision) { repo.activeCashShift(current.id) }
@@ -82,12 +83,13 @@ fun main() = application {
                 notice?.let { Text(it, Modifier.padding(16.dp), color = MaterialTheme.colorScheme.error) }
                 Box(Modifier.weight(1f).padding(24.dp)) {
                     when (route) {
-                        "Sell" -> saleStates.SaveableStateProvider(current.id) { SellScreen(current.id, products, customers) { lines, cash, customer, operationId ->
-                            try { repo.checkout(current.id, lines, cash, customer, operationId); revision++; null } catch (e: Exception) { e.message ?: "Sale not saved" }
+                        "Sell" -> saleStates.SaveableStateProvider(current.id) { SellScreen(current.id, products, customers) { lines, cash, customer, operationId, dueDate ->
+                            try { repo.checkout(current.id, lines, cash, customer, operationId,dueDate); revision++; null } catch (e: Exception) { e.message ?: "Sale not saved" }
                         } }
                         "Stock" -> StockScreen(repo, current.id, onChanged={ revision++ }, onImport={ route="Import" })
                         "Customers" -> CustomerWorkspace(repo,current.id) { revision++ }
                         "Sales" -> SalesScreen(repo, current.id) { revision++ }
+                        "Credit review" -> CreditReviewScreen(repo,current.id)
                         "Reports" -> ReportsScreen(repo, current.id)
                         "Suppliers" -> SuppliersScreen(repo, current.id) { revision++ }
                         "Backup" -> BackupPanel(repo, current)
@@ -97,11 +99,12 @@ fun main() = application {
                             Text("Your shop tools", style = MaterialTheme.typography.headlineSmall)
                             Text("Choose the work you need to do.")
                             pos.ui.components.NeutralButton("Suppliers & payments", { route = "Suppliers" })
+                            pos.ui.components.NeutralButton("Review customer credit", { route="Credit review" })
                             pos.ui.components.NeutralButton("Reports & CSV exports", { route = "Reports" })
                             pos.ui.components.NeutralButton("Encrypted shop backup", { route = "Backup" })
                             pos.ui.components.NeutralButton("Import new items from CSV", { route = "Import" })
                             Text("Saved work: ${repo.pendingSyncCount(current.id)} local changes are waiting for online setup. No online backup has been created.", Modifier.widthIn(max=680.dp))
-                            Text("Online accounts, staff roles, packaging conversions and external payment services remain under development.", Modifier.widthIn(max=680.dp))
+                            Text("Online accounts, staff roles, packaging sales and external payment services remain under development.", Modifier.widthIn(max=680.dp))
                         }
                     }
                 }

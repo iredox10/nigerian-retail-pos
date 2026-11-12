@@ -21,11 +21,11 @@ fun main() {
                 repo.addProduct(t.id,"Vegetable oil · 1 litre","bottle",380000,48.0)
                 repo.addProduct(t.id,"Laundry soap · 200 g","piece",45000,96.0)
                 repo.addProduct(t.id,"Tomato paste · 70 g","sachet",25000,120.0)
-                val customer = repo.addCustomer(t.id,"Amina · Sample customer")
+                val customer = repo.addCustomer(t.id,"Amina · Sample customer",phone="08012345678",address="Sample market, Lagos",creditLimitMinor=2000000)
                 val firstShift = repo.openCashShift(t.id,500000)
                 repo.closeCashShift(t.id,firstShift.id,490000)
                 repo.openCashShift(t.id,1000000)
-                repo.checkout(t.id,listOf(CartLine(malt,3)),50000,customer.id,"sample-credit-sale")
+                repo.checkout(t.id,listOf(CartLine(malt,3)),50000,customer.id,"sample-credit-sale",java.time.LocalDate.now(java.time.ZoneId.of("Africa/Lagos")).plusDays(7).toString())
                 repo.recordRepayment(t.id,customer.id,25000)
                 repo.recordExpense(t.id,"Fuel","Generator fuel",125000,"sample-fuel")
                 repo.recordCashMovement(t.id,250000,"Owner added cash","sample-contribution")
@@ -36,7 +36,7 @@ fun main() {
                 DraftStore(t.id).save(SaleDraft("${malt.id}:3;${rice.id}:1",java.util.UUID.randomUUID().toString()))
             }
         }
-        val route = System.getenv("POS_PREVIEW_SCREEN")?.takeIf { it in setOf("Sell","Stock","Money","Sales","Customers","Reports","Suppliers","Backup","Import") } ?: "Sell"
+        val route = System.getenv("POS_PREVIEW_SCREEN")?.takeIf { it in setOf("Sell","Stock","Money","Sales","Customers","Reports","Suppliers","Backup","Import","Credit review") } ?: "Sell"
         val width = System.getenv("POS_PREVIEW_WIDTH")?.toIntOrNull()?.coerceIn(800,1920) ?: 1440
         val height = System.getenv("POS_PREVIEW_HEIGHT")?.toIntOrNull()?.coerceIn(600,1200) ?: 900
         val placement = if (System.getenv("POS_PREVIEW_WIDTH") != null || System.getenv("POS_PREVIEW_HEIGHT") != null) WindowPlacement.Floating else WindowPlacement.Fullscreen

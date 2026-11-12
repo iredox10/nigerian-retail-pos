@@ -28,7 +28,7 @@ fun SellScreen(
     tenantId: String,
     products: List<Product>,
     customers: List<Customer>,
-    onCheckout: (List<CartLine>, Long, String?, String) -> String?,
+    onCheckout: (List<CartLine>, Long, String?, String, String?) -> String?,
 ) {
     val draftStoreResult = remember(tenantId) { runCatching { DraftStore(tenantId) } }
     val draftStore = draftStoreResult.getOrNull()
@@ -41,6 +41,7 @@ fun SellScreen(
     var method by rememberSaveable { mutableStateOf(restoredDraft.getOrNull()?.method ?: "cash") }
     var cashText by rememberSaveable { mutableStateOf(restoredDraft.getOrNull()?.cashText ?: "") }
     var selectedCustomer by rememberSaveable { mutableStateOf<String?>(restoredDraft.getOrNull()?.customerId) }
+    var dueDateText by rememberSaveable { mutableStateOf(restoredDraft.getOrNull()?.dueDateText ?: "") }
     var error by remember { mutableStateOf<String?>(draftStoreResult.exceptionOrNull()?.let { "Draft storage unavailable: ${it.message}" } ?: restoredDraft.exceptionOrNull()?.let { "Could not restore saved sale: ${it.message}. Original draft has not been changed." }) }
     var savedTotal by rememberSaveable { mutableStateOf(0L) }
     var savedChange by rememberSaveable { mutableStateOf(0L) }
@@ -55,15 +56,15 @@ fun SellScreen(
     var heldError by remember { mutableStateOf<String?>(heldResult.exceptionOrNull()?.message) }
     var discard by remember { mutableStateOf<HeldSale?>(null) }
     var reviewNotice by remember { mutableStateOf<String?>(null) }
-    fun currentDraft() = SaleDraft(encodedCart,operationId,cashText,selectedCustomer,method)
-    fun persistPayment(cash:String=cashText,customerId:String?=selectedCustomer,paymentMethod:String=method) {
+    fun currentDraft() = SaleDraft(encodedCart,operationId,cashText,selectedCustomer,method,dueDateText)
+    fun persistPayment(cash:String=cashText,customerId:String?=selectedCustomer,paymentMethod:String=method,due:String=dueDateText) {
         try {
             require(draftStore!=null && restoredDraft.isSuccess) { "Draft storage is unavailable." }
-            draftStore.save(SaleDraft(encodedCart,operationId,cash,customerId,paymentMethod))
-            cashText=cash;selectedCustomer=customerId;method=paymentMethod;error=null
+            draftStore.save(SaleDraft(encodedCart,operationId,cash,customerId,paymentMethod,due))
+            cashText=cash;selectedCustomer=customerId;method=paymentMethod;dueDateText=due;error=null
         } catch(e:Exception) { error="Payment details not saved: ${e.message}" }
     }
-    fun resetCurrent() { encodedCart="";operationId=UUID.randomUUID().toString();stage="items";cashText="";selectedCustomer=null;method="cash";search="";showSaleOnly=false;error=null;reviewNotice=null }
+    fun resetCurrent() { encodedCart="";operationId=UUID.randomUUID().toString();stage="items";cashText="";selectedCustomer=null;method="cash";dueDateText="";search="";showSaleOnly=false;error=null;reviewNotice=null }
     val quantities = remember(encodedCart) {
         encodedCart.split(';').mapNotNull { item ->
             val index = item.lastIndexOf(':')
@@ -83,7 +84,7 @@ fun SellScreen(
             return
         }
         try {
-            draftStore.save(SaleDraft(updated, operationId,cashText,selectedCustomer,method))
+            draftStore.save(SaleDraft(updated, operationId,cashText,selectedCustomer,method,dueDateText))
             encodedCart = updated
             error = null
         } catch(e: Exception) { error = "Item change not saved: ${e.message}" }
@@ -216,7 +217,13 @@ fun SellScreen(
                                     customer?.let {
                                         val newDebt = runCatching { Math.addExact(it.balanceMinor, credit) }.getOrNull()
                                         Text("Already owes ${money(it.balanceMinor)}\nAfter this sale: ${newDebt?.let(::money) ?: "Amount exceeds supported range"}", style = MaterialTheme.typography.bodySmall)
+                                        Text(it.creditLimitMinor?.let { cap -> "Credit limit: ${money(cap)}" } ?: "Credit limit: not set",style=MaterialTheme.typography.bodySmall)
+                                        if(credit>0 && it.creditLimitMinor!=null && (newDebt==null || newDebt>it.creditLimitMinor!!)) Text("This sale exceeds the customer's credit limit. Collect more cash or ask the owner to review the limit under Customers.",color=MaterialTheme.colorScheme.error,style=MaterialTheme.typography.bodySmall)
                                     }
+                                }
+                                if(method=="credit") {
+                                    OutlinedTextField(dueDateText,{persistPayment(due=it)},label={Text("Repayment due date (optional)")},placeholder={Text("YYYY-MM-DD")},singleLine=true,modifier=Modifier.fillMaxWidth())
+                                    Text("Leave blank if no date was agreed. Dates use West Africa Time. A due date does not send a reminder.",style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
                                 }
                                 if (cashGiven != null) {
                                     HorizontalDivider()
@@ -245,9 +252,10 @@ fun SellScreen(
                                     cash == null -> error = "Enter a valid cash amount, with no more than two decimal places."
                                     method == "cash" && cash < total -> error = "Still to pay ${money(total - cash)}. Choose Pay later / part cash only if you are granting customer credit."
                                     method == "credit" && credit > 0 && customer == null -> error = "Choose the customer who will pay the balance."
+                                    method=="credit" && credit>0 && dueDateText.isNotBlank() && runCatching { val date=java.time.LocalDate.parse(dueDateText.trim()); require(date.toString()==dueDateText.trim() && !date.isBefore(java.time.LocalDate.now(java.time.ZoneId.of("Africa/Lagos")))) }.isFailure -> error="Use YYYY-MM-DD for a due date today or later."
                                     else -> {
                                         committing = true
-                                        val result = try { onCheckout(lines, appliedCash, if (credit > 0) customer?.id else null, operationId) } catch (e: Exception) { e.message ?: "Sale not saved" }
+                                        val result = try { onCheckout(lines, appliedCash, if (credit > 0) customer?.id else null, operationId, if(credit>0) dueDateText.trim().ifBlank { null } else null) } catch (e: Exception) { e.message ?: "Sale not saved" }
                                         committing = false
                                         if (result == null) {
                                             savedTotal = total; savedChange = maxOf(0, cash - total); savedCredit = credit; stage = "saved"
@@ -286,7 +294,7 @@ fun SellScreen(
                     TextButton({
                         try {
                             val resumed=requireNotNull(draftStore).resume(held.id)
-                            encodedCart=resumed.cart;operationId=resumed.operationId;cashText=resumed.cashText;selectedCustomer=resumed.customerId;method=resumed.method;stage="items";error=null;heldSales=draftStore.heldSales();showHeld=false;showSaleOnly=true
+                            encodedCart=resumed.cart;operationId=resumed.operationId;cashText=resumed.cashText;selectedCustomer=resumed.customerId;method=resumed.method;dueDateText=resumed.dueDateText;stage="items";error=null;heldSales=draftStore.heldSales();showHeld=false;showSaleOnly=true
                             reviewNotice="Resumed sale: check current prices, quantities and payment before finishing."
                         }catch(e:Exception) {heldError=e.message ?: "Sale could not be resumed."}
                     },enabled=encodedCart.isEmpty()) {Text("Resume sale")}
