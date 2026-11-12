@@ -27,14 +27,31 @@ class PosRepository(path: String = File(System.getProperty("user.home"), ".niger
             "CREATE TABLE IF NOT EXISTS customers(id TEXT NOT NULL,tenant_id TEXT NOT NULL REFERENCES tenants(id),name TEXT NOT NULL,balance_minor INTEGER NOT NULL DEFAULT 0 CHECK(balance_minor>=0),PRIMARY KEY(tenant_id,id))",
             "CREATE TABLE IF NOT EXISTS sales(id TEXT NOT NULL,tenant_id TEXT NOT NULL REFERENCES tenants(id),total_minor INTEGER NOT NULL,cash_minor INTEGER NOT NULL,credit_minor INTEGER NOT NULL,customer_id TEXT,created_at TEXT NOT NULL,PRIMARY KEY(tenant_id,id),FOREIGN KEY(tenant_id,customer_id) REFERENCES customers(tenant_id,id))",
             "CREATE TABLE IF NOT EXISTS sale_lines(id INTEGER PRIMARY KEY AUTOINCREMENT,sale_id TEXT NOT NULL,tenant_id TEXT NOT NULL,product_id TEXT NOT NULL,name TEXT NOT NULL,unit TEXT NOT NULL,price_minor INTEGER NOT NULL,quantity INTEGER NOT NULL CHECK(quantity>0),FOREIGN KEY(tenant_id,sale_id) REFERENCES sales(tenant_id,id))",
-            "CREATE TABLE IF NOT EXISTS outbox(id TEXT PRIMARY KEY,tenant_id TEXT NOT NULL REFERENCES tenants(id),kind TEXT NOT NULL,entity_id TEXT NOT NULL,created_at TEXT NOT NULL,status TEXT NOT NULL DEFAULT 'pending')",
-            "CREATE TABLE IF NOT EXISTS repayments(id TEXT PRIMARY KEY,tenant_id TEXT NOT NULL,customer_id TEXT NOT NULL,amount_minor INTEGER NOT NULL CHECK(amount_minor>0),created_at TEXT NOT NULL,FOREIGN KEY(tenant_id,customer_id) REFERENCES customers(tenant_id,id))",
+            "CREATE TABLE IF NOT EXISTS outbox(id TEXT NOT NULL,tenant_id TEXT NOT NULL REFERENCES tenants(id),kind TEXT NOT NULL,entity_id TEXT NOT NULL,created_at TEXT NOT NULL,status TEXT NOT NULL DEFAULT 'pending',PRIMARY KEY(tenant_id,id))",
+            "CREATE TABLE IF NOT EXISTS repayments(id TEXT NOT NULL,tenant_id TEXT NOT NULL,customer_id TEXT NOT NULL,amount_minor INTEGER NOT NULL CHECK(amount_minor>0),created_at TEXT NOT NULL,PRIMARY KEY(tenant_id,id),FOREIGN KEY(tenant_id,customer_id) REFERENCES customers(tenant_id,id))",
             "CREATE TABLE IF NOT EXISTS stock_receipts(id TEXT NOT NULL,tenant_id TEXT NOT NULL REFERENCES tenants(id),product_id TEXT NOT NULL,product_name TEXT NOT NULL,unit TEXT NOT NULL,quantity INTEGER NOT NULL CHECK(quantity>0),unit_cost_minor INTEGER NOT NULL CHECK(unit_cost_minor>=0),total_cost_minor INTEGER NOT NULL CHECK(total_cost_minor>=0),paid_cash_minor INTEGER NOT NULL CHECK(paid_cash_minor>=0 AND paid_cash_minor<=total_cost_minor),supplier_name TEXT NOT NULL,created_at TEXT NOT NULL,PRIMARY KEY(tenant_id,id),FOREIGN KEY(tenant_id,product_id) REFERENCES products(tenant_id,id))",
             "CREATE TABLE IF NOT EXISTS expenses(id TEXT NOT NULL,tenant_id TEXT NOT NULL REFERENCES tenants(id),category TEXT NOT NULL,description TEXT NOT NULL,amount_minor INTEGER NOT NULL CHECK(amount_minor>0),created_at TEXT NOT NULL,PRIMARY KEY(tenant_id,id))",
             "CREATE TABLE IF NOT EXISTS cash_shifts(id TEXT NOT NULL,tenant_id TEXT NOT NULL REFERENCES tenants(id),opening_minor INTEGER NOT NULL CHECK(opening_minor>=0),opened_at TEXT NOT NULL,closed_at TEXT,expected_minor INTEGER,counted_minor INTEGER,PRIMARY KEY(tenant_id,id))",
             "CREATE UNIQUE INDEX IF NOT EXISTS one_active_cash_shift ON cash_shifts(tenant_id) WHERE closed_at IS NULL",
-            "CREATE TABLE IF NOT EXISTS cash_entries(id TEXT NOT NULL,tenant_id TEXT NOT NULL REFERENCES tenants(id),shift_id TEXT,kind TEXT NOT NULL,amount_minor INTEGER NOT NULL CHECK(amount_minor<>0),description TEXT NOT NULL,created_at TEXT NOT NULL,source_id TEXT NOT NULL,PRIMARY KEY(tenant_id,id),UNIQUE(tenant_id,kind,source_id),FOREIGN KEY(tenant_id,shift_id) REFERENCES cash_shifts(tenant_id,id))"
+            "CREATE TABLE IF NOT EXISTS cash_entries(id TEXT NOT NULL,tenant_id TEXT NOT NULL REFERENCES tenants(id),shift_id TEXT,kind TEXT NOT NULL,amount_minor INTEGER NOT NULL CHECK(amount_minor<>0),description TEXT NOT NULL,created_at TEXT NOT NULL,source_id TEXT NOT NULL,PRIMARY KEY(tenant_id,id),UNIQUE(tenant_id,kind,source_id),FOREIGN KEY(tenant_id,shift_id) REFERENCES cash_shifts(tenant_id,id))",
+            "CREATE TABLE IF NOT EXISTS sale_returns(id TEXT NOT NULL,tenant_id TEXT NOT NULL,sale_id TEXT NOT NULL,refund_minor INTEGER NOT NULL CHECK(refund_minor>=0),restock INTEGER NOT NULL CHECK(restock IN(0,1)),reason TEXT NOT NULL,created_at TEXT NOT NULL,PRIMARY KEY(tenant_id,id),FOREIGN KEY(tenant_id,sale_id) REFERENCES sales(tenant_id,id))",
+            "CREATE TABLE IF NOT EXISTS return_lines(id INTEGER PRIMARY KEY AUTOINCREMENT,return_id TEXT NOT NULL,tenant_id TEXT NOT NULL,product_id TEXT NOT NULL,name TEXT NOT NULL,unit TEXT NOT NULL,quantity INTEGER NOT NULL CHECK(quantity>0),unit_price_minor INTEGER NOT NULL CHECK(unit_price_minor>=0),FOREIGN KEY(tenant_id,return_id) REFERENCES sale_returns(tenant_id,id))",
+            "CREATE TABLE IF NOT EXISTS supplier_payments(id TEXT NOT NULL,tenant_id TEXT NOT NULL,receipt_id TEXT NOT NULL,supplier_name TEXT NOT NULL,amount_minor INTEGER NOT NULL CHECK(amount_minor>0),created_at TEXT NOT NULL,PRIMARY KEY(tenant_id,id),FOREIGN KEY(tenant_id,receipt_id) REFERENCES stock_receipts(tenant_id,id))"
         ).forEach { sql -> db.createStatement().use { it.execute(sql) } }
+        transaction {
+            if(query("PRAGMA table_info(repayments)") { it.getInt("pk") }.count { it>0 }==1) {
+                execute("CREATE TABLE repayments_scoped(id TEXT NOT NULL,tenant_id TEXT NOT NULL,customer_id TEXT NOT NULL,amount_minor INTEGER NOT NULL CHECK(amount_minor>0),created_at TEXT NOT NULL,PRIMARY KEY(tenant_id,id),FOREIGN KEY(tenant_id,customer_id) REFERENCES customers(tenant_id,id))")
+                execute("INSERT INTO repayments_scoped SELECT * FROM repayments")
+                execute("DROP TABLE repayments")
+                execute("ALTER TABLE repayments_scoped RENAME TO repayments")
+            }
+            if(query("PRAGMA table_info(outbox)") { it.getInt("pk") }.count { it>0 }==1) {
+                execute("CREATE TABLE outbox_scoped(id TEXT NOT NULL,tenant_id TEXT NOT NULL REFERENCES tenants(id),kind TEXT NOT NULL,entity_id TEXT NOT NULL,created_at TEXT NOT NULL,status TEXT NOT NULL DEFAULT 'pending',PRIMARY KEY(tenant_id,id))")
+                execute("INSERT INTO outbox_scoped SELECT * FROM outbox")
+                execute("DROP TABLE outbox")
+                execute("ALTER TABLE outbox_scoped RENAME TO outbox")
+            }
+        }
         // Legacy cash stays unassigned: a new shift's opening count already includes physical cash.
         transaction {
             execute("INSERT OR IGNORE INTO cash_entries(id,tenant_id,shift_id,kind,amount_minor,description,created_at,source_id) SELECT 'legacy-sale-'||id,tenant_id,NULL,'sale',cash_minor,'Cash sale '||substr(id,1,8),created_at,id FROM sales WHERE cash_minor>0")
@@ -75,15 +92,21 @@ class PosRepository(path: String = File(System.getProperty("user.home"), ".niger
             enqueue(tenantId,"customer.created",it.id)
         }
     }
+    /** Add-only import. Validate the entire batch before writing; never overwrite existing stock. */
+    @Synchronized fun importProducts(tenantId:String, rows:List<ProductImportRow>):List<Product> = transaction {
+        requireTenant(tenantId)
+        require(rows.isNotEmpty() && rows.size <= 10_000) { "Import between 1 and 10,000 items at a time." }
+        fun key(name:String,unit:String) = name.trim().lowercase(java.util.Locale.ROOT) to unit.trim().lowercase(java.util.Locale.ROOT)
+        val keys=rows.map { key(it.name,it.unit) }
+        require(keys.distinct().size==keys.size) { "Item name and unit combinations must be unique in this file." }
+        val existing=products(tenantId).map { key(it.name,it.unit) }.toSet()
+        require(keys.none { it in existing }) { "Some items already exist in this shop. No items were imported; use Add stock for existing goods." }
+        rows.forEach { require(it.name.isNotBlank() && it.unit.isNotBlank() && it.priceMinor>=0 && it.stock>=0) { "Check all item names, units, prices and quantities." } }
+        rows.map { addProduct(tenantId,it.name,it.unit,it.priceMinor,it.stock.toDouble()) }
+    }
     @Synchronized fun sales(tenantId: String): List<Sale> {
         requireTenant(tenantId)
-        return query("SELECT * FROM sales WHERE tenant_id=? ORDER BY created_at DESC",tenantId) { r ->
-            val saleId=r.getString("id")
-            val lines=query("SELECT * FROM sale_lines WHERE tenant_id=? AND sale_id=? ORDER BY id",tenantId,saleId) { l ->
-                CartLine(Product(l.getString("product_id"),tenantId,l.getString("name"),l.getString("unit"),l.getLong("price_minor"),0.0),l.getInt("quantity"))
-            }
-            Sale(saleId,tenantId,lines,r.getLong("total_minor"),r.getLong("cash_minor"),r.getLong("credit_minor"),r.getString("customer_id"),r.getString("created_at"))
-        }
+        return query("SELECT * FROM sales WHERE tenant_id=? ORDER BY created_at DESC",tenantId,map=::sale)
     }
     /** cashMinor is applied cash, excluding change. Caller must explicitly choose a customer for credit. */
     @Synchronized fun checkout(tenantId: String, lines: List<CartLine>, cashMinor: Long, customerId: String? = null, operationId: String? = null): Sale = transaction {
@@ -280,6 +303,196 @@ class PosRepository(path: String = File(System.getProperty("user.home"), ".niger
         enqueue(tenantId,"cash.shift_closed",shiftId)
         result
     }
+    @Synchronized fun saleReturns(tenantId:String,saleId:String?=null):List<SaleReturn> {
+        requireTenant(tenantId)
+        if(saleId!=null) requireSale(tenantId,saleId)
+        val sql="SELECT * FROM sale_returns WHERE tenant_id=?"+(if(saleId!=null) " AND sale_id=?" else "")+" ORDER BY created_at DESC,id DESC"
+        return if(saleId==null) query(sql,tenantId,map=::saleReturn) else query(sql,tenantId,saleId,map=::saleReturn)
+    }
+    @Synchronized fun returnableQuantities(tenantId:String,saleId:String):Map<String,Int> {
+        val sale=requireSale(tenantId,saleId)
+        val returned=saleReturns(tenantId,saleId).flatMap { it.lines }.groupBy { it.productId }
+        return sale.lines.associate { line ->
+            line.product.id to (line.quantity - (returned[line.product.id]?.fold(0) { sum,item -> Math.addExact(sum,item.quantity) } ?: 0))
+        }
+    }
+    @Synchronized fun returnItems(tenantId:String,saleId:String,quantities:Map<String,Int>,restock:Boolean,reason:String,operationId:String?=null):SaleReturn = transaction {
+        requireTenant(tenantId)
+        require(reason.isNotBlank() && quantities.isNotEmpty() && quantities.all { it.key.isNotBlank() && it.value>0 }) { "Select returned quantities and enter a reason." }
+        require(operationId==null || operationId.isNotBlank()) { "Operation identifier cannot be blank." }
+        val sale=requireSale(tenantId,saleId)
+        require(sale.creditMinor==0L && sale.cashMinor==sale.totalMinor) { "Credit-sale returns are not supported yet. No refund or stock change has been recorded." }
+        if(operationId!=null) {
+            val previous=saleReturns(tenantId).find { it.id==operationId }
+            if(previous!=null) {
+                require(previous.saleId==saleId && previous.restock==restock && previous.reason==reason.trim() && previous.lines.associate { it.productId to it.quantity }==quantities) { "This return was already recorded with different details." }
+                return@transaction previous
+            }
+        }
+        val remaining=returnableQuantities(tenantId,saleId)
+        require(quantities.all { (productId,quantity) -> quantity <= (remaining[productId] ?: 0) }) { "A return cannot exceed the quantity still returnable on this receipt." }
+        val lines=quantities.entries.sortedBy { it.key }.map { (productId,quantity) ->
+            val original=sale.lines.single { it.product.id==productId }
+            ReturnLine(productId,original.product.name,original.product.unit,quantity,original.product.priceMinor)
+        }
+        val refund=lines.fold(0L) { total,line -> Math.addExact(total,Math.multiplyExact(line.unitPriceMinor,line.quantity.toLong())) }
+        val shift=requireCashShift(tenantId)
+        requireCashAvailable(tenantId,shift.id,refund)
+        // Validate all stock updates before mutating the ledger; damaged goods never re-enter saleable stock.
+        val stockUpdates=if(restock) lines.map { line ->
+            val item=query("SELECT * FROM products WHERE tenant_id=? AND id=?",tenantId,line.productId,map=::product).singleOrNull()
+                ?: throw IllegalArgumentException("Returned item is missing from this shop's stock records.")
+            require(item.unit==line.unit) { "Selling unit changed since the sale. This return needs a reviewed stock correction." }
+            val updated=item.stock+line.quantity
+            require(updated.isFinite() && updated<=9_007_199_254_740_991.0) { "Returned stock exceeds the supported quantity range." }
+            line.productId to updated
+        } else emptyList()
+        val result=SaleReturn(operationId?:id(),tenantId,saleId,lines,refund,restock,reason.trim(),Instant.now().toString())
+        execute("INSERT INTO sale_returns VALUES(?,?,?,?,?,?,?)",result.id,tenantId,saleId,refund,if(restock) 1 else 0,result.reason,result.createdAt)
+        lines.forEach { line -> execute("INSERT INTO return_lines(return_id,tenant_id,product_id,name,unit,quantity,unit_price_minor) VALUES(?,?,?,?,?,?,?)",result.id,tenantId,line.productId,line.name,line.unit,line.quantity,line.unitPriceMinor) }
+        stockUpdates.forEach { (productId,quantity) -> execute("UPDATE products SET stock=? WHERE tenant_id=? AND id=?",quantity,tenantId,productId) }
+        if(refund>0) appendCash(tenantId,shift.id,"refund",-refund,"Return for sale ${saleId.take(8)}: ${result.reason}",result.id)
+        enqueue(tenantId,"sale.returned",result.id)
+        result
+    }
+    @Synchronized fun supplierPayments(tenantId:String,receiptId:String?=null):List<SupplierPayment> {
+        requireTenant(tenantId)
+        if(receiptId!=null) requireStockReceipt(tenantId,receiptId)
+        val sql="SELECT * FROM supplier_payments WHERE tenant_id=?"+(if(receiptId!=null) " AND receipt_id=?" else "")+" ORDER BY created_at DESC,id DESC"
+        return if(receiptId==null) query(sql,tenantId,map=::supplierPayment) else query(sql,tenantId,receiptId,map=::supplierPayment)
+    }
+    @Synchronized fun supplierOutstanding(tenantId:String,receiptId:String):Long {
+        val receipt=requireStockReceipt(tenantId,receiptId)
+        val paid=supplierPayments(tenantId,receiptId).fold(0L) { total,payment -> Math.addExact(total,payment.amountMinor) }
+        return Math.subtractExact(receipt.unpaidMinor,paid).also { require(it>=0) { "Supplier payment history exceeds the receipt balance." } }
+    }
+    @Synchronized fun paySupplierReceipt(tenantId:String,receiptId:String,amountMinor:Long,operationId:String?=null):SupplierPayment = transaction {
+        requireTenant(tenantId)
+        require(amountMinor>0) { "Enter a supplier payment greater than zero." }
+        require(operationId==null || operationId.isNotBlank()) { "Operation identifier cannot be blank." }
+        val receipt=requireStockReceipt(tenantId,receiptId)
+        if(operationId!=null) {
+            val previous=supplierPayments(tenantId).find { it.id==operationId }
+            if(previous!=null) {
+                require(previous.receiptId==receiptId && previous.amountMinor==amountMinor) { "This supplier payment was already recorded with different details." }
+                return@transaction previous
+            }
+        }
+        require(amountMinor<=supplierOutstanding(tenantId,receiptId)) { "Payment exceeds what is still owed on this stock receipt." }
+        val shift=requireCashShift(tenantId)
+        requireCashAvailable(tenantId,shift.id,amountMinor)
+        val result=SupplierPayment(operationId?:id(),tenantId,receiptId,receipt.supplierName,amountMinor,Instant.now().toString())
+        execute("INSERT INTO supplier_payments VALUES(?,?,?,?,?,?)",result.id,tenantId,receiptId,receipt.supplierName,amountMinor,result.createdAt)
+        appendCash(tenantId,shift.id,"supplier_payment",-amountMinor,"Payment to ${receipt.supplierName}",result.id)
+        enqueue(tenantId,"supplier.payment",result.id)
+        result
+    }
+    private fun sale(r:ResultSet):Sale {
+        val tenantId=r.getString("tenant_id"); val saleId=r.getString("id")
+        val lines=query("SELECT * FROM sale_lines WHERE tenant_id=? AND sale_id=? ORDER BY id",tenantId,saleId) { line ->
+            CartLine(Product(line.getString("product_id"),tenantId,line.getString("name"),line.getString("unit"),line.getLong("price_minor"),0.0),line.getInt("quantity"))
+        }
+        return Sale(saleId,tenantId,lines,r.getLong("total_minor"),r.getLong("cash_minor"),r.getLong("credit_minor"),r.getString("customer_id"),r.getString("created_at"))
+    }
+    private fun requireSale(tenantId:String,saleId:String):Sale {
+        requireTenant(tenantId)
+        return query("SELECT * FROM sales WHERE tenant_id=? AND id=?",tenantId,saleId,map=::sale).singleOrNull() ?: throw IllegalArgumentException("Sale not found in this shop.")
+    }
+    private fun requireStockReceipt(tenantId:String,receiptId:String):StockReceipt {
+        requireTenant(tenantId)
+        return query("SELECT * FROM stock_receipts WHERE tenant_id=? AND id=?",tenantId,receiptId,map=::stockReceipt).singleOrNull()
+            ?: throw IllegalArgumentException("Stock receipt not found in this shop.")
+    }
+    private fun saleReturn(r:ResultSet):SaleReturn {
+        val tenantId=r.getString("tenant_id"); val returnId=r.getString("id")
+        val lines=query("SELECT * FROM return_lines WHERE tenant_id=? AND return_id=? ORDER BY id",tenantId,returnId) { line -> ReturnLine(line.getString("product_id"),line.getString("name"),line.getString("unit"),line.getInt("quantity"),line.getLong("unit_price_minor")) }
+        return SaleReturn(returnId,tenantId,r.getString("sale_id"),lines,r.getLong("refund_minor"),r.getInt("restock")==1,r.getString("reason"),r.getString("created_at"))
+    }
+    private fun supplierPayment(r:ResultSet)=SupplierPayment(r.getString("id"),r.getString("tenant_id"),r.getString("receipt_id"),r.getString("supplier_name"),r.getLong("amount_minor"),r.getString("created_at"))
+
+    private val snapshotTableOrder get() = listOf("products","customers","cash_shifts","sales","sale_lines","repayments","stock_receipts","expenses","sale_returns","return_lines","supplier_payments","cash_entries","outbox")
+    @Synchronized fun exportTenantSnapshot(tenantId:String):TenantSnapshot = transaction {
+        requireTenant(tenantId)
+        val tenant=tenants().single { it.id==tenantId }
+        val tables=snapshotTableOrder.associateWith { table ->
+            query("SELECT * FROM $table WHERE tenant_id=?",tenantId) { row ->
+                (1..row.metaData.columnCount).associate { column -> row.metaData.getColumnName(column) to row.getString(column) }
+            }
+        }
+        TenantSnapshot(tenant,tables)
+    }
+    @Synchronized fun restoreTenantSnapshot(snapshot:TenantSnapshot,newName:String,provisionOwner:(Tenant)->Unit={}):Tenant = transaction {
+        require(newName.isNotBlank()) { "Enter a name for the restored shop." }
+        require(snapshot.tables.keys.all { it in snapshotTableOrder }) { "Backup contains an unsupported record table." }
+        val tenant=Tenant(id(),newName.trim())
+        // Validate the complete payload before creating even the tenant row.
+        snapshotTableOrder.forEach { table ->
+            val schema=query("PRAGMA table_info($table)") { Triple(it.getString("name"),it.getString("type"),it.getInt("notnull")==1) }.associateBy { it.first }
+            snapshot.tables[table].orEmpty().forEach { row ->
+                require(row.keys.all { it in schema.keys }) { "Backup contains an unsupported column in $table." }
+                require(row["tenant_id"]==snapshot.tenant.id) { "Backup contains records from another shop." }
+                schema.values.forEach { (name,type,required) ->
+                    val value=row[name]
+                    val generatedId=(table=="sale_lines" || table=="return_lines") && name=="id"
+                    require(!required || value!=null || generatedId) { "Backup is missing a required value in $table." }
+                    if(value!=null && type=="INTEGER") require(value.toLongOrNull()!=null) { "Backup has invalid integer data in $table." }
+                    if(value!=null && name=="quantity" && table in setOf("sale_lines","stock_receipts","return_lines")) {
+                        val quantity=value.toLongOrNull()
+                        require(quantity!=null && quantity in 1L..Int.MAX_VALUE.toLong()) { "Backup quantity exceeds the supported integer range." }
+                    }
+                    if(value!=null && type=="REAL") require(value.toDoubleOrNull()?.isFinite()==true) { "Backup has invalid numeric data in $table." }
+                    if(value!=null && name=="stock") require(value.toDouble() in 0.0..9_007_199_254_740_991.0) { "Backup stock exceeds supported range." }
+                }
+            }
+        }
+        execute("INSERT INTO tenants VALUES(?,?)",tenant.id,tenant.name)
+        snapshotTableOrder.forEach { table ->
+            snapshot.tables[table].orEmpty().forEach { row ->
+                val data=row.filterKeys { !((table=="sale_lines" || table=="return_lines") && it=="id") }.toMutableMap()
+                data["tenant_id"]=tenant.id
+                val columns=data.keys.toList()
+                execute("INSERT INTO $table (${columns.joinToString(",")}) VALUES(${columns.joinToString(",") { "?" }})",*columns.map { data[it] }.toTypedArray())
+            }
+        }
+        // Reconstruct domain records to enforce cross-field invariants as well as SQL constraints.
+        products(tenant.id); customers(tenant.id); sales(tenant.id); stockReceipts(tenant.id)
+        expenses(tenant.id); cashShifts(tenant.id); cashEntries(tenant.id); saleReturns(tenant.id); supplierPayments(tenant.id)
+        customers(tenant.id).forEach { customer ->
+            val granted=sales(tenant.id).filter { it.customerId==customer.id }.fold(java.math.BigInteger.ZERO) { sum,sale -> sum.add(java.math.BigInteger.valueOf(sale.creditMinor)) }
+            val paid=query("SELECT amount_minor FROM repayments WHERE tenant_id=? AND customer_id=?",tenant.id,customer.id) { it.getLong(1) }.fold(java.math.BigInteger.ZERO) { sum,amount -> sum.add(java.math.BigInteger.valueOf(amount)) }
+            val expected=granted.subtract(paid)
+            require(expected.signum()>=0 && expected==java.math.BigInteger.valueOf(customer.balanceMinor)) { "Backup customer balance does not match credit sales and repayments." }
+        }
+        val expectedCashSources=linkedMapOf<Pair<String,String>,Long>()
+        fun sources(table:String,kind:String,amountColumn:String,outflow:Boolean=false) {
+            query("SELECT id,$amountColumn FROM $table WHERE tenant_id=? AND $amountColumn>0",tenant.id) { it.getString(1) to it.getLong(2) }.forEach { (source,amount) ->
+                expectedCashSources[kind to source]=if(outflow) Math.negateExact(amount) else amount
+            }
+        }
+        sources("sales","sale","cash_minor");sources("repayments","repayment","amount_minor")
+        sources("expenses","expense","amount_minor",true);sources("stock_receipts","stock_purchase","paid_cash_minor",true)
+        sources("sale_returns","refund","refund_minor",true);sources("supplier_payments","supplier_payment","amount_minor",true)
+        val actualSources=linkedMapOf<Pair<String,String>,Long>()
+        query("SELECT kind,source_id,amount_minor,shift_id FROM cash_entries WHERE tenant_id=?",tenant.id) { row ->
+            val kind=row.getString(1)
+            if(kind!="sale" && kind!="repayment") require(row.getString(4)!=null) { "Backup cash payouts or manual movements must belong to a shift." }
+            if(kind!="manual") actualSources[kind to row.getString(2)]=row.getLong(3)
+        }
+        require(actualSources==expectedCashSources) { "Backup cash movements do not match their source records." }
+        saleReturns(tenant.id).forEach { returned ->
+            val original=requireSale(tenant.id,returned.saleId)
+            require(original.creditMinor==0L && returned.lines.all { line -> original.lines.any { it.product.id==line.productId && it.product.name==line.name && it.product.unit==line.unit && it.product.priceMinor==line.unitPriceMinor } }) { "Backup return does not match its original cash sale." }
+        }
+        sales(tenant.id).forEach { sale -> require(returnableQuantities(tenant.id,sale.id).values.all { it>=0 }) { "Backup returns exceed original quantities." } }
+        stockReceipts(tenant.id).forEach { supplierOutstanding(tenant.id,it.id) }
+        cashShifts(tenant.id).forEach { shift ->
+            val calculated=cashEntries(tenant.id,shift.id).fold(java.math.BigInteger.valueOf(shift.openingMinor)) { total,entry -> total.add(java.math.BigInteger.valueOf(entry.amountMinor)) }.longValueExact()
+            require(calculated>=0 && (shift.expectedMinor==null || shift.expectedMinor==calculated)) { "Backup cash count snapshot does not match its ledger." }
+        }
+        provisionOwner(tenant)
+        tenant
+    }
+
     private fun requireCashShift(tenantId:String)=activeCashShift(tenantId) ?: throw IllegalArgumentException("Open today's cash shift before recording money taken from the drawer.")
     private fun requireCashAvailable(tenantId:String,shiftId:String,amountMinor:Long) { require(expectedCash(tenantId,shiftId)>=amountMinor) { "This payment exceeds the cash expected in the drawer." } }
     private fun appendCash(tenantId:String,shiftId:String?,kind:String,amountMinor:Long,description:String,sourceId:String):CashEntry {
