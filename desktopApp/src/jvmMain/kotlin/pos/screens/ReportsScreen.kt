@@ -109,11 +109,13 @@ fun ReportsScreen(repo: PosRepository, tenantId: String) {
 
             Surface(shape = MaterialTheme.shapes.medium) { Column(Modifier.fillMaxWidth().padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                 SectionHeader("Export this shop's records", "CSV for a spreadsheet · Current product export includes archived items; customer and stock snapshots are not historical views")
+                if(selectedExport=="Payment assignments") Text("Assignment dates use the selected period; Active/Undone status reflects all corrections saved now.",style=MaterialTheme.typography.bodySmall)
+                if(selectedExport=="Assignment corrections") Text("Includes undo events recorded in the selected period, even when the original assignment is older.",style=MaterialTheme.typography.bodySmall)
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     Box {
                         NeutralButton("$selectedExport ▾", { exportMenu = true })
                         DropdownMenu(exportMenu, { exportMenu = false }) {
-                            listOf("Sales", "Products", "Customers", "Expenses", "Cash activity", "Stock received", "Payment assignments", "Stock movements", "Low stock").forEach { kind -> DropdownMenuItem(text = { Text(kind) }, onClick = { selectedExport = kind; exportMenu = false }) }
+                            listOf("Sales", "Products", "Customers", "Expenses", "Cash activity", "Stock received", "Payment assignments", "Assignment corrections", "Stock movements", "Low stock").forEach { kind -> DropdownMenuItem(text = { Text(kind) }, onClick = { selectedExport = kind; exportMenu = false }) }
                         }
                     }
                     PosButton("Save CSV file", {
@@ -126,7 +128,12 @@ fun ReportsScreen(repo: PosRepository, tenantId: String) {
                                 "Customers" -> CsvService.customers(tenantId, records.customers)
                                 "Expenses" -> CsvService.expenses(tenantId, records.expenses.filter { range.contains(it.createdAt) })
                                 "Cash activity" -> CsvService.cashEntries(tenantId, records.cash.filter { range.contains(it.createdAt) })
-                                "Payment assignments" -> CsvService.repaymentAllocations(tenantId,repo.repaymentAllocations(tenantId).filter { range.contains(it.createdAt) })
+                                "Payment assignments" -> {
+                                    val assignments=repo.repaymentAllocations(tenantId,includeReversed=true).filter { range.contains(it.createdAt) }
+                                    val ids=assignments.map {it.id}.toSet()
+                                    CsvService.repaymentAllocations(tenantId,assignments,repo.allocationReversals(tenantId).filter {it.allocationId in ids})
+                                }
+                                "Assignment corrections" -> CsvService.allocationReversals(tenantId,repo.allocationReversals(tenantId).filter {range.contains(it.createdAt)})
                                 else -> CsvService.stockReceipts(tenantId, records.receipts.filter { range.contains(it.createdAt) })
                             }
                             val file = CsvService.save(csv, "retail-pos-${selectedExport.lowercase().replace(' ', '-')}-${if(selectedExport in listOf("Products", "Customers", "Low stock")) "current" else "$start-to-$end"}.csv")

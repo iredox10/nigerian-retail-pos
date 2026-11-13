@@ -76,10 +76,23 @@ object CsvService {
         })
     }
 
-    fun repaymentAllocations(tenantId:String,values:List<RepaymentAllocation>):String {
-        require(values.all {it.tenantId==tenantId}) { "Export includes another shop's assignments." }
-        return encode(listOf("Assignment ID","Customer ID","Payment ID","Credit receipt ID","Assigned amount NGN","Assigned at UTC"),values.map {
-            listOf(text(it.id),text(it.customerId),text(it.repaymentId),text(it.saleId),naira(it.amountMinor),text(it.createdAt))
+    fun repaymentAllocations(tenantId:String,values:List<RepaymentAllocation>,reversals:List<AllocationReversal> = emptyList()):String {
+        require(values.all {it.tenantId==tenantId} && reversals.all {it.tenantId==tenantId}) { "Export includes another shop's assignments or corrections." }
+        require(values.map {it.id}.distinct().size==values.size && reversals.map {it.id}.distinct().size==reversals.size && reversals.map {it.allocationId}.distinct().size==reversals.size) { "Export contains repeated assignments or corrections." }
+        val byId=values.associateBy {it.id}
+        require(reversals.all { byId[it.allocationId]?.customerId==it.customerId }) { "Correction does not match an exported assignment." }
+        val undone=reversals.associateBy {it.allocationId}
+        return encode(listOf("Assignment ID","Customer ID","Payment ID","Credit receipt ID","Assigned amount NGN","Assigned at UTC","Current assignment status","Correction ID","Undone at UTC","Correction reason"),values.map {
+            val reversal=undone[it.id]
+            listOf(text(it.id),text(it.customerId),text(it.repaymentId),text(it.saleId),naira(it.amountMinor),text(it.createdAt),text(if(reversal==null) "Active" else "Undone"),text(reversal?.id.orEmpty()),text(reversal?.createdAt.orEmpty()),text(reversal?.reason.orEmpty()))
+        })
+    }
+
+    fun allocationReversals(tenantId:String,values:List<AllocationReversal>):String {
+        require(values.all {it.tenantId==tenantId}) { "Export includes another shop's assignment corrections." }
+        require(values.map {it.id}.distinct().size==values.size && values.map {it.allocationId}.distinct().size==values.size) { "Export contains repeated corrections." }
+        return encode(listOf("Correction ID","Assignment ID","Customer ID","Reason","Undone at UTC"),values.map {
+            listOf(text(it.id),text(it.allocationId),text(it.customerId),text(it.reason),text(it.createdAt))
         })
     }
 
