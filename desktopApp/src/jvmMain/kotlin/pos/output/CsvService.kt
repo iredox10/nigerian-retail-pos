@@ -76,6 +76,13 @@ object CsvService {
         })
     }
 
+    fun repaymentAllocations(tenantId:String,values:List<RepaymentAllocation>):String {
+        require(values.all {it.tenantId==tenantId}) { "Export includes another shop's assignments." }
+        return encode(listOf("Assignment ID","Customer ID","Payment ID","Credit receipt ID","Assigned amount NGN","Assigned at UTC"),values.map {
+            listOf(text(it.id),text(it.customerId),text(it.repaymentId),text(it.saleId),naira(it.amountMinor),text(it.createdAt))
+        })
+    }
+
     /** Explicit local export; cancellation returns null. Never changes the underlying business data. */
     fun save(text: String, suggestedName: String): File? {
         val chooser = JFileChooser().apply {
