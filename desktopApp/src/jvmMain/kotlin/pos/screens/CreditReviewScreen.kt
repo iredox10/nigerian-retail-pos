@@ -12,6 +12,8 @@ import androidx.compose.ui.unit.dp
 import pos.data.PosRepository
 import pos.domain.money
 import pos.output.DebtAgeingService
+import pos.output.DebtAgeBand
+import pos.output.CsvService
 import pos.ui.components.*
 import java.time.LocalDate
 import java.time.ZoneId
@@ -21,6 +23,7 @@ import java.time.ZoneId
 fun CreditReviewScreen(repo:PosRepository,tenantId:String) {
     key(tenantId) {
         var revision by remember { mutableIntStateOf(0) }
+        var notice by remember { mutableStateOf<String?>(null) }
         var search by remember { mutableStateOf("") }
         var pastDueOnly by remember { mutableStateOf(false) }
         val today=remember(revision) { LocalDate.now(ZoneId.of("Africa/Lagos")) }
@@ -31,8 +34,16 @@ fun CreditReviewScreen(repo:PosRepository,tenantId:String) {
             PosTextField(search,{search=it},"Find a customer",Modifier.fillMaxWidth(),hint="Name or phone")
             Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),horizontalArrangement=Arrangement.spacedBy(16.dp)) {
                 FilterChip(pastDueOnly,{pastDueOnly=!pastDueOnly},label={Text("Customers with past-due sale dates")})
-                NeutralButton("Refresh",{revision++})
+                NeutralButton("Refresh",{revision++;notice=null})
+                NeutralButton("Export all customer ageing",{
+                    try {
+                        val text=DebtAgeingService.csv(tenantId,loaded.getOrThrow(),today)
+                        val file=CsvService.save(text,"customer-debt-ageing-$today.csv")
+                        notice=if(file==null) "Export cancelled." else "Customer ageing saved to ${file.name}."
+                    } catch(e:Exception) { notice="Export failed: ${e.message}" }
+                },enabled=loaded.isSuccess)
             }
+            notice?.let { Text(it,style=MaterialTheme.typography.bodySmall) }
             loaded.exceptionOrNull()?.let {InlineNotice("Credit review could not be loaded",it.message ?: "Refresh to try again.",NoticeTone.Danger)}
             loaded.getOrNull()?.let { rows ->
                 val visible=rows.filter { (!pastDueOnly || it.invoiceBalances.any { balance -> balance.remainingMinor>0 && balance.sale.dueDate?.let { due -> LocalDate.parse(due).isBefore(today) }==true }) && (it.customer.name.contains(search,true) || it.customer.phone?.contains(search)==true) }
@@ -47,6 +58,11 @@ fun CreditReviewScreen(repo:PosRepository,tenantId:String) {
                                 LabelValueRow("Payments not assigned to receipts",money(row.unallocatedRepaymentsMinor))
                                 if(row.preciseOverdueMinor!=null) LabelValueRow("Overdue debt with recorded due dates",money(row.preciseOverdueMinor!!),emphasized=true)
                                 else InlineNotice("Assign remaining payments first","An exact overdue total is unavailable while ${money(row.unallocatedRepaymentsMinor)} of payments is unassigned. Current customer debt above already includes these payments.",NoticeTone.Warning)
+                                row.ageing?.let { ageing ->
+                                    Text("How long payments are late",style=MaterialTheme.typography.titleMedium)
+                                    DebtAgeBand.entries.forEach { band -> LabelValueRow(band.label,money(ageing.amounts.getValue(band))) }
+                                    Text("These bands use current unpaid balances and recorded due dates. Due today is not late; undated debt is kept separate.",style=MaterialTheme.typography.bodySmall)
+                                }
                                 HorizontalDivider()
                                 Text(if(row.unallocatedRepaymentsMinor>0) "Receipt balances before unassigned payments" else "Unpaid credit receipts",style=MaterialTheme.typography.titleMedium)
                                 row.invoiceBalances.filter { it.remainingMinor>0 }.forEach { balance ->

@@ -5,11 +5,20 @@
 ## Verified
 
 - Shared and desktop compilation with Kotlin 2.2.20, Compose 1.9.1 and JDK 17.
-- **183 automated tests pass**, with zero failures or errors. The discount checkpoint adds 10 persistence/recovery/output integration tests and three shared calculation tests to the previous 170-test checkpoint.
+- **189 automated tests pass**, with zero failures or errors. The negotiated-price checkpoint added 13 tests to the previous 170-test checkpoint; six ageing-band tests bring the total to 189.
 - Coverage includes cross-tenant rejection, exact kobo amounts, retry deduplication, return limits/restocking, supplier overpayment, atomic import rejection, WAT date boundaries, spreadsheet formula protection, encrypted tenant-only backup, wrong passwords, corrupted input, repeated restore and cash/debt-history consistency.
 - Linux desktop distribution rebuilt successfully using `gradle :desktopApp:createDistributable` at `desktopApp/build/compose/binaries/main/app/RetailPOS`.
 - Native isolated previews rendered for Reports, Sales, Suppliers, Backup and Import. Reports filled the 1920 × 1080 display; Sales and Suppliers were also inspected in the compositor-provided narrower window. See [Reports](artifacts/desktop-reports.png), [Sales](artifacts/desktop-sales.png), and [Suppliers](artifacts/desktop-suppliers.png), [Backup](artifacts/desktop-backup.png), and [Import](artifacts/desktop-import.png).
 - Previous fullscreen verification remains recorded in [the fullscreen render](artifacts/desktop-fullscreen.png). Startup requests true fullscreen with F11 and visible window controls. Window-manager behavior still needs Windows and multi-monitor verification.
+
+## Debt-ageing bands — 13 November 2026
+
+- Credit review now groups current receipt balances into due today/later, 1–7, 8–30, 31–60, 61–90 and over 90 days late, with a separate no-agreed-date group.
+- Groups use explicitly assigned repayments. Exact amounts remain unavailable while payments are unassigned; no FIFO or inferred due dates are introduced.
+- Export all customer ageing creates spreadsheet-safe CSV with classification date, current-balance basis, unassigned amounts and all bands. Unknown amounts are blank, not zero. Export includes all reviewed customers regardless of the on-screen filter.
+- Six tests verify every boundary, leap-day calendar arithmetic, partial/fully settled receipt bands, reconciliation, unknown values, tenant restrictions, duplicate rows and relabeled export dates.
+- Native isolated preview inspected the rendered rows: Amina's ₦750 current debt appeared entirely under Due today or later, with zero unassigned payments and zero overdue. [Screenshot](artifacts/desktop-debt-ageing.png). The export formatter is tested; the OS save dialog was not exercised in this pass.
+- Current balances are classified using the review date; this is not historical accounting as of that date. Allocation reversals/reassignment, write-offs and reminders remain pending.
 
 ## Negotiated unit prices — 13 November 2026
 

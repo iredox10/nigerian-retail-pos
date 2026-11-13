@@ -86,3 +86,7 @@ Keep packaging setup inside item management. Show a labeled “Sell as” contro
 ## Negotiated prices — 13 November 2026
 
 Use the existing labeled contextual action on each basket line. Adapt the locked guide's recognition principle: show the catalogue price, new price per named unit, required reason and resulting total. Keep the fixed payment action and the original receipt-like total panel. No new tokens or navigation. Persist discount and price reference with the draft; a changed catalogue price requires explicit review. Receipts explain original price, reduction and net price so partial returns can refund an exact amount. Only the current owner workspace exists; do not imply staff approval enforcement.
+
+## Debt-ageing bands — 13 November 2026
+
+Extend the existing Credit review customer surface with labeled amount rows, following the locked Carbon comparison structure and familiar-wording rule. Keep the current debt and unassigned-payment context above the bands. Use calendar days after an agreed WAT due date: due today is not late; no-date debt has its own row. Suppress every exact band while repayments remain unassigned. Export all reviewed customers, independent of the visible search/filter, with an explicit current-balance basis and blank unknown amounts. Keep refresh and export labeled; no new navigation or tokens. Native preview inspected the seven rows and current-debt reconciliation.

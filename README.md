@@ -100,3 +100,5 @@ The shared module currently declares a JVM target while keeping domain/UI code i
 The chosen stack direction is Kotlin Multiplatform/Compose for installed apps, React/TypeScript with TanStack for web, and Heroku for online services. Backend synchronization architecture remains open. Product name, pricing, and delivery schedule are not yet decided. See the [full implementation audit](IMPLEMENTATION_STATUS.md) for remaining requirements and [build verification](BUILD_STATUS.md) for current evidence and limitations.
 
 Negotiated unit prices are available through Sell → Change price. Enter the lower price and reason; receipts retain the original price and cash returns refund the net amount. Staff approval limits and percentage/basket discounts remain pending.
+
+Credit review now shows current unpaid balances by days late, including a separate undated group, and exports all customer ageing to CSV. Exact bands remain unavailable while repayments are unassigned; assign payments to receipts under Customers first.
