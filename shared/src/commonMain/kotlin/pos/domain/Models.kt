@@ -14,11 +14,18 @@ data class Product(
     val stock: Double,
     val barcode: String? = null,
     val archived: Boolean = false,
+    val reorderLevel: Int? = null,
+    val openingStock: Double? = null,
+    val createdAt: String? = null,
 ) {
     init {
         require(id.isNotBlank() && tenantId.isNotBlank())
         require(name.isNotBlank() && unit.isNotBlank())
         require(priceMinor >= 0) { "Selling price cannot be negative." }
+        require(reorderLevel == null || reorderLevel >= 0) { "Reorder level cannot be negative." }
+        require((openingStock == null) == (createdAt == null)) { "Opening stock and its recorded time must be present together." }
+        require(openingStock == null || (openingStock.isFinite() && openingStock in 0.0..9_007_199_254_740_991.0)) { "Opening stock exceeds the supported range." }
+        require(createdAt == null || createdAt.isNotBlank()) { "Opening stock time cannot be empty." }
         require(barcode == null || (barcode.isNotBlank() && barcode == barcode.trim() && barcode.length <= 128 && barcode.none { it.isISOControl() })) { "Use a non-empty barcode of at most 128 characters." }
         require(stock.isFinite() && stock >= 0 && stock <= 9_007_199_254_740_991.0) { "Stock must be a non-negative quantity within the supported exact range." }
     }

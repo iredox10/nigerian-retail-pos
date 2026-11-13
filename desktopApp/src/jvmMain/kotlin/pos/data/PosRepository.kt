@@ -52,6 +52,9 @@ class PosRepository(path: String = File(System.getProperty("user.home"), ".niger
             val productColumns=query("PRAGMA table_info(products)") { it.getString("name") }
             if("barcode" !in productColumns) db.createStatement().use { it.execute("ALTER TABLE products ADD COLUMN barcode TEXT") }
             if("archived" !in productColumns) db.createStatement().use { it.execute("ALTER TABLE products ADD COLUMN archived INTEGER NOT NULL DEFAULT 0 CHECK(archived IN(0,1))") }
+            if("reorder_level" !in productColumns) db.createStatement().use { it.execute("ALTER TABLE products ADD COLUMN reorder_level INTEGER CHECK(reorder_level>=0)") }
+            if("opening_stock" !in productColumns) db.createStatement().use { it.execute("ALTER TABLE products ADD COLUMN opening_stock REAL CHECK(opening_stock>=0)") }
+            if("created_at" !in productColumns) db.createStatement().use { it.execute("ALTER TABLE products ADD COLUMN created_at TEXT") }
             val receiptColumns=query("PRAGMA table_info(stock_receipts)") { it.getString("name") }
             if("base_unit" !in receiptColumns) db.createStatement().use { it.execute("ALTER TABLE stock_receipts ADD COLUMN base_unit TEXT") }
             if("base_units_per_unit" !in receiptColumns) db.createStatement().use { it.execute("ALTER TABLE stock_receipts ADD COLUMN base_units_per_unit INTEGER NOT NULL DEFAULT 1 CHECK(base_units_per_unit>0)") }
@@ -73,6 +76,7 @@ class PosRepository(path: String = File(System.getProperty("user.home"), ".niger
         }
         // Create after the legacy repayment-key migration so every reference has a scoped parent key.
         db.createStatement().use { it.execute("CREATE TABLE IF NOT EXISTS repayment_allocations(id TEXT NOT NULL,tenant_id TEXT NOT NULL,customer_id TEXT NOT NULL,repayment_id TEXT NOT NULL,sale_id TEXT NOT NULL,amount_minor INTEGER NOT NULL CHECK(amount_minor>0),created_at TEXT NOT NULL,PRIMARY KEY(tenant_id,id),FOREIGN KEY(tenant_id,customer_id) REFERENCES customers(tenant_id,id),FOREIGN KEY(tenant_id,repayment_id) REFERENCES repayments(tenant_id,id),FOREIGN KEY(tenant_id,sale_id) REFERENCES sales(tenant_id,id))") }
+        db.createStatement().use { it.execute("CREATE TABLE IF NOT EXISTS stock_settings_changes(id TEXT NOT NULL,tenant_id TEXT NOT NULL,product_id TEXT NOT NULL,previous_reorder_level INTEGER CHECK(previous_reorder_level>=0),reorder_level INTEGER CHECK(reorder_level>=0),created_at TEXT NOT NULL,PRIMARY KEY(tenant_id,id),FOREIGN KEY(tenant_id,product_id) REFERENCES products(tenant_id,id))") }
         // Legacy cash stays unassigned: a new shift's opening count already includes physical cash.
         transaction {
             execute("INSERT OR IGNORE INTO cash_entries(id,tenant_id,shift_id,kind,amount_minor,description,created_at,source_id) SELECT 'legacy-sale-'||id,tenant_id,NULL,'sale',cash_minor,'Cash sale '||substr(id,1,8),created_at,id FROM sales WHERE cash_minor>0")
@@ -100,11 +104,58 @@ class PosRepository(path: String = File(System.getProperty("user.home"), ".niger
         requireTenant(tenantId)
         require(name.isNotBlank() && unit.isNotBlank()) { "Enter the item name and selling unit." }
         require(priceMinor >= 0 && stock.isFinite() && stock >= 0 && stock <= 9_007_199_254_740_991.0) { "Enter a non-negative price and stock within the supported quantity range." }
-        Product(id(), tenantId, name.trim(), unit.trim(), priceMinor, stock, normalizeBarcode(barcode)).also {
+        Product(id(), tenantId, name.trim(), unit.trim(), priceMinor, stock, normalizeBarcode(barcode),openingStock=stock,createdAt=Instant.now().toString()).also {
             requireBarcodeAvailable(tenantId,it.barcode)
-            execute("INSERT INTO products(id,tenant_id,name,unit,price_minor,stock,barcode,archived) VALUES(?,?,?,?,?,?,?,0)", it.id,tenantId,it.name,it.unit,it.priceMinor,it.stock,it.barcode)
+            execute("INSERT INTO products(id,tenant_id,name,unit,price_minor,stock,barcode,archived,opening_stock,created_at) VALUES(?,?,?,?,?,?,?,0,?,?)", it.id,tenantId,it.name,it.unit,it.priceMinor,it.stock,it.barcode,it.openingStock,it.createdAt)
             enqueue(tenantId,"product.created",it.id)
         }
+    }
+    /** Reminder only: changing a threshold never changes available quantity. */
+    @Synchronized fun setReorderLevel(tenantId:String,productId:String,level:Int?,operationId:String?=null):Product = transaction {
+        requireTenant(tenantId)
+        require(level==null || level>=0) { "Enter a whole reorder level from 0, or leave it disabled." }
+        require(operationId==null || operationId.isNotBlank()) { "Operation identifier cannot be blank." }
+        val item=requireProduct(tenantId,productId)
+        if(operationId!=null) {
+            val previous=query("SELECT * FROM stock_settings_changes WHERE tenant_id=? AND id=?",tenantId,operationId,map=::stockSettingsChange).singleOrNull()
+            if(previous!=null) {
+                require(previous.productId==productId && previous.reorderLevel==level) { "This reminder change was already saved with different details." }
+                return@transaction item
+            }
+        }
+        require(!item.archived) { "Restore this archived item before changing its stock reminder." }
+        val change=StockSettingsChange(operationId?:id(),tenantId,productId,item.reorderLevel,level,Instant.now().toString())
+        execute("UPDATE products SET reorder_level=? WHERE tenant_id=? AND id=?",level,tenantId,productId)
+        execute("INSERT INTO stock_settings_changes VALUES(?,?,?,?,?,?)",change.id,tenantId,productId,change.previousReorderLevel,level,change.createdAt)
+        enqueue(tenantId,"stock.reminder_changed",change.id)
+        item.copy(reorderLevel=level)
+    }
+    @Synchronized fun stockSettingsChanges(tenantId:String,productId:String?=null):List<StockSettingsChange> {
+        requireTenant(tenantId)
+        if(productId!=null)requireProduct(tenantId,productId)
+        return query("SELECT * FROM stock_settings_changes WHERE tenant_id=?"+(if(productId!=null) " AND product_id=?" else "")+" ORDER BY created_at,id",*listOfNotNull(tenantId,productId).toTypedArray(),map=::stockSettingsChange)
+    }
+    @Synchronized fun lowStockProducts(tenantId:String):List<Product> {
+        requireTenant(tenantId)
+        return query("SELECT * FROM products WHERE tenant_id=? AND archived=0 AND reorder_level IS NOT NULL AND stock<=reorder_level ORDER BY stock,name",tenantId,map=::product)
+    }
+    /** Derived from immutable transaction snapshots. Legacy unknown opening quantities are never invented. */
+    @Synchronized fun inventoryMovements(tenantId:String,productId:String):List<InventoryMovement> {
+        requireTenant(tenantId)
+        val item=requireProduct(tenantId,productId)
+        val movements=mutableListOf<InventoryMovement>()
+        if(item.openingStock!=null && item.createdAt!=null) movements+=InventoryMovement("opening:$productId",tenantId,productId,"opening",requireNotNull(item.openingStock),productId,requireNotNull(item.createdAt),"Counted opening stock")
+        query("SELECT * FROM stock_receipts WHERE tenant_id=? AND product_id=?",tenantId,productId,map=::stockReceipt).forEach { receipt ->
+            movements+=InventoryMovement("purchase:${receipt.id}",tenantId,productId,"purchase",receipt.baseQuantity.toDouble(),receipt.id,receipt.createdAt,"Received ${receipt.quantity} ${receipt.unit} from ${receipt.supplierName.ifBlank { "supplier not recorded" }}")
+        }
+        query("SELECT s.id AS source_id,s.created_at,l.quantity FROM sale_lines l JOIN sales s ON s.tenant_id=l.tenant_id AND s.id=l.sale_id WHERE l.tenant_id=? AND l.product_id=?",tenantId,productId) { row ->
+            InventoryMovement("sale:${row.getString("source_id")}",tenantId,productId,"sale",-row.getInt("quantity").toDouble(),row.getString("source_id"),row.getString("created_at"),"Goods sold on receipt")
+        }.also { movements+=it }
+        query("SELECT r.id AS source_id,r.created_at,l.quantity,r.reason FROM return_lines l JOIN sale_returns r ON r.tenant_id=l.tenant_id AND r.id=l.return_id WHERE l.tenant_id=? AND l.product_id=? AND r.restock=1",tenantId,productId) { row ->
+            InventoryMovement("return:${row.getString("source_id")}",tenantId,productId,"return",row.getInt("quantity").toDouble(),row.getString("source_id"),row.getString("created_at"),"Sellable return: ${row.getString("reason")}")
+        }.also { movements+=it }
+        stockAdjustments(tenantId,productId).forEach { count -> movements+=InventoryMovement("count:${count.id}",tenantId,productId,"count",count.difference,count.id,count.createdAt,"Count ${count.previousStock} → ${count.countedStock}: ${count.reason}") }
+        return movements.sortedWith(compareBy<InventoryMovement> { Instant.parse(it.createdAt) }.thenBy { it.id })
     }
     @Synchronized fun productByBarcode(tenantId:String,barcode:String):Product? {
         requireTenant(tenantId)
@@ -121,7 +172,7 @@ class PosRepository(path: String = File(System.getProperty("user.home"), ".niger
         val previous=operationId?.let { catalogueChange(tenantId,it) }
         if(previous!=null) {
             require(previous.product.id==productId && previous.kind=="edit" && previous.product.name==name.trim() && previous.product.unit==unit.trim() && previous.product.priceMinor==priceMinor && previous.product.barcode==code) { "This item edit was already saved with different details." }
-            return@transaction previous.product.copy(stock=item.stock)
+            return@transaction previous.product.copy(stock=item.stock,reorderLevel=item.reorderLevel,openingStock=item.openingStock,createdAt=item.createdAt)
         }
         require(unit.trim()==item.unit) { "Selling units cannot be changed here. Create a separate item to keep quantity history clear." }
         requireBarcodeAvailable(tenantId,code,productId)
@@ -622,7 +673,7 @@ class PosRepository(path: String = File(System.getProperty("user.home"), ".niger
     }
     private fun supplierPayment(r:ResultSet)=SupplierPayment(r.getString("id"),r.getString("tenant_id"),r.getString("receipt_id"),r.getString("supplier_name"),r.getLong("amount_minor"),r.getString("created_at"))
 
-    private val snapshotTableOrder get() = listOf("products","purchase_units","customers","customer_changes","cash_shifts","sales","sale_lines","repayments","repayment_allocations","stock_receipts","expenses","sale_returns","return_lines","supplier_payments","cash_entries","catalogue_changes","stock_adjustments","outbox")
+    private val snapshotTableOrder get() = listOf("products","stock_settings_changes","purchase_units","customers","customer_changes","cash_shifts","sales","sale_lines","repayments","repayment_allocations","stock_receipts","expenses","sale_returns","return_lines","supplier_payments","cash_entries","catalogue_changes","stock_adjustments","outbox")
     @Synchronized fun exportTenantSnapshot(tenantId:String):TenantSnapshot = transaction {
         requireTenant(tenantId)
         val tenant=tenants().single { it.id==tenantId }
@@ -653,6 +704,8 @@ class PosRepository(path: String = File(System.getProperty("user.home"), ".niger
                         require(quantity!=null && quantity in 1L..Int.MAX_VALUE.toLong()) { "Backup quantity exceeds the supported integer range." }
                     }
                     if(value!=null && name=="base_units_per_unit") require(value.toLongOrNull() in 1L..Int.MAX_VALUE.toLong()) { "Backup buying unit factor exceeds the supported integer range." }
+                    if(value!=null && name in setOf("reorder_level","previous_reorder_level")) require(value.toLongOrNull() in 0L..Int.MAX_VALUE.toLong()) { "Backup reorder level exceeds the supported integer range." }
+                    if(value!=null && name=="opening_stock") require(value.toDoubleOrNull()?.let { it in 0.0..9_007_199_254_740_991.0 }==true) { "Backup opening stock exceeds the supported range." }
                     if(value!=null && name=="counted_stock") require(value.toLongOrNull() in 0L..Int.MAX_VALUE.toLong()) { "Backup counted stock exceeds the supported integer range." }
                     if(value!=null && name=="previous_stock") require(value.toDoubleOrNull()?.let { it in 0.0..9_007_199_254_740_991.0 }==true) { "Backup previous stock exceeds the supported range." }
                     if(value!=null && type=="REAL") require(value.toDoubleOrNull()?.isFinite()==true) { "Backup has invalid numeric data in $table." }
@@ -671,7 +724,9 @@ class PosRepository(path: String = File(System.getProperty("user.home"), ".niger
             }
         }
         // Reconstruct domain records to enforce cross-field invariants as well as SQL constraints.
-        products(tenant.id,includeArchived=true); customers(tenant.id); sales(tenant.id); stockReceipts(tenant.id)
+        products(tenant.id,includeArchived=true).forEach { item -> item.createdAt?.let { Instant.parse(it) } }
+        stockSettingsChanges(tenant.id).forEach { Instant.parse(it.createdAt) }
+        customers(tenant.id); sales(tenant.id); stockReceipts(tenant.id)
         stockAdjustments(tenant.id); priceHistory(tenant.id); repayments(tenant.id); customerChanges(tenant.id)
         val restoredUnits=purchaseUnits(tenant.id,includeArchived=true)
         restoredUnits.forEach { unit -> require(unit.baseUnit==requireProduct(tenant.id,unit.productId).unit) { "Backup buying unit does not match the item's selling unit." } }
@@ -780,9 +835,10 @@ class PosRepository(path: String = File(System.getProperty("user.home"), ".niger
     private fun recordCatalogueChange(changeId:String,item:Product,previousPriceMinor:Long,kind:String) {
         execute("INSERT INTO catalogue_changes VALUES(?,?,?,?,?,?,?,?,?,?,?)",changeId,item.tenantId,item.id,kind,item.name,item.unit,item.priceMinor,previousPriceMinor,item.barcode,if(item.archived) 1 else 0,Instant.now().toString())
     }
+    private fun stockSettingsChange(r:ResultSet)=StockSettingsChange(r.getString("id"),r.getString("tenant_id"),r.getString("product_id"),r.getObject("previous_reorder_level")?.let { (it as Number).toInt() },r.getObject("reorder_level")?.let { (it as Number).toInt() },r.getString("created_at"))
     private fun stockAdjustment(r:ResultSet)=StockAdjustment(r.getString("id"),r.getString("tenant_id"),r.getString("product_id"),r.getString("product_name"),r.getString("unit"),r.getDouble("previous_stock"),r.getInt("counted_stock"),r.getString("reason"),r.getString("created_at"))
     private fun requireTenant(tenantId: String) { require(query("SELECT id FROM tenants WHERE id=?",tenantId) { it.getString(1) }.isNotEmpty()) { "Shop not found." } }
-    private fun product(r: ResultSet)=Product(r.getString("id"),r.getString("tenant_id"),r.getString("name"),r.getString("unit"),r.getLong("price_minor"),r.getDouble("stock"),r.getString("barcode"),r.getInt("archived")==1)
+    private fun product(r: ResultSet)=Product(r.getString("id"),r.getString("tenant_id"),r.getString("name"),r.getString("unit"),r.getLong("price_minor"),r.getDouble("stock"),r.getString("barcode"),r.getInt("archived")==1,r.getObject("reorder_level")?.let { (it as Number).toInt() },r.getObject("opening_stock")?.let { (it as Number).toDouble() },r.getString("created_at"))
     private fun enqueue(tenantId:String,kind:String,entityId:String) { execute("INSERT INTO outbox(id,tenant_id,kind,entity_id,created_at) VALUES(?,?,?,?,?)",id(),tenantId,kind,entityId,Instant.now().toString()) }
     private fun id()=UUID.randomUUID().toString()
     private fun execute(sql:String,vararg args:Any?):Int=db.prepareStatement(sql).use { s -> args.forEachIndexed { i,v -> s.setObject(i+1,v) };s.executeUpdate() }
