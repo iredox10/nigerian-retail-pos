@@ -25,12 +25,12 @@ import pos.ui.theme.PosPalette
 import java.util.UUID
 
 @Composable
-fun SalesScreen(repo: PosRepository, tenantId: String, onChanged: () -> Unit) {
-    key(tenantId) { TenantSalesScreen(repo, tenantId, onChanged) }
+fun SalesScreen(repo: PosRepository, tenantId: String, allowReturns: Boolean = true, onChanged: () -> Unit) {
+    key(tenantId) { TenantSalesScreen(repo, tenantId, allowReturns, onChanged) }
 }
 
 @Composable
-private fun TenantSalesScreen(repo: PosRepository, tenantId: String, onChanged: () -> Unit) {
+private fun TenantSalesScreen(repo: PosRepository, tenantId: String, allowReturns: Boolean, onChanged: () -> Unit) {
     var revision by remember { mutableStateOf(0) }
     val sales = remember(tenantId, revision) { repo.sales(tenantId) }
     val tenant = remember(tenantId) { repo.tenants().single { it.id == tenantId } }
@@ -53,7 +53,7 @@ private fun TenantSalesScreen(repo: PosRepository, tenantId: String, onChanged: 
     }
 
     Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-        SectionHeader("Sales", "Find a saved sale, print a receipt or record returned items.")
+        SectionHeader("Sales", if(allowReturns) "Find a saved sale, print a receipt or record returned items." else "Find a saved sale and print or export its receipt.")
         notice?.let {
             InlineNotice(if (noticeError) "Action not completed" else "Receipt update", it,
                 if (noticeError) NoticeTone.Danger else NoticeTone.Neutral, Modifier.fillMaxWidth())
@@ -129,6 +129,8 @@ private fun TenantSalesScreen(repo: PosRepository, tenantId: String, onChanged: 
                             if (selected.creditMinor > 0) {
                                 Text("Returns for receipts with customer credit are not available yet. No debt or payment will be changed here.",
                                     style = MaterialTheme.typography.bodySmall, color = PosPalette.Secondary)
+                            } else if (!allowReturns) {
+                                Text("A manager or owner must sign in to record returned items or refunds.",style = MaterialTheme.typography.bodySmall,color = PosPalette.Secondary)
                             } else if (returnable.values.any { it > 0 }) {
                                 NeutralButton("Return items", { returning = true }, Modifier.fillMaxWidth(), enabled = !outputBusy)
                                 Text("Cash refunds require an open shift with enough cash.", style = MaterialTheme.typography.bodySmall, color = PosPalette.Secondary)
@@ -143,7 +145,7 @@ private fun TenantSalesScreen(repo: PosRepository, tenantId: String, onChanged: 
             }
         }
     }
-    if (returning && selected != null) {
+    if (allowReturns && returning && selected != null) {
         ReturnItemsDialog(selected, returnable, { returning = false }) { quantities, restock, reason, operation ->
             repo.returnItems(tenantId, selected.id, quantities, restock, reason, operation)
             returning = false

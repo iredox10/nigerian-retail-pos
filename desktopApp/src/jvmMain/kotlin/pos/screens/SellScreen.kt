@@ -30,13 +30,15 @@ fun SellScreen(
     products: List<Product>,
     customers: List<Customer>,
     sellingUnits: List<SellingUnit> = emptyList(),
+    allowCredit: Boolean = true,
+    allowDiscounts: Boolean = true,
     onCheckout: (List<CartLine>, Long, String?, String, String?) -> String?,
 ) {
     val draftStoreResult = remember(tenantId) { runCatching { DraftStore(tenantId) } }
     val draftStore = draftStoreResult.getOrNull()
     val restoredDraft = remember(tenantId) { runCatching { draftStore?.load() } }
     var search by rememberSaveable { mutableStateOf("") }
-    // Only IDs and integer quantities are retained by the UI. Prices come from the scoped catalogue.
+    // Catalogue prices are refreshed; explicit discounts retain a reference price for review.
     var encodedCart by rememberSaveable { mutableStateOf(restoredDraft.getOrNull()?.cart ?: "") }
     var encodedDiscounts by rememberSaveable { mutableStateOf(DraftDiscountCodec.encode(restoredDraft.getOrNull()?.discounts.orEmpty())) }
     val discounts = remember(encodedDiscounts) { DraftDiscountCodec.decode(encodedDiscounts) }
@@ -115,6 +117,7 @@ fun SellScreen(
         catch(e: Exception) { error = "Item change not saved: ${e.message}" }
     }
 
+    val forbiddenDraft = (!allowCredit && method=="credit") || (!allowDiscounts && discounts.isNotEmpty())
     val cashGiven = parseNaira(cashText)
     val appliedCash = minOf(cashGiven ?: 0, total)
     val credit = if (method == "credit") total - appliedCash else 0
@@ -239,7 +242,7 @@ fun SellScreen(
                                             Text("Was ${money(line.unitPriceMinor)} · Now ${money(line.netUnitPriceMinor)} / ${line.sellingUnit}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
                                             Text("Reason: ${line.discountReason}", style = MaterialTheme.typography.bodySmall)
                                         }
-                                        TextButton({
+                                        if (allowDiscounts) TextButton({
                                             changingPrice = line.key
                                             agreedPrice = BigDecimal(line.netUnitPriceMinor).movePointLeft(2).toPlainString()
                                             discountReason = discounts[line.key]?.reason.orEmpty()
@@ -258,7 +261,7 @@ fun SellScreen(
                                 Text("How is the customer paying?", style = MaterialTheme.typography.titleMedium)
                                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                     FilterChip(method == "cash", { persistPayment(customerId=null,paymentMethod="cash") }, label = { Text("Cash") })
-                                    FilterChip(method == "credit", { persistPayment(paymentMethod="credit") }, label = { Text("Pay later / part cash") })
+                                    if(allowCredit) FilterChip(method == "credit", { persistPayment(paymentMethod="credit") }, label = { Text("Pay later / part cash") })
                                 }
                                 Text("Bank transfers and card terminals are not integrated. Record only cash or explicit customer credit here.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 OutlinedTextField(cashText, { persistPayment(cash=it) }, label = { Text(if (method == "cash") "Cash given by customer" else "Cash paid now (enter 0 if none)") }, prefix = { Text("₦ ") }, singleLine = true, modifier = Modifier.fillMaxWidth())
@@ -283,6 +286,7 @@ fun SellScreen(
                                     Text(if (cashGiven!! >= total) "Change to give ${money(cashGiven!! - total)}" else "Still to pay ${money(total - cashGiven!!)}", fontWeight = FontWeight.SemiBold)
                                 }
                             }
+                            if (forbiddenDraft) Text("This saved sale needs a manager or owner because it contains credit or a discount. Sign in with that account, or remove discounted items and choose Cash.",color=MaterialTheme.colorScheme.error)
                             if (staleDiscounts) Text("A discounted item's catalogue price changed. Review its discount before payment, or remove the item.", color = MaterialTheme.colorScheme.error)
                             if (unavailableDraftItems) {
                                 Text("Some saved items are archived or unavailable. Restore them under Stock or remove them before payment.",color=MaterialTheme.colorScheme.error)
@@ -321,7 +325,7 @@ fun SellScreen(
                                         } else error = result
                                     }
                                 }
-                            }, modifier = Modifier.fillMaxWidth().height(56.dp), enabled = lines.isNotEmpty() && !committing && totalResult.isSuccess && !unavailableDraftItems && !staleDiscounts && draftStore != null && restoredDraft.isSuccess) {
+                            }, modifier = Modifier.fillMaxWidth().height(56.dp), enabled = lines.isNotEmpty() && !committing && totalResult.isSuccess && !unavailableDraftItems && !staleDiscounts && (!forbiddenDraft || stage=="items") && draftStore != null && restoredDraft.isSuccess) {
                                 Text(if (committing) "Saving…" else if (stage == "items") "Take payment" else if (method == "credit" && credit > 0) "Save with ${money(credit)} owed" else "Finish sale")
                             }
                             if (stage == "items" && lines.isEmpty()) Text("Add an item to take payment", Modifier.padding(top = 8.dp), style = MaterialTheme.typography.bodySmall)

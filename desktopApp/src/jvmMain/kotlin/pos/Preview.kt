@@ -5,6 +5,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.*
 import pos.data.*
 import pos.domain.CartLine
+import pos.domain.StaffRole
+import pos.security.StaffAccess
+import pos.security.WorkspaceAccess
 import pos.ui.theme.PosTheme
 import java.nio.file.Files
 
@@ -40,10 +43,26 @@ fun main() {
                 DraftStore(t.id).save(SaleDraft("${malt.id}:3;${rice.id}:1",java.util.UUID.randomUUID().toString()))
             }
         }
-        val route = System.getenv("POS_PREVIEW_SCREEN")?.takeIf { it in setOf("Sell","Stock","Money","Sales","Customers","Reports","Suppliers","Backup","Import","Credit review") } ?: "Sell"
+        val route = System.getenv("POS_PREVIEW_SCREEN")?.takeIf { it in setOf("Sell","Stock","Money","Sales","Customers","Reports","Suppliers","Backup","Import","Credit review","Staff") } ?: "Sell"
         val width = System.getenv("POS_PREVIEW_WIDTH")?.toIntOrNull()?.coerceIn(800,1920) ?: 1440
         val height = System.getenv("POS_PREVIEW_HEIGHT")?.toIntOrNull()?.coerceIn(600,1200) ?: 900
         val placement = if (System.getenv("POS_PREVIEW_WIDTH") != null || System.getenv("POS_PREVIEW_HEIGHT") != null) WindowPlacement.Floating else WindowPlacement.Fullscreen
-        DesktopWindow(title="Retail POS · Isolated preview · $route",onClose=::exitApplication,initialPlacement=placement,width=width,height=height) { App(repo,tenant,route) }
+        val staffAccess = remember { StaffAccess() }
+        val staffSession = remember {
+            if (route=="Staff" || System.getenv("POS_PREVIEW_ROLE")!=null) {
+                WorkspaceAccess().register(tenant.id,"Preview-owner-2026")
+                val owner=requireNotNull(staffAccess.unlockOwner(tenant.id,"Preview-owner-2026"))
+                val cashier=staffAccess.addMember(owner,"Sample cashier",StaffRole.CASHIER,"Preview-cashier-2026")
+                val manager=staffAccess.addMember(owner,"Sample manager",StaffRole.MANAGER,"Preview-manager-2026")
+                when(System.getenv("POS_PREVIEW_ROLE")) {
+                    "Cashier" -> staffAccess.unlockStaff(tenant.id,cashier.id,"Preview-cashier-2026")
+                    "Manager" -> staffAccess.unlockStaff(tenant.id,manager.id,"Preview-manager-2026")
+                    else -> owner
+                }
+            } else null
+        }
+        DesktopWindow(title="Retail POS · Isolated preview · $route",onClose=::exitApplication,initialPlacement=placement,width=width,height=height) {
+            App(repo,tenant,route,staffSession,staffAccess)
+        }
     }
 }

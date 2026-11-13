@@ -26,7 +26,7 @@ fun BackupPanel(repo: PosRepository, tenant: Tenant) {
     var saving by remember { mutableStateOf(false) }
     Column(Modifier.widthIn(max=680.dp).verticalScroll(rememberScrollState()), verticalArrangement=Arrangement.spacedBy(16.dp)) {
         SectionHeader("Back up this shop", "Encrypted recovery file · ${tenant.name}")
-        Text("This file includes this shop's business records only. It does not include other shops, owner passwords, unfinished baskets, or printer settings. Keep the file and its password somewhere you can recover them.")
+        Text("This file includes this shop's business records only. It does not include other shops, owner/staff passwords, staff accounts, unfinished baskets, or printer settings. Keep the file and its password somewhere you can recover them.")
         OutlinedTextField(password,{password=it},label={Text("Backup password")},visualTransformation=PasswordVisualTransformation(),singleLine=true,modifier=Modifier.fillMaxWidth())
         OutlinedTextField(repeat,{repeat=it},label={Text("Repeat backup password")},visualTransformation=PasswordVisualTransformation(),singleLine=true,modifier=Modifier.fillMaxWidth())
         Text("At least 8 characters. This password protects the backup file; it does not encrypt the working database.",style=MaterialTheme.typography.bodySmall)
@@ -65,7 +65,7 @@ fun RestoreBackupDialog(repo:PosRepository, access:WorkspaceAccess, dismiss:()->
             OutlinedTextField(backupPassword,{backupPassword=it},label={Text("Backup file password")},visualTransformation=PasswordVisualTransformation(),singleLine=true)
             PosTextField(name,{name=it},"Name for restored shop")
             OutlinedTextField(ownerPassword,{ownerPassword=it},label={Text("New owner password")},visualTransformation=PasswordVisualTransformation(),singleLine=true)
-            Text("Owner passwords are not imported. The new password unlocks only the restored workspace.",style=MaterialTheme.typography.bodySmall)
+            Text("Owner and staff credentials are not imported. The new password unlocks only the restored workspace.",style=MaterialTheme.typography.bodySmall)
             error?.let { InlineNotice("Nothing restored",it,NoticeTone.Danger) }
         }
     },confirmButton={ PosButton(if(working) "Restoring…" else "Restore as new shop",{
