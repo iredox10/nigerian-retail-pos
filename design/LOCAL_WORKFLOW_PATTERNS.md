@@ -78,3 +78,7 @@ The existing Stock contextual-detail pattern and Carbon table reference own this
 - Low stock filters active items only. Archiving goods keeps their historical movements but removes them from reorder alerts.
 - Movement exports retain signed base quantities, timestamps, source IDs and opening-history certainty. Low-stock/product exports are current snapshots rather than historical stock balances.
 - Changing a reorder level keeps setting history but never changes stock or cash. This is an owner workspace tool; delegated staff approval remains a separate unfinished feature.
+
+## Selling units and shared stock — 13 November 2026
+
+Keep packaging setup inside item management. Show a labeled “Sell as” control only when alternate selling definitions exist, with each whole-unit price and base equivalent. Selecting another unit never reinterprets a basket line; carton and loose quantities remain distinct. Show base-stock deduction beneath pack lines. Both controls and the repository aggregate mixed-line stock requirements. Archived definitions preserve historical receipts/refunds but cannot create new sales. Persist opaque line keys in drafts; absent units must block payment with an explicit recovery action. Preserve the existing reference lock and tokens.

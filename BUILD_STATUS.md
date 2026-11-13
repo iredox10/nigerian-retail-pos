@@ -5,11 +5,20 @@
 ## Verified
 
 - Shared and desktop compilation with Kotlin 2.2.20, Compose 1.9.1 and JDK 17.
-- **157 automated tests pass**, with zero failures or errors: 39 prior tests plus six after-sales, four tenant-snapshot, four receipt, six CSV/report-date, eight encrypted-backup, three restore-regression, four product-import tests, eight catalogue/stock/customer-query tests, eight held-sale/recovery tests, five customer-statement tests, five purchase-unit persistence/migration tests, ten independent conversion-integrity tests, two purchase CSV tests, three credit-domain tests, seven customer-credit persistence tests, eight credit-review tests two credit-output/draft tests, seven repayment-allocation persistence tests, six additional allocation-aware credit-review tests two allocation CSV tests, six stock-history integrity tests, two inventory migration/recovery tests and two inventory CSV tests.
+- **170 automated tests pass**, with zero failures or errors. This adds 11 selling-unit integrity tests, a mixed-pack receipt test and a mixed-key draft recovery test to the previous 157-test checkpoint.
 - Coverage includes cross-tenant rejection, exact kobo amounts, retry deduplication, return limits/restocking, supplier overpayment, atomic import rejection, WAT date boundaries, spreadsheet formula protection, encrypted tenant-only backup, wrong passwords, corrupted input, repeated restore and cash/debt-history consistency.
 - Linux desktop distribution rebuilt successfully using `gradle :desktopApp:createDistributable` at `desktopApp/build/compose/binaries/main/app/RetailPOS`.
 - Native isolated previews rendered for Reports, Sales, Suppliers, Backup and Import. Reports filled the 1920 × 1080 display; Sales and Suppliers were also inspected in the compositor-provided narrower window. See [Reports](artifacts/desktop-reports.png), [Sales](artifacts/desktop-sales.png), and [Suppliers](artifacts/desktop-suppliers.png), [Backup](artifacts/desktop-backup.png), and [Import](artifacts/desktop-import.png).
 - Previous fullscreen verification remains recorded in [the fullscreen render](artifacts/desktop-fullscreen.png). Startup requests true fullscreen with F11 and visible window controls. Window-manager behavior still needs Windows and multi-monitor verification.
+
+## Selling packs and loose units — 13 November 2026
+
+- Stock → Manage → Selling units defines immutable pack names, base conversion, whole-pack prices and optional barcodes. Archive/create replaces a definition; archived definitions remain available to historical records.
+- Sell offers a labeled selling-unit choice. Mixed carton/loose lines share one base stock pool; quantity controls and repository checks aggregate their stock requirement. Pack barcodes use the existing barcode + Enter flow.
+- Held/active drafts keep distinct pack keys; unavailable archived units block payment until removed/restored. Resumed drafts use current catalogue prices.
+- Historical receipts, customer history, cash-sale refunds and optional restock preserve sold units/prices/conversions. Backups include definitions and snapshots; older backups/migrations default to base units.
+- Automated checks verify 1 carton × 24 plus 3 bottles deducts 27 bottles; original pack refunds, mixed overselling rollback, tenant/barcode isolation, replay safety, migration/restore and overflow.
+- Linux distributable rebuilt successfully. Native checkout render (unit-choice layout inspected; the full checkout interaction was not completed in this visual pass): [selling-unit choice](artifacts/desktop-pack-checkout.png). Physical scanner/printer and merchant usability remain unverified.
 
 ## Latest inventory additions
 
@@ -53,7 +62,7 @@
 - The independent integration test receives 2 cartons × 24 bottles, sells 3 bottles and verifies 45 remain, together with exact drawer cash and supplier debt.
 - Product CSV exports now include archived goods and their archive flag; this is labeled on the Reports screen.
 - Native preview check: opened Buying units, selected carton, entered 2 cartons at ₦10,000 each with ₦0 paid, and saved the receipt. Malt stock increased from 237 to 285 bottles, with a ₦20,000 purchase/credit preview. See [buying units](artifacts/desktop-buying-units.png), [conversion](artifacts/desktop-carton-receiving.png), [cost preview](artifacts/desktop-carton-cost-preview.png), and [saved stock](artifacts/desktop-carton-stock-saved.png).
-- Selling whole packages, packaging-specific sale prices/barcodes, fractional checkout and repacking remain pending.
+- Whole-package selling with independent prices/barcodes is now implemented below. Fractional checkout and repacking remain pending.
 
 ## Previous daily-shop additions
 
@@ -92,4 +101,4 @@ Local business queries and mutations are tenant-scoped. Composite relationships 
 
 This remains a trusted-device owner application. The working SQLite database is unencrypted. Local owner gates are not a network authorization boundary. Production online operation requires authenticated identities, tenant memberships, server-side authorization, roles, device enrollment and a reviewed synchronization protocol.
 
-See [the full implementation audit](IMPLEMENTATION_STATUS.md) for coverage of every specification section. Staff roles, packaging conversions at checkout/fractional sales, catalogue categories/variants and bulk edits, credit returns/exchanges, advanced stock/accounting, online services and mobile apps remain among the material outstanding work. The long-term feature specification is not complete.
+See [the full implementation audit](IMPLEMENTATION_STATUS.md) for coverage of every specification section. Staff roles, fractional sales, catalogue categories/variants and bulk edits, credit returns/exchanges, advanced stock/accounting, online services and mobile apps remain among the material outstanding work. The long-term feature specification is not complete.
