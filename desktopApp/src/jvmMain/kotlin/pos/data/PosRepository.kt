@@ -71,6 +71,8 @@ class PosRepository(path: String = File(System.getProperty("user.home"), ".niger
                 execute("ALTER TABLE outbox_scoped RENAME TO outbox")
             }
         }
+        // Create after the legacy repayment-key migration so every reference has a scoped parent key.
+        db.createStatement().use { it.execute("CREATE TABLE IF NOT EXISTS repayment_allocations(id TEXT NOT NULL,tenant_id TEXT NOT NULL,customer_id TEXT NOT NULL,repayment_id TEXT NOT NULL,sale_id TEXT NOT NULL,amount_minor INTEGER NOT NULL CHECK(amount_minor>0),created_at TEXT NOT NULL,PRIMARY KEY(tenant_id,id),FOREIGN KEY(tenant_id,customer_id) REFERENCES customers(tenant_id,id),FOREIGN KEY(tenant_id,repayment_id) REFERENCES repayments(tenant_id,id),FOREIGN KEY(tenant_id,sale_id) REFERENCES sales(tenant_id,id))") }
         // Legacy cash stays unassigned: a new shift's opening count already includes physical cash.
         transaction {
             execute("INSERT OR IGNORE INTO cash_entries(id,tenant_id,shift_id,kind,amount_minor,description,created_at,source_id) SELECT 'legacy-sale-'||id,tenant_id,NULL,'sale',cash_minor,'Cash sale '||substr(id,1,8),created_at,id FROM sales WHERE cash_minor>0")
@@ -183,6 +185,45 @@ class PosRepository(path: String = File(System.getProperty("user.home"), ".niger
         return query("SELECT * FROM repayments WHERE tenant_id=?"+(if(customerId!=null) " AND customer_id=?" else "")+" ORDER BY created_at DESC",*listOfNotNull(tenantId,customerId).toTypedArray()) {
             CustomerRepayment(it.getString("id"),tenantId,it.getString("customer_id"),it.getLong("amount_minor"),it.getString("created_at"))
         }
+    }
+    @Synchronized fun repaymentAllocations(tenantId:String,customerId:String?=null):List<RepaymentAllocation> {
+        requireTenant(tenantId)
+        if(customerId!=null) requireCustomer(tenantId,customerId)
+        return query("SELECT * FROM repayment_allocations WHERE tenant_id=?"+(if(customerId!=null) " AND customer_id=?" else "")+" ORDER BY created_at,id",*listOfNotNull(tenantId,customerId).toTypedArray(),map=::repaymentAllocation)
+    }
+    /** Amount of this already-recorded payment which the owner has not assigned to a credit sale. */
+    @Synchronized fun unallocatedRepayment(tenantId:String,repaymentId:String):Long {
+        requireTenant(tenantId)
+        val payment=requireRepayment(tenantId,repaymentId)
+        val allocated=allocationTotal(tenantId,"repayment_id",repaymentId)
+        return remainingAllocation(payment.amountMinor,allocated,"Payment allocations exceed the recorded repayment.")
+    }
+    /** Original credit minus explicit allocations; unassigned payments may still cover this sale. */
+    @Synchronized fun unallocatedCredit(tenantId:String,saleId:String):Long {
+        val sale=requireSale(tenantId,saleId)
+        return remainingAllocation(sale.creditMinor,allocationTotal(tenantId,"sale_id",saleId),"Payment allocations exceed the original credit sale.")
+    }
+    /** Allocation changes the assignment only. The payment already reduced debt and recorded cash. */
+    @Synchronized fun allocateRepayment(tenantId:String,repaymentId:String,saleId:String,amountMinor:Long,operationId:String?=null):RepaymentAllocation = transaction {
+        requireTenant(tenantId)
+        require(amountMinor>0) { "Choose an allocation greater than zero." }
+        require(operationId==null || operationId.isNotBlank()) { "Operation identifier cannot be blank." }
+        val payment=requireRepayment(tenantId,repaymentId)
+        val sale=requireSale(tenantId,saleId)
+        require(sale.creditMinor>0 && sale.customerId==payment.customerId) { "Choose a credit receipt for the same customer as this repayment." }
+        if(operationId!=null) {
+            val previous=query("SELECT * FROM repayment_allocations WHERE tenant_id=? AND id=?",tenantId,operationId,map=::repaymentAllocation).singleOrNull()
+            if(previous!=null) {
+                require(previous.repaymentId==repaymentId && previous.saleId==saleId && previous.amountMinor==amountMinor) { "This allocation was already saved with different details." }
+                return@transaction previous
+            }
+        }
+        require(amountMinor<=unallocatedRepayment(tenantId,repaymentId)) { "Allocation exceeds the amount of this payment still available to assign." }
+        require(amountMinor<=unallocatedCredit(tenantId,saleId)) { "Allocation exceeds the credit on this receipt still available to cover." }
+        val result=RepaymentAllocation(operationId?:id(),tenantId,payment.customerId,repaymentId,saleId,amountMinor,Instant.now().toString())
+        execute("INSERT INTO repayment_allocations VALUES(?,?,?,?,?,?,?)",result.id,tenantId,result.customerId,repaymentId,saleId,amountMinor,result.createdAt)
+        enqueue(tenantId,"repayment.allocated",result.id)
+        result
     }
     @Synchronized fun addCustomer(tenantId: String, name: String, phone:String?=null, address:String?=null, creditLimitMinor:Long?=null): Customer = transaction {
         requireTenant(tenantId)
@@ -581,7 +622,7 @@ class PosRepository(path: String = File(System.getProperty("user.home"), ".niger
     }
     private fun supplierPayment(r:ResultSet)=SupplierPayment(r.getString("id"),r.getString("tenant_id"),r.getString("receipt_id"),r.getString("supplier_name"),r.getLong("amount_minor"),r.getString("created_at"))
 
-    private val snapshotTableOrder get() = listOf("products","purchase_units","customers","customer_changes","cash_shifts","sales","sale_lines","repayments","stock_receipts","expenses","sale_returns","return_lines","supplier_payments","cash_entries","catalogue_changes","stock_adjustments","outbox")
+    private val snapshotTableOrder get() = listOf("products","purchase_units","customers","customer_changes","cash_shifts","sales","sale_lines","repayments","repayment_allocations","stock_receipts","expenses","sale_returns","return_lines","supplier_payments","cash_entries","catalogue_changes","stock_adjustments","outbox")
     @Synchronized fun exportTenantSnapshot(tenantId:String):TenantSnapshot = transaction {
         requireTenant(tenantId)
         val tenant=tenants().single { it.id==tenantId }
@@ -650,6 +691,15 @@ class PosRepository(path: String = File(System.getProperty("user.home"), ".niger
             val expected=granted.subtract(paid)
             require(expected.signum()>=0 && expected==java.math.BigInteger.valueOf(customer.balanceMinor)) { "Backup customer balance does not match credit sales and repayments." }
         }
+        val restoredAllocations=repaymentAllocations(tenant.id)
+        restoredAllocations.forEach { allocation ->
+            val payment=requireRepayment(tenant.id,allocation.repaymentId)
+            val sale=requireSale(tenant.id,allocation.saleId)
+            require(allocation.customerId==payment.customerId && allocation.customerId==sale.customerId && sale.creditMinor>0) { "Backup repayment allocation does not belong to the same customer's credit sale." }
+            Instant.parse(allocation.createdAt)
+        }
+        repayments(tenant.id).forEach { unallocatedRepayment(tenant.id,it.id) }
+        sales(tenant.id).forEach { unallocatedCredit(tenant.id,it.id) }
         val expectedCashSources=linkedMapOf<Pair<String,String>,Long>()
         fun sources(table:String,kind:String,amountColumn:String,outflow:Boolean=false) {
             query("SELECT id,$amountColumn FROM $table WHERE tenant_id=? AND $amountColumn>0",tenant.id) { it.getString(1) to it.getLong(2) }.forEach { (source,amount) ->
@@ -707,6 +757,19 @@ class PosRepository(path: String = File(System.getProperty("user.home"), ".niger
         if(barcode!=null) require(query("SELECT id FROM products WHERE tenant_id=? AND barcode=?",tenantId,barcode) { it.getString(1) }.all { it==exceptId }) { "This barcode is already assigned to another item in this shop, including archived items." }
     }
     private fun customer(r:ResultSet)=Customer(r.getString("id"),r.getString("tenant_id"),r.getString("name"),r.getLong("balance_minor"),r.getString("phone"),r.getString("address"),r.getObject("credit_limit_minor")?.let { (it as Number).toLong() })
+    private fun repaymentAllocation(r:ResultSet)=RepaymentAllocation(r.getString("id"),r.getString("tenant_id"),r.getString("customer_id"),r.getString("repayment_id"),r.getString("sale_id"),r.getLong("amount_minor"),r.getString("created_at"))
+    private fun requireRepayment(tenantId:String,repaymentId:String):CustomerRepayment=query("SELECT * FROM repayments WHERE tenant_id=? AND id=?",tenantId,repaymentId) {
+        CustomerRepayment(it.getString("id"),tenantId,it.getString("customer_id"),it.getLong("amount_minor"),it.getString("created_at"))
+    }.singleOrNull() ?: throw IllegalArgumentException("Repayment not found in this shop.")
+    private fun allocationTotal(tenantId:String,column:String,sourceId:String):java.math.BigInteger {
+        require(column=="repayment_id" || column=="sale_id")
+        return query("SELECT amount_minor FROM repayment_allocations WHERE tenant_id=? AND $column=?",tenantId,sourceId) { it.getLong(1) }.fold(java.math.BigInteger.ZERO) { total,amount -> total.add(java.math.BigInteger.valueOf(amount)) }
+    }
+    private fun remainingAllocation(original:Long,allocated:java.math.BigInteger,message:String):Long {
+        val remaining=java.math.BigInteger.valueOf(original).subtract(allocated)
+        require(remaining.signum()>=0) { message }
+        return remaining.longValueExact()
+    }
     private fun requireCustomer(tenantId:String,customerId:String):Customer=query("SELECT * FROM customers WHERE tenant_id=? AND id=?",tenantId,customerId,map=::customer).singleOrNull() ?: throw IllegalArgumentException("Customer not found in this shop.")
     private fun customerChange(r:ResultSet)=CustomerChange(r.getString("id"),r.getString("tenant_id"),r.getString("customer_id"),r.getString("previous_name"),r.getString("previous_phone"),r.getString("previous_address"),r.getObject("previous_credit_limit_minor")?.let { (it as Number).toLong() },r.getString("name"),r.getString("phone"),r.getString("address"),r.getObject("credit_limit_minor")?.let { (it as Number).toLong() },r.getString("created_at"))
     private fun requireProduct(tenantId:String,productId:String):Product = query("SELECT * FROM products WHERE tenant_id=? AND id=?",tenantId,productId,map=::product).singleOrNull() ?: throw IllegalArgumentException("Item not found in this shop.")
