@@ -36,6 +36,9 @@ class StaffAccess(
             it.execute("PRAGMA synchronous=FULL")
             it.execute("CREATE TABLE IF NOT EXISTS login_attempts(tenant_id TEXT NOT NULL,subject TEXT NOT NULL,failures INTEGER NOT NULL CHECK(failures BETWEEN 0 AND 5),last_attempt_ms INTEGER NOT NULL CHECK(last_attempt_ms>=0),locked_until_ms INTEGER NOT NULL CHECK(locked_until_ms>=0),PRIMARY KEY(tenant_id,subject))")
             it.execute("CREATE TABLE IF NOT EXISTS local_staff(id TEXT NOT NULL,tenant_id TEXT NOT NULL,name TEXT NOT NULL,role TEXT NOT NULL CHECK(role IN('MANAGER','CASHIER')),active INTEGER NOT NULL CHECK(active IN(0,1)),created_at TEXT NOT NULL,salt TEXT NOT NULL,password_hash TEXT NOT NULL,version INTEGER NOT NULL CHECK(version>0),creation_fingerprint TEXT NOT NULL,creation_salt TEXT NOT NULL,PRIMARY KEY(tenant_id,id))")
+            it.execute("CREATE TABLE IF NOT EXISTS staff_audit(id TEXT NOT NULL,tenant_id TEXT NOT NULL,kind TEXT NOT NULL,entity_id TEXT NOT NULL,created_at TEXT NOT NULL,actor_id TEXT,actor_name TEXT NOT NULL,actor_role TEXT NOT NULL CHECK(actor_role IN('OWNER','MANAGER','CASHIER')),description TEXT CHECK(description IS NULL OR length(description)<=1000),PRIMARY KEY(tenant_id,id))")
+            it.execute("CREATE TRIGGER IF NOT EXISTS staff_audit_no_update BEFORE UPDATE ON staff_audit BEGIN SELECT RAISE(ABORT,'Staff audit history cannot be edited'); END")
+            it.execute("CREATE TRIGGER IF NOT EXISTS staff_audit_no_delete BEFORE DELETE ON staff_audit BEGIN SELECT RAISE(ABORT,'Staff audit history cannot be removed'); END")
         }
         if(Files.getFileStore(file).supportsFileAttributeView("posix")) Files.setPosixFilePermissions(file,PosixFilePermissions.fromString("rw-------"))
     }
@@ -141,6 +144,14 @@ class StaffAccess(
         requireSession(ownerSession,StaffPermission.MANAGE_STAFF)
         return rows("SELECT * FROM local_staff WHERE tenant_id=? ORDER BY name,id",ownerSession.tenantId).map(::member)
     }
+    /** Local security history is separate from transferable business backup data. */
+    @Synchronized fun auditEvents(ownerSession:StaffSession):List<AuditEvent> {
+        requireSession(ownerSession,StaffPermission.MANAGE_STAFF)
+        return rows("SELECT * FROM staff_audit WHERE tenant_id=? ORDER BY created_at DESC,id DESC",ownerSession.tenantId).map { row ->
+            AuditEvent(row.getValue("id"),row.getValue("tenant_id"),row.getValue("kind"),row.getValue("entity_id"),row.getValue("created_at"),
+                AuditActor(row.getValue("tenant_id"),row["actor_id"],row.getValue("actor_name"),StaffRole.valueOf(row.getValue("actor_role"))),row["description"])
+        }
+    }
     @Synchronized fun addMember(ownerSession:StaffSession,name:String,role:StaffRole,password:String,operationId:String?=null):StaffMember = transaction {
         requireSession(ownerSession,StaffPermission.MANAGE_STAFF)
         validatePassword(password)
@@ -161,6 +172,7 @@ class StaffAccess(
         try {
             execute("INSERT INTO local_staff VALUES(?,?,?,?,?,?,?,?,?,?,?)",id,person.tenantId,person.name,role.name,1,person.createdAt,encode(salt),encode(hash),1L,creationFingerprint(person.tenantId,id,person.name,role,password,creationSalt),encode(creationSalt))
         } finally {hash.fill(0);salt.fill(0);creationSalt.fill(0)}
+        appendStaffAudit(ownerSession,"staff.created",person.id,"Created staff: name=${person.name}; role=${person.role.name}; active=${person.active}")
         person
     }
     @Synchronized fun updateMember(ownerSession:StaffSession,id:String,name:String,role:StaffRole,active:Boolean) = transaction {
@@ -171,20 +183,28 @@ class StaffAccess(
         if(changed!=old) {
             execute("UPDATE local_staff SET name=?,role=?,active=?,version=version+1 WHERE tenant_id=? AND id=?",changed.name,role.name,if(active)1 else 0,changed.tenantId,id)
             invalidate(changed.tenantId,id)
+            appendStaffAudit(ownerSession,"staff.updated",id,"Staff before: name=${old.name}; role=${old.role.name}; active=${old.active}. Staff after: name=${changed.name}; role=${changed.role.name}; active=${changed.active}.")
         }
         changed
     }
     @Synchronized fun resetPassword(ownerSession:StaffSession,id:String,password:String) = transaction {
         requireSession(ownerSession,StaffPermission.MANAGE_STAFF)
         validatePassword(password)
-        requireMember(ownerSession.tenantId,id)
+        val person=requireMember(ownerSession.tenantId,id)
         val salt=ByteArray(24).also(random::nextBytes)
         val hash=derive(ownerSession.tenantId,id,password,salt)
         try {
             // The creation fingerprint is deliberately retained for duplicate create retries.
             execute("UPDATE local_staff SET salt=?,password_hash=?,version=version+1 WHERE tenant_id=? AND id=?",encode(salt),encode(hash),ownerSession.tenantId,id)
             invalidate(ownerSession.tenantId,id)
+            appendStaffAudit(ownerSession,"staff.password_reset",id,"Password reset for staff: name=${person.name}")
         } finally {hash.fill(0);salt.fill(0)}
+    }
+
+    private fun appendStaffAudit(session:StaffSession,kind:String,entityId:String,description:String) {
+        require(description.length<=1000)
+        execute("INSERT INTO staff_audit(id,tenant_id,kind,entity_id,created_at,actor_id,actor_name,actor_role,description) VALUES(?,?,?,?,?,?,?,?,?)",
+            UUID.randomUUID().toString(),session.tenantId,kind,entityId,Instant.now().toString(),session.staffId,session.name,session.role.name,description)
     }
 
     private fun issue(tenantId:String,staffId:String?,name:String,role:StaffRole,version:Long?):StaffSession {

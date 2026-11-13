@@ -115,7 +115,7 @@ fun ReportsScreen(repo: PosRepository, tenantId: String) {
                     Box {
                         NeutralButton("$selectedExport ▾", { exportMenu = true })
                         DropdownMenu(exportMenu, { exportMenu = false }) {
-                            listOf("Sales", "Products", "Customers", "Expenses", "Cash activity", "Stock received", "Payment assignments", "Assignment corrections", "Stock movements", "Low stock").forEach { kind -> DropdownMenuItem(text = { Text(kind) }, onClick = { selectedExport = kind; exportMenu = false }) }
+                            listOf("Sales", "Products", "Customers", "Expenses", "Cash activity", "Stock received", "Payment assignments", "Assignment corrections", "Activity history", "Stock movements", "Low stock").forEach { kind -> DropdownMenuItem(text = { Text(kind) }, onClick = { selectedExport = kind; exportMenu = false }) }
                         }
                     }
                     PosButton("Save CSV file", {
@@ -133,6 +133,7 @@ fun ReportsScreen(repo: PosRepository, tenantId: String) {
                                     val ids=assignments.map {it.id}.toSet()
                                     CsvService.repaymentAllocations(tenantId,assignments,repo.allocationReversals(tenantId).filter {it.allocationId in ids})
                                 }
+                                "Activity history" -> CsvService.auditEvents(tenantId,repo.auditEvents(tenantId).filter {range.contains(it.createdAt)})
                                 "Assignment corrections" -> CsvService.allocationReversals(tenantId,repo.allocationReversals(tenantId).filter {range.contains(it.createdAt)})
                                 else -> CsvService.stockReceipts(tenantId, records.receipts.filter { range.contains(it.createdAt) })
                             }

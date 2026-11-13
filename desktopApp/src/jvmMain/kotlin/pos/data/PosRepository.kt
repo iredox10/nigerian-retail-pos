@@ -14,6 +14,12 @@ class PosRepository(path: String = File(System.getProperty("user.home"), ".niger
     // A null callback is for trusted local tooling/tests. The desktop installs a genuine-session
     // validator, including while locked; this adapter is not a server authorization boundary.
     private var permissionCheck: ((String, StaffPermission) -> Unit)? = null
+    private var actorProvider: ((String) -> AuditActor?)? = null
+
+    /** Desktop wiring supplies a genuine current identity; trusted tools can be unattributed. */
+    @Synchronized fun setActorProvider(provider: ((String) -> AuditActor?)?) {
+        actorProvider = provider
+    }
 
     @Synchronized fun setPermissionCheck(check: ((String, StaffPermission) -> Unit)?) {
         permissionCheck = check
@@ -102,6 +108,17 @@ class PosRepository(path: String = File(System.getProperty("user.home"), ".niger
             execute("INSERT OR IGNORE INTO cash_entries(id,tenant_id,shift_id,kind,amount_minor,description,created_at,source_id) SELECT 'legacy-sale-'||id,tenant_id,NULL,'sale',cash_minor,'Cash sale '||substr(id,1,8),created_at,id FROM sales WHERE cash_minor>0")
             execute("INSERT OR IGNORE INTO cash_entries(id,tenant_id,shift_id,kind,amount_minor,description,created_at,source_id) SELECT 'legacy-repayment-'||id,tenant_id,NULL,'repayment',amount_minor,'Customer repayment',created_at,id FROM repayments WHERE amount_minor>0")
         }
+        // This table is created only after the legacy outbox key has been migrated.
+        db.createStatement().use { it.execute("CREATE TABLE IF NOT EXISTS activity_audit(id TEXT NOT NULL,tenant_id TEXT NOT NULL,kind TEXT NOT NULL,entity_id TEXT NOT NULL,created_at TEXT NOT NULL,actor_id TEXT,actor_name TEXT,actor_role TEXT CHECK(actor_role IN('OWNER','MANAGER','CASHIER')),description TEXT,PRIMARY KEY(tenant_id,id),FOREIGN KEY(tenant_id,id) REFERENCES outbox(tenant_id,id))") }
+        execute("CREATE TRIGGER IF NOT EXISTS activity_audit_no_update BEFORE UPDATE ON activity_audit BEGIN SELECT RAISE(ABORT,'Activity history cannot be edited'); END")
+        execute("CREATE TRIGGER IF NOT EXISTS activity_audit_no_delete BEFORE DELETE ON activity_audit BEGIN SELECT RAISE(ABORT,'Activity history cannot be removed'); END")
+    }
+
+    /** New writes only: legacy events are not retrospectively attributed to the current owner. */
+    @Synchronized fun auditEvents(tenantId: String): List<AuditEvent> {
+        requirePermission(tenantId, StaffPermission.VIEW_REPORTS)
+        requireTenant(tenantId)
+        return query("SELECT * FROM activity_audit WHERE tenant_id=? ORDER BY created_at DESC,id DESC", tenantId, map=::auditEvent)
     }
 
     @Synchronized fun tenants(): List<Tenant> = query("SELECT id,name FROM tenants ORDER BY name") { Tenant(it.getString(1), it.getString(2)) }
@@ -793,7 +810,7 @@ class PosRepository(path: String = File(System.getProperty("user.home"), ".niger
     }
     private fun supplierPayment(r:ResultSet)=SupplierPayment(r.getString("id"),r.getString("tenant_id"),r.getString("receipt_id"),r.getString("supplier_name"),r.getLong("amount_minor"),r.getString("created_at"))
 
-    private val snapshotTableOrder get() = listOf("products","selling_units","stock_settings_changes","purchase_units","customers","customer_changes","cash_shifts","sales","sale_lines","repayments","repayment_allocations","allocation_reversals","stock_receipts","expenses","sale_returns","return_lines","supplier_payments","cash_entries","catalogue_changes","stock_adjustments","outbox")
+    private val snapshotTableOrder get() = listOf("products","selling_units","stock_settings_changes","purchase_units","customers","customer_changes","cash_shifts","sales","sale_lines","repayments","repayment_allocations","allocation_reversals","stock_receipts","expenses","sale_returns","return_lines","supplier_payments","cash_entries","catalogue_changes","stock_adjustments","outbox","activity_audit")
     @Synchronized fun exportTenantSnapshot(tenantId:String):TenantSnapshot = transaction {
         requirePermission(tenantId, StaffPermission.BACKUP)
         requireTenant(tenantId)
@@ -939,6 +956,13 @@ class PosRepository(path: String = File(System.getProperty("user.home"), ".niger
             val calculated=cashEntries(tenant.id,shift.id).fold(java.math.BigInteger.valueOf(shift.openingMinor)) { total,entry -> total.add(java.math.BigInteger.valueOf(entry.amountMinor)) }.longValueExact()
             require(calculated>=0 && (shift.expectedMinor==null || shift.expectedMinor==calculated)) { "Backup cash count snapshot does not match its ledger." }
         }
+        query("SELECT * FROM activity_audit WHERE tenant_id=?", tenant.id, map=::auditEvent).forEach { event ->
+            Instant.parse(event.createdAt)
+            val linked=query("SELECT kind,entity_id,created_at FROM outbox WHERE tenant_id=? AND id=?", tenant.id, event.id) {
+                Triple(it.getString("kind"),it.getString("entity_id"),it.getString("created_at"))
+            }.singleOrNull()
+            require(linked == Triple(event.kind,event.entityId,event.createdAt)) { "Backup activity does not match its original saved event." }
+        }
         provisionOwner(tenant)
         tenant
     }
@@ -1001,7 +1025,24 @@ class PosRepository(path: String = File(System.getProperty("user.home"), ".niger
     private fun stockAdjustment(r:ResultSet)=StockAdjustment(r.getString("id"),r.getString("tenant_id"),r.getString("product_id"),r.getString("product_name"),r.getString("unit"),r.getDouble("previous_stock"),r.getInt("counted_stock"),r.getString("reason"),r.getString("created_at"))
     private fun requireTenant(tenantId: String) { require(query("SELECT id FROM tenants WHERE id=?",tenantId) { it.getString(1) }.isNotEmpty()) { "Shop not found." } }
     private fun product(r: ResultSet)=Product(r.getString("id"),r.getString("tenant_id"),r.getString("name"),r.getString("unit"),r.getLong("price_minor"),r.getDouble("stock"),r.getString("barcode"),r.getInt("archived")==1,r.getObject("reorder_level")?.let { (it as Number).toInt() },r.getObject("opening_stock")?.let { (it as Number).toDouble() },r.getString("created_at"))
-    private fun enqueue(tenantId:String,kind:String,entityId:String) { execute("INSERT INTO outbox(id,tenant_id,kind,entity_id,created_at) VALUES(?,?,?,?,?)",id(),tenantId,kind,entityId,Instant.now().toString()) }
+    private fun auditEvent(row: ResultSet): AuditEvent {
+        val tenantId=row.getString("tenant_id")
+        val actorId=row.getString("actor_id")
+        val actorName=row.getString("actor_name")
+        val actorRole=row.getString("actor_role")
+        val actor=if(actorId==null && actorName==null && actorRole==null) null else AuditActor(
+            tenantId,actorId,requireNotNull(actorName) { "Saved actor has no name." },
+            StaffRole.valueOf(requireNotNull(actorRole) { "Saved actor has no role." }),
+        )
+        return AuditEvent(row.getString("id"),tenantId,row.getString("kind"),row.getString("entity_id"),row.getString("created_at"),actor,row.getString("description"))
+    }
+    private fun enqueue(tenantId:String,kind:String,entityId:String) {
+        // Every caller runs inside the durable mutation transaction. Identity failure rolls
+        // back the business event, cash/stock/debt changes, outbox, and activity together.
+        val event=AuditEvent(id(),tenantId,kind,entityId,Instant.now().toString(),actorProvider?.invoke(tenantId))
+        execute("INSERT INTO outbox(id,tenant_id,kind,entity_id,created_at) VALUES(?,?,?,?,?)",event.id,tenantId,kind,entityId,event.createdAt)
+        execute("INSERT INTO activity_audit(id,tenant_id,kind,entity_id,created_at,actor_id,actor_name,actor_role,description) VALUES(?,?,?,?,?,?,?,?,?)",event.id,tenantId,kind,entityId,event.createdAt,event.actor?.id,event.actor?.name,event.actor?.role?.name,event.description)
+    }
     private fun id()=UUID.randomUUID().toString()
     private fun execute(sql:String,vararg args:Any?):Int=db.prepareStatement(sql).use { s -> args.forEachIndexed { i,v -> s.setObject(i+1,v) };s.executeUpdate() }
     private fun <T> query(sql:String,vararg args:Any?,map:(ResultSet)->T):List<T> = db.prepareStatement(sql).use { s -> args.forEachIndexed { i,v -> s.setObject(i+1,v) };s.executeQuery().use { r -> buildList { while(r.next()) add(map(r)) } } }

@@ -17,7 +17,9 @@ A checked box means that specific item has implementation and recorded verificat
 - [x] Protect owner backup and staff management operations.
 - [x] Verify migration, tenant isolation, revocation, denied actions, actual desktop login and packaging.
 - [ ] Short staff PIN unlock with attempt limits and secure device policy.
-- [ ] Attribute every financial/catalogue/correction event to an actor.
+- [x] Attribute new repository financial/catalogue/correction events to the signed-in actor; preserve snapshots, retries and backup history.
+- [x] Searchable business activity history, date-filtered CSV export and owner-only staff-change history.
+- [ ] Broader audit of platform/admin actions and security review; historical actors cannot be reconstructed.
 - [ ] Owner/manager approval requests and auditable overrides.
 - [x] Persistent failed-login throttling.
 - [x] Session expiry and inactivity lock.

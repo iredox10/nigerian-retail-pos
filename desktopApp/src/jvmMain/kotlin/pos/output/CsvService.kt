@@ -96,6 +96,14 @@ object CsvService {
         })
     }
 
+    fun auditEvents(tenantId:String,values:List<AuditEvent>):String {
+        require(values.all {it.tenantId==tenantId}) { "Activity export contains another shop." }
+        require(values.map {it.id}.distinct().size==values.size) { "Activity export has duplicate events." }
+        return encode(listOf("Event ID","Recorded at UTC","Action","Source ID","Actor recorded","Actor ID","Actor name at event","Actor role at event","Description"),values.map {
+            listOf(text(it.id),text(it.createdAt),text(it.kind),text(it.entityId),text((it.actor!=null).toString()),text(it.actor?.id.orEmpty()),text(it.actor?.name.orEmpty()),text(it.actor?.role?.name.orEmpty()),text(it.description.orEmpty()))
+        })
+    }
+
     fun inventoryMovements(tenantId:String,products:List<Product>,values:List<InventoryMovement>):String {
         require(products.all {it.tenantId==tenantId} && products.map {it.id}.distinct().size==products.size) { "Choose this shop's product records." }
         val byId=products.associateBy {it.id}

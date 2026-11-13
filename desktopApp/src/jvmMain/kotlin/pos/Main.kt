@@ -19,6 +19,7 @@ import pos.data.PosRepository
 import pos.security.WorkspaceAccess
 import pos.security.StaffAccess
 import pos.screens.StaffScreen
+import pos.screens.AuditScreen
 import pos.screens.SellScreen
 import pos.screens.StockScreen
 import pos.screens.MoneyScreen
@@ -58,6 +59,14 @@ fun main() = application {
     var route by remember { mutableStateOf(initialRoute) }
     var notice by remember { mutableStateOf<String?>(null) }
     val saleStates = rememberSaveableStateHolder()
+    repo.setActorProvider { tenantId ->
+        if(isolatedPreview) null else {
+            val active=requireNotNull(session) { "Sign in before recording an activity." }
+            require(active.tenantId==tenantId) { "This session belongs to another shop." }
+            staffAccess.requireSession(active,StaffPermission.SELL,touch=false)
+            AuditActor(tenantId,active.staffId,active.name,active.role)
+        }
+    }
     if (tenant == null) {
         WorkspacePicker(repo, access, staffAccess) { shop, active -> tenant = shop; session = active; route = "Sell"; revision++ }
         return
@@ -71,7 +80,7 @@ fun main() = application {
         "Stock","Import" -> allowed(StaffPermission.MANAGE_STOCK)
         "Customers","Credit review" -> allowed(StaffPermission.MANAGE_CUSTOMERS)
         "Money" -> allowed(StaffPermission.MANAGE_MONEY)
-        "Reports" -> allowed(StaffPermission.VIEW_REPORTS)
+        "Reports","Audit" -> allowed(StaffPermission.VIEW_REPORTS)
         "Suppliers" -> allowed(StaffPermission.MANAGE_SUPPLIERS)
         "Backup" -> allowed(StaffPermission.BACKUP)
         "Staff" -> allowed(StaffPermission.MANAGE_STAFF)
@@ -137,7 +146,7 @@ fun main() = application {
                 Text(session?.let { "${it.name} · ${it.role.name.lowercase().replaceFirstChar { c -> c.uppercaseChar() }}" } ?: "Isolated owner preview", style = MaterialTheme.typography.labelMedium)
                 Spacer(Modifier.height(20.dp))
                 listOf("Sell", "Sales", "Stock", "Customers", "Money", "More").filter { routeAllowed(it) && (it != "More" || activeRole != StaffRole.CASHIER) }.forEach { item ->
-                    val selected = route == item || (item == "More" && route in setOf("Reports","Suppliers","Backup","Import","Credit review","Staff"))
+                    val selected = route == item || (item == "More" && route in setOf("Reports","Suppliers","Backup","Import","Credit review","Staff","Audit"))
                     Surface(onClick = {
                         try {
                             session?.let { staffAccess.requireSession(it,StaffPermission.SELL) }
@@ -153,8 +162,8 @@ fun main() = application {
             }
             Column(Modifier.weight(1f).fillMaxHeight()) {
                 Row(Modifier.fillMaxWidth().height(64.dp).padding(horizontal = 24.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Text(route, style = MaterialTheme.typography.headlineSmall)
-                    if (route in setOf("Reports","Suppliers","Backup","Import","Credit review","Staff")) TextButton({ route = if(route=="Import") "Stock" else "More" }) { Text(if(route=="Import") "Back to stock" else "Back to shop tools") }
+                    Text(if(route=="Audit") "Activity history" else route, style = MaterialTheme.typography.headlineSmall)
+                    if (route in setOf("Reports","Suppliers","Backup","Import","Credit review","Staff","Audit")) TextButton({ route = if(route=="Import") "Stock" else "More" }) { Text(if(route=="Import") "Back to stock" else "Back to shop tools") }
                     Spacer(Modifier.weight(1f))
                     if (route == "Sell" && allowed(StaffPermission.MANAGE_MONEY)) {
                         val activeShift = remember(current.id, revision) { repo.activeCashShift(current.id) }
@@ -177,6 +186,7 @@ fun main() = application {
                         "Sales" -> SalesScreen(repo, current.id, allowReturns = allowed(StaffPermission.RETURN_SALE)) { revision++ }
                         "Credit review" -> CreditReviewScreen(repo,current.id)
                         "Reports" -> ReportsScreen(repo, current.id)
+                        "Audit" -> AuditScreen(repo,current.id,staffAccess,session)
                         "Suppliers" -> SuppliersScreen(repo, current.id) { revision++ }
                         "Backup" -> BackupPanel(repo, current)
                         "Staff" -> session?.let { StaffScreen(staffAccess,it) { revision++ } } ?: Text("Staff management requires an owner sign-in.")
@@ -188,6 +198,7 @@ fun main() = application {
                             if(allowed(StaffPermission.MANAGE_SUPPLIERS)) pos.ui.components.NeutralButton("Suppliers & payments", { route = "Suppliers" })
                             if(allowed(StaffPermission.MANAGE_CUSTOMERS)) pos.ui.components.NeutralButton("Review customer credit", { route="Credit review" })
                             if(allowed(StaffPermission.VIEW_REPORTS)) pos.ui.components.NeutralButton("Reports & CSV exports", { route = "Reports" })
+                            if(allowed(StaffPermission.VIEW_REPORTS)) pos.ui.components.NeutralButton("Activity history", { route="Audit" })
                             if(allowed(StaffPermission.BACKUP)) pos.ui.components.NeutralButton("Encrypted shop backup", { route = "Backup" })
                             if(allowed(StaffPermission.MANAGE_STOCK)) pos.ui.components.NeutralButton("Import new items from CSV", { route = "Import" })
                             Text("Saved work: ${repo.pendingSyncCount(current.id)} local changes are waiting for online setup. No online backup has been created.", Modifier.widthIn(max=680.dp))
