@@ -108,7 +108,7 @@ private fun OwnerStaffScreen(access: StaffAccess, session: StaffSession, onChang
                             StaffRoleChoice(role) { role = it; newCreateIntent() }
                             StaffPasswordField(password, { password = it; newCreateIntent() }, "Staff password")
                             StaffPasswordField(confirmation, { confirmation = it; newCreateIntent() }, "Enter the password again")
-                            Text("Use 8–1024 characters. This is a password, not a short cashier PIN.", style = MaterialTheme.typography.bodySmall)
+                            Text("Use 8–1024 characters. Staff can set up a six-digit convenience PIN from the sign-in screen after confirming this full password.", style = MaterialTheme.typography.bodySmall)
                             PosButton("Create staff account", {
                                 try {
                                     require(name.trim().isNotEmpty()) { "Enter the staff member's name." }
@@ -138,7 +138,7 @@ private fun OwnerStaffScreen(access: StaffAccess, session: StaffSession, onChang
                             Checkbox(editActive, { editActive = it; editError = null })
                             Text("Allow this person to sign in", Modifier.weight(1f).padding(top = 12.dp))
                         }
-                        Text("Saving an access change ends this person's existing sessions. They must sign in again. A disabled account cannot sign in; previous shop records remain saved.")
+                        Text("Saving an access change ends this person's existing sessions and removes their PIN. They must sign in again with their full password. A disabled account cannot sign in; previous shop records remain saved.")
                         editError?.let { InlineNotice("Access not changed", it, NoticeTone.Danger) }
                     }
                 },
@@ -159,7 +159,7 @@ private fun OwnerStaffScreen(access: StaffAccess, session: StaffSession, onChang
                 title = { Text("Reset password for ${member.name}?") },
                 text = {
                     Column(Modifier.heightIn(max = 440.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                        Text("The old password will stop working and existing sessions will end. Give the new password to this staff member privately.")
+                        Text("The old password will stop working, existing sessions will end, and the convenience PIN will be removed. Give the new password to this staff member privately.")
                         StaffPasswordField(resetPassword, { resetPassword = it; resetError = null }, "New staff password")
                         StaffPasswordField(resetConfirmation, { resetConfirmation = it; resetError = null }, "Enter the new password again")
                         Text("Use 8–1024 characters. Resetting a password does not enable a disabled account.", style = MaterialTheme.typography.bodySmall)
