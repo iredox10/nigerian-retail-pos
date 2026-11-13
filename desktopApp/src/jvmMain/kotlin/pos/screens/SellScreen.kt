@@ -46,6 +46,7 @@ fun SellScreen(
     var encodedCart by rememberSaveable { mutableStateOf(restoredDraft.getOrNull()?.cart ?: "") }
     var encodedDiscounts by rememberSaveable { mutableStateOf(DraftDiscountCodec.encode(restoredDraft.getOrNull()?.discounts.orEmpty())) }
     val discounts = remember(encodedDiscounts) { DraftDiscountCodec.decode(encodedDiscounts) }
+    val quantityErrors = remember(tenantId) { mutableStateMapOf<String,Boolean>() }
     var changingPrice by remember { mutableStateOf<String?>(null) }
     var agreedPrice by remember { mutableStateOf("") }
     var percentageMode by remember { mutableStateOf(false) }
@@ -88,7 +89,7 @@ fun SellScreen(
         }.toMap()
     }
     val options = products.flatMap { product ->
-        listOf(CartLine(product, 1)) + sellingUnits.filter { it.productId == product.id && !it.archived }.map {
+        listOf(CartLine(product, quantityScaleFactor(product.quantityPrecision).toInt())) + sellingUnits.filter { it.productId == product.id && !it.archived }.map {
             CartLine(product, 1, it.id, it.name, it.priceMinor, it.baseUnitsPerUnit)
         }
     }.associateBy { it.key }
@@ -103,8 +104,18 @@ fun SellScreen(
     fun fitsStock(line: CartLine, quantity: Int): Boolean = runCatching {
         if (quantity < 0) return@runCatching false
         val other = lines.filter { it.product.id == line.product.id && it.key != line.key }.fold(0L) { sum, item -> Math.addExact(sum, item.baseQuantity) }
-        Math.addExact(other, Math.multiplyExact(quantity.toLong(), line.baseUnitsPerUnit.toLong())).toDouble() <= line.product.stock
+        Math.addExact(other, if(quantity==0) 0 else line.copy(quantity=quantity).baseQuantity) <= line.product.exactStockScaled
     }.getOrDefault(false)
+    fun nextAddedQuantity(line:CartLine):Int = runCatching {
+        val current=quantities[line.key] ?: 0
+        val step=quantityScaleFactor(line.quantityPrecision).toInt()
+        if(current>0) Math.addExact(current,step) else {
+            val used=lines.filter {it.product.id==line.product.id}.fold(0L) {sum,item -> Math.addExact(sum,item.baseQuantity)}
+            val available=(line.product.exactStockScaled-used).coerceAtLeast(0)
+            val perSmallest=Quantity(1,line.quantityPrecision).rescale(line.product.quantityPrecision).timesWhole(line.baseUnitsPerUnit.toLong()).scaledUnits
+            minOf(step.toLong(),available/perSmallest).toInt()
+        }
+    }.getOrDefault(0)
     val totalResult = runCatching { cartTotal(lines) }
     val total = totalResult.getOrDefault(0L)
     val unavailableDraftItems = quantities.keys.any { it !in options }
@@ -118,6 +129,7 @@ fun SellScreen(
     }
     fun update(line: CartLine, quantity: Int) {
         val next = quantities.toMutableMap()
+        quantityErrors.remove(line.key)
         if (quantity <= 0) next.remove(line.key) else next[line.key] = quantity
         try { persistBasket(next, discounts.filterKeys { it in next }) }
         catch(e: Exception) { error = "Item change not saved: ${e.message}" }
@@ -134,7 +146,7 @@ fun SellScreen(
         Column {
             if (compact) Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 FilterChip(selected = !showSaleOnly, onClick = { showSaleOnly = false }, label = { Text("Choose items") })
-                FilterChip(selected = showSaleOnly, onClick = { showSaleOnly = true }, label = { Text("This sale · ${lines.sumOf { it.quantity }}") })
+                FilterChip(selected = showSaleOnly, onClick = { showSaleOnly = true }, label = { Text("This sale · ${lines.size} lines") })
             }
             Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(24.dp)) {
                 if (!compact || !showSaleOnly) Column(Modifier.weight(1f).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -147,8 +159,8 @@ fun SellScreen(
                             }
                             if(match==null) error="No item has this barcode. Choose a matching item or add its barcode under Stock."
                             else if(stage=="saved") error="Start a new sale before scanning another item."
-                            else if(!fitsStock(match,(quantities[match.key] ?: 0)+1)) error="Not enough ${match.product.unit} of ${match.product.name} in stock."
-                            else { update(match,(quantities[match.key] ?: 0)+1);search="" }
+                            else if(nextAddedQuantity(match)<=0 || !fitsStock(match,nextAddedQuantity(match))) error="Not enough ${match.product.unit} of ${match.product.name} in stock."
+                            else { update(match,nextAddedQuantity(match));search="" }
                             true
                         } else false
                     }, singleLine = true,
@@ -198,9 +210,9 @@ fun SellScreen(
                                             }
                                         }
                                         if (choice.baseUnitsPerUnit > 1) Text("1 ${choice.sellingUnit} = ${choice.baseUnitsPerUnit} ${product.unit}", style = MaterialTheme.typography.bodySmall)
-                                        Text(if ((quantities[choice.key] ?: 0) > 0) "In this sale: ${quantities[choice.key]} ${choice.sellingUnit}" else "${formatStock(product.stock)} ${product.unit} available", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                        Text(if ((quantities[choice.key] ?: 0) > 0) "In this sale: ${quantityLabel((quantities[choice.key] ?: 0).toLong(),choice.quantityPrecision)} ${choice.sellingUnit}" else "${product.stockLabel} ${product.unit} available", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                     }
-                                    OutlinedButton(shape = MaterialTheme.shapes.small, onClick = { update(choice, (quantities[choice.key] ?: 0) + 1) }, enabled = stage != "saved" && fitsStock(choice, (quantities[choice.key] ?: 0) + 1)) {
+                                    OutlinedButton(shape = MaterialTheme.shapes.small, onClick = { update(choice, nextAddedQuantity(choice)) }, enabled = stage != "saved" && nextAddedQuantity(choice)>0 && fitsStock(choice, nextAddedQuantity(choice))) {
                                         Text("Add to sale")
                                     }
                                 }
@@ -234,7 +246,7 @@ fun SellScreen(
                                 TextButton({showHeld=true;try {heldSales=requireNotNull(draftStore).heldSales();heldError=null} catch(e:Exception) {heldError=e.message ?: "Saved sales could not be read."}}) { Text("Saved sales (${heldSales.size})") }
                             }
                             reviewNotice?.let { Text(it,style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.primary) }
-                            Text("${lines.sumOf { it.quantity }} selling units · ${lines.map { it.product.id }.distinct().size} items", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text("${lines.size} sale lines · ${lines.map { it.product.id }.distinct().size} items", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             Spacer(Modifier.height(16.dp))
                             if (stage == "items") LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                                 if (lines.isEmpty()) item {
@@ -247,7 +259,7 @@ fun SellScreen(
                                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                         Text(line.product.name, fontWeight = FontWeight.Medium)
                                         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                                            Text("${line.quantity} ${line.sellingUnit}", Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
+                                            Text("${line.quantityLabel} ${line.sellingUnit}", Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
                                             Text(money(line.totalMinor), fontWeight = FontWeight.Medium)
                                         }
                                         if (line.discountPerUnitMinor > 0) {
@@ -262,12 +274,21 @@ fun SellScreen(
                                             discountReason = discounts[line.key]?.reason.orEmpty()
                                             priceError = null
                                         }) { Text(if (discounts.containsKey(line.key)) "Review discount" else "Change price") }
-                                        if (line.baseUnitsPerUnit > 1) Text("${line.baseQuantity} ${line.product.unit} from stock", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                        if (line.baseUnitsPerUnit > 1) Text("${quantityLabel(line.baseQuantity,line.product.quantityPrecision)} ${line.product.unit} from stock", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                        val wholeStep=quantityScaleFactor(line.quantityPrecision).toInt()
+                                        var quantityText by remember(line.key,line.quantity) { mutableStateOf(line.quantityLabel) }
                                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                                            OutlinedButton(shape = MaterialTheme.shapes.small, onClick = { update(line, line.quantity - 1) }, contentPadding = PaddingValues(horizontal = 12.dp)) { Text(if (line.quantity == 1) "Remove" else "−") }
-                                            Text("${line.quantity}")
-                                            OutlinedButton(shape = MaterialTheme.shapes.small, onClick = { update(line, line.quantity + 1) }, enabled = line.quantity < Int.MAX_VALUE && fitsStock(line, line.quantity + 1), contentPadding = PaddingValues(horizontal = 12.dp)) { Text("+") }
+                                            OutlinedButton(shape = MaterialTheme.shapes.small,onClick={update(line,(line.quantity-wholeStep).coerceAtLeast(0))},contentPadding=PaddingValues(horizontal=12.dp)) {Text(if(line.quantity<=wholeStep) "Remove" else "−1")}
+                                            OutlinedTextField(quantityText,{value -> quantityText=value;quantityErrors[line.key]=value!=line.quantityLabel},modifier=Modifier.width(100.dp),singleLine=true,label={Text(line.sellingUnit)},isError=quantityCount(quantityText,line.quantityPrecision)?.let { !fitsStock(line,it) } != false)
+                                            OutlinedButton(shape=MaterialTheme.shapes.small,onClick={update(line,Math.addExact(line.quantity,wholeStep))},enabled=line.quantity<=Int.MAX_VALUE-wholeStep && fitsStock(line,line.quantity+wholeStep),contentPadding=PaddingValues(horizontal=12.dp)) {Text("+1")}
                                         }
+                                        if(quantityText!=line.quantityLabel) {
+                                            val entered=quantityCount(quantityText,line.quantityPrecision)
+                                            TextButton({if(entered!=null && fitsStock(line,entered)) update(line,entered)},enabled=entered!=null && fitsStock(line,entered)) {Text("Apply quantity")}
+                                            if(entered==null) Text("Enter more than 0, with up to ${line.quantityPrecision} decimal places.",style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.error)
+                                            else if(!fitsStock(line,entered)) Text("Not enough stock for this quantity.",style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.error)
+                                        }
+                                        TextButton({update(line,0)}) {Text("Remove item")}
                                         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                                     }
                                 }
@@ -339,7 +360,7 @@ fun SellScreen(
                                         } else error = result
                                     }
                                 }
-                            }, modifier = Modifier.fillMaxWidth().height(56.dp), enabled = lines.isNotEmpty() && !committing && totalResult.isSuccess && !unavailableDraftItems && !staleDiscounts && (!forbiddenDraft || stage=="items") && draftStore != null && restoredDraft.isSuccess) {
+                            }, modifier = Modifier.fillMaxWidth().height(56.dp), enabled = quantityErrors.none {it.key in quantities && it.value} && lines.isNotEmpty() && !committing && totalResult.isSuccess && !unavailableDraftItems && !staleDiscounts && (!forbiddenDraft || stage=="items") && draftStore != null && restoredDraft.isSuccess) {
                                 Text(if (committing) "Saving…" else if (stage == "items") "Take payment" else if (method == "credit" && credit > 0) "Save with ${money(credit)} owed" else "Finish sale")
                             }
                             if (stage == "items" && lines.isEmpty()) Text("Add an item to take payment", Modifier.padding(top = 8.dp), style = MaterialTheme.typography.bodySmall)

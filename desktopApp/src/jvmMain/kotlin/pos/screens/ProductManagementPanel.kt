@@ -1,5 +1,7 @@
 package pos.screens
 
+import pos.domain.*
+
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -44,10 +46,10 @@ internal fun ProductManagementPanel(
         val editOperation = remember(name, price, barcode) { UUID.randomUUID().toString() }
         val countOperation = remember(counted, reason) { UUID.randomUUID().toString() }
         val archiveOperation = remember(product.archived) { UUID.randomUUID().toString() }
-        val count = counted.trim().takeIf { it.matches(Regex("[0-9]+")) }?.toIntOrNull()
-        val difference = count?.toDouble()?.minus(product.stock)
+        val count = parseQuantity(counted,product.quantityPrecision)?.scaledUnits?.takeIf {it<=Int.MAX_VALUE}?.toInt()
+        val difference = count?.let {projectedQuantity(it.toLong(),product.quantityPrecision)-product.stock}
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(20.dp)) {
-            SectionHeader(product.name, "Selling unit: ${product.unit} · ${quantityText(product.stock)} available")
+            SectionHeader(product.name, "Selling unit: ${product.unit} · ${product.stockLabel} available")
             if (product.archived) InlineNotice("Archived item", "Saved sales and history are kept. Restore this item before selling, receiving or counting it.", NoticeTone.Warning)
             Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 listOf("Details", "Catalogue", "Selling units", "Buying units", "Count stock", "History").forEach { label ->
@@ -91,11 +93,11 @@ internal fun ProductManagementPanel(
                     Column(Modifier.fillMaxWidth().padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                         SectionHeader("What did you count?", "For a stock correction, loss or recount. Use Add stock for goods received from a supplier.")
                         Column(Modifier.widthIn(max = 620.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                            LabelValueRow("Recorded quantity now", "${quantityText(product.stock)} ${product.unit}")
-                            PosTextField(counted, { counted = it; error = null }, "Actual quantity counted (${product.unit})", hint = "Whole units, including 0", enabled = !product.archived)
+                            LabelValueRow("Recorded quantity now", "${product.stockLabel} ${product.unit}")
+                            PosTextField(counted, { counted = it; error = null }, "Actual quantity counted (${product.unit})", hint = "Up to ${product.quantityPrecision} decimal places, including 0", enabled = !product.archived)
                             PosTextField(reason, { reason = it; error = null }, "Why is the quantity different?", hint = "For example, 2 damaged bottles removed", enabled = !product.archived, singleLine = false)
                             if (difference != null) {
-                                LabelValueRow("New recorded quantity", "$count ${product.unit}", emphasized = true)
+                                LabelValueRow("New recorded quantity", "${quantityLabel(count.toLong(),product.quantityPrecision)} ${product.unit}", emphasized = true)
                                 LabelValueRow("Correction", when {
                                     difference > 0 -> "Add ${quantityText(difference)} ${product.unit}"
                                     difference < 0 -> "Remove ${quantityText(-difference)} ${product.unit}"
@@ -105,7 +107,7 @@ internal fun ProductManagementPanel(
                             Text("Saving replaces the recorded quantity with your count and keeps the previous quantity, difference and reason in history. It does not record a purchase or a cash movement.", style = MaterialTheme.typography.bodySmall, color = PosPalette.Secondary)
                             PosButton("Save counted stock", {
                                 try {
-                                    require(count != null) { "Enter a whole quantity from 0 to ${Int.MAX_VALUE}." }
+                                    require(count != null) { "Enter a non-negative quantity with up to ${product.quantityPrecision} decimal places." }
                                     require(reason.isNotBlank()) { "Explain why the counted quantity differs." }
                                     repo.adjustStock(tenantId, product.id, count, reason.trim(), countOperation, expectedStock = product.stock)
                                     onChanged("Counted stock and correction history saved on this computer")
@@ -124,7 +126,7 @@ internal fun ProductManagementPanel(
                         counts.forEach { adjustment ->
                             Surface(color = PosPalette.Surface) {
                                 Column(Modifier.fillMaxWidth().padding(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                    Text("${quantityText(adjustment.previousStock)} → ${adjustment.countedStock} ${adjustment.unit}", style = MaterialTheme.typography.titleMedium)
+                                    Text("${quantityText(adjustment.previousStock)} → ${adjustment.countedStockLabel} ${adjustment.unit}", style = MaterialTheme.typography.titleMedium)
                                     Text(adjustment.reason)
                                     Text("${managementDate(adjustment.createdAt)} · ${adjustment.productName}", style = MaterialTheme.typography.bodySmall, color = PosPalette.Secondary)
                                 }
@@ -198,7 +200,7 @@ private fun BuyingUnitsPanel(repo: PosRepository, tenantId: String, product: Pro
                             val baseCount = product.stock.toLong()
                             val wholePacks = baseCount / unit.baseUnitsPerUnit
                             val loose = baseCount % unit.baseUnitsPerUnit
-                            Text("Same recorded stock: $wholePacks ${unit.name} + $loose ${unit.baseUnit}. This is another view of ${quantityText(product.stock)} ${product.unit}, not extra stock.", style = MaterialTheme.typography.bodySmall, color = PosPalette.Secondary)
+                            Text("Same recorded stock: $wholePacks ${unit.name} + $loose ${unit.baseUnit}. This is another view of ${product.stockLabel} ${product.unit}, not extra stock.", style = MaterialTheme.typography.bodySmall, color = PosPalette.Secondary)
                         }
                         Text(if (unit.archived) "Unavailable for new stock receipts. Earlier receipts keep their saved conversion."
                             else "Available in Add stock. Enter buying prices per ${unit.name}.", style = MaterialTheme.typography.bodySmall, color = PosPalette.Secondary)

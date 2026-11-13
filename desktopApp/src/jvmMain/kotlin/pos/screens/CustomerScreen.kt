@@ -201,7 +201,7 @@ private fun ColumnScope.CustomerHistory(statement: CustomerStatement, pay: () ->
                     Text(if (event.sale != null) "Original sale · Receipt ${event.id.takeLast(8).uppercase()}" else "Cash debt repayment · ${event.id.takeLast(8).uppercase()}", fontWeight = FontWeight.SemiBold)
                     Text(customerTime(event.createdAt), style = MaterialTheme.typography.bodySmall)
                     event.sale?.let { sale ->
-                        Text(sale.lines.joinToString(" · ") { "${it.quantity} ${it.sellingUnit} ${it.product.name}" }, style = MaterialTheme.typography.bodySmall)
+                        Text(sale.lines.joinToString(" · ") { "${it.quantityLabel} ${it.sellingUnit} ${it.product.name}" }, style = MaterialTheme.typography.bodySmall)
                         LabelValueRow("Original sale total", money(sale.totalMinor))
                         LabelValueRow("Cash applied at sale", money(sale.cashMinor))
                         LabelValueRow("Credit added at sale", money(sale.creditMinor), emphasized = true)

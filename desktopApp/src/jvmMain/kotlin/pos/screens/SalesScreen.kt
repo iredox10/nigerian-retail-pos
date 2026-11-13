@@ -1,5 +1,7 @@
 package pos.screens
 
+import pos.domain.*
+
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -80,7 +82,7 @@ private fun TenantSalesScreen(repo: PosRepository, tenantId: String, allowReturn
                                             Text(money(sale.totalMinor), fontWeight = FontWeight.SemiBold)
                                         }
                                         Text(receiptDate(sale.createdAt), style = MaterialTheme.typography.bodySmall, color = PosPalette.Secondary)
-                                        Text(sale.lines.joinToString { "${it.quantity} ${it.sellingUnit} ${it.product.name}" },
+                                        Text(sale.lines.joinToString { "${it.quantityLabel} ${it.sellingUnit} ${it.product.name}" },
                                             maxLines = 2, style = MaterialTheme.typography.bodySmall, color = PosPalette.Secondary)
                                         StatusPill(if (sale.creditMinor > 0) "Part paid / pay later at sale" else "Paid in cash",
                                             if (sale.creditMinor > 0) NoticeTone.Warning else NoticeTone.Neutral)
@@ -173,9 +175,9 @@ private fun ReturnItemsDialog(
     val preview = runCatching {
         sale.lines.fold(0L) { sum, line ->
             val input = quantities[line.key].orEmpty()
-            val count = if (input.isBlank()) 0 else input.toIntOrNull() ?: error("Invalid quantity")
+            val count = if (input.isBlank()) 0 else quantityCount(input,line.quantityPrecision) ?: error("Invalid quantity")
             require(count in 0..(returnable[line.key] ?: 0))
-            Math.addExact(sum, Math.multiplyExact(count.toLong(), line.netUnitPriceMinor))
+            Math.addExact(sum, Quantity((line.quantity-(returnable[line.key] ?: 0)+count).toLong(),line.quantityPrecision).lineTotalMinor(line.netUnitPriceMinor)-Quantity((line.quantity-(returnable[line.key] ?: 0)).toLong(),line.quantityPrecision).lineTotalMinor(line.netUnitPriceMinor))
         }
     }.getOrNull()
     AlertDialog(onDismissRequest = { if (!saving) dismiss() }, title = { Text("Return items · ${sale.id.take(8)}") },
@@ -184,7 +186,7 @@ private fun ReturnItemsDialog(
                 Text("Enter only the goods being returned. Blank quantities mean no return for that item.", color = PosPalette.Secondary)
                 sale.lines.filter { (returnable[it.key] ?: 0) > 0 }.forEach { line ->
                     PosTextField(quantities[line.key].orEmpty(), { quantities[line.key] = it },
-                        "${line.product.name} (${line.sellingUnit})", hint = "Up to ${returnable[line.key]} ${line.sellingUnit}")
+                        "${line.product.name} (${line.sellingUnit})", hint = "Up to ${quantityLabel((returnable[line.key] ?: 0).toLong(),line.quantityPrecision)} ${line.sellingUnit}")
                 }
                 PosTextField(reason, { reason = it }, "Why are the goods being returned?", singleLine = false)
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -204,8 +206,8 @@ private fun ReturnItemsDialog(
                 try {
                     val entries = sale.lines.associate { line ->
                         val input = quantities[line.key].orEmpty().trim()
-                        val quantity = if (input.isBlank()) 0 else input.toIntOrNull()
-                            ?: throw IllegalArgumentException("Enter return quantities as whole numbers.")
+                        val quantity = if (input.isBlank()) 0 else quantityCount(input,line.quantityPrecision)
+                            ?: throw IllegalArgumentException("Enter return quantities using the item’s saved decimal places.")
                         require(quantity in 0..(returnable[line.key] ?: 0)) { "Return quantity exceeds the items still available to return." }
                         line.key to quantity
                     }.filterValues { it > 0 }

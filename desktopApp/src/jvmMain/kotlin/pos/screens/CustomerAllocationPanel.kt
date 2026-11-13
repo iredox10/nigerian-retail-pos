@@ -125,7 +125,7 @@ internal fun ColumnScope.CustomerAllocationPanel(repo: PosRepository, tenantId: 
                         Surface(shape = MaterialTheme.shapes.small) {
                             Column(Modifier.fillMaxWidth().padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                                 Text("Receipt ${choice.id.takeLast(8).uppercase()} · ${allocationTime(choice.createdAt)}", fontWeight = FontWeight.SemiBold)
-                                Text(choice.lines.joinToString(" · ") { "${it.quantity} ${it.sellingUnit} ${it.product.name}" }, style = MaterialTheme.typography.bodySmall)
+                                Text(choice.lines.joinToString(" · ") { "${it.quantityLabel} ${it.sellingUnit} ${it.product.name}" }, style = MaterialTheme.typography.bodySmall)
                                 LabelValueRow("Credit on original sale", money(choice.creditMinor))
                                 LabelValueRow(if (records.unassigned > 0) "Receipt balance before unassigned payments" else "Unpaid credit on receipt", money(balance), emphasized = true)
                                 Text(choice.dueDate?.let { "Agreed repayment due date: $it · WAT" } ?: "No repayment due date recorded", style = MaterialTheme.typography.bodySmall)

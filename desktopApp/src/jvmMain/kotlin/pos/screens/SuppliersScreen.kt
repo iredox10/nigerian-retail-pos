@@ -179,11 +179,11 @@ private fun SupplierReceipt(row: ReceiptBalance, canPay: Boolean, pay: () -> Uni
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
                     Text(receipt.productName, fontWeight = FontWeight.SemiBold)
-                    Text("${receipt.quantity} ${receipt.unit} · Receipt ${receipt.id.takeLast(8).uppercase()} · ${supplierTime(receipt.createdAt)}", style = MaterialTheme.typography.bodySmall)
+                    Text("${receipt.quantityLabel} ${receipt.unit} · Receipt ${receipt.id.takeLast(8).uppercase()} · ${supplierTime(receipt.createdAt)}", style = MaterialTheme.typography.bodySmall)
                 }
                 StatusPill(if (row.outstanding > 0) "Money owed" else "Fully paid", if (row.outstanding > 0) NoticeTone.Warning else NoticeTone.Success)
             }
-            if(receipt.purchaseUnitId!=null) Text("${receipt.quantity} ${receipt.unit} × ${receipt.baseUnitsPerUnit} ${receipt.baseUnit} = ${receipt.baseQuantity} ${receipt.baseUnit} added to stock",style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
+            if(receipt.purchaseUnitId!=null) Text("${receipt.quantityLabel} ${receipt.unit} × ${receipt.baseUnitsPerUnit} ${receipt.baseUnit} = ${receipt.baseQuantityLabel} ${receipt.baseUnit} added to stock",style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
             LabelValueRow("Purchase total", money(receipt.totalCostMinor))
             LabelValueRow("Cash paid when stock arrived", money(receipt.paidCashMinor))
             val laterPaid = row.payments.fold(0L) { sum, payment -> Math.addExact(sum, payment.amountMinor) }

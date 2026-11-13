@@ -1,5 +1,7 @@
 package pos.screens
 
+import pos.domain.quantityLabel
+
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -25,7 +27,7 @@ fun ProductImportScreen(repo:PosRepository,tenantId:String,onChanged:()->Unit) {
     var imported by remember(tenantId) { mutableStateOf(false) }
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()),verticalArrangement=Arrangement.spacedBy(16.dp)) {
         SectionHeader("Import new items", "Preview first · Add-only import for this shop")
-        Text("Use the template columns: name, unit, price_naira, stock. Enter counted opening stock as whole units. Prices must have at most two decimal places. Existing items are never overwritten; use Add stock for goods already in the shop.",Modifier.widthIn(max=800.dp))
+        Text("Use the template columns: name, unit, price_naira, stock. Add an optional quantity_precision column (0–6) for measured goods; otherwise stock must use whole units. Prices must have at most two decimal places. Existing items are never overwritten; use Add stock for goods already in the shop.",Modifier.widthIn(max=800.dp))
         Row(horizontalArrangement=Arrangement.spacedBy(12.dp)) {
             NeutralButton("Save CSV template",{
                 try { CsvService.save(ProductImportService.TEMPLATE,"retail-pos-item-import-template.csv") }
@@ -48,7 +50,7 @@ fun ProductImportScreen(repo:PosRepository,tenantId:String,onChanged:()->Unit) {
             Text("Showing the first ${minOf(10,rows.size)} items. Every record in the file has been parsed; duplicate checks run again before any write.")
             rows.take(10).forEach { row ->
                 Surface(shape=MaterialTheme.shapes.small) { Row(Modifier.fillMaxWidth().padding(16.dp),horizontalArrangement=Arrangement.spacedBy(20.dp)) {
-                    Text(row.name,Modifier.weight(1f));Text(row.unit,Modifier.width(100.dp));Text(money(row.priceMinor),Modifier.width(160.dp));Text("${row.stock} opening units",Modifier.width(160.dp))
+                    Text(row.name,Modifier.weight(1f));Text(row.unit,Modifier.width(100.dp));Text(money(row.priceMinor),Modifier.width(160.dp));Text("${quantityLabel(row.stock.toLong(),row.quantityPrecision)} opening units",Modifier.width(160.dp))
                 } }
             }
             PosButton(if(imported) "Items imported" else "Import ${rows.size} items into this shop",{
