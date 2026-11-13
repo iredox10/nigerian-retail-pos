@@ -17,6 +17,8 @@ Started 13 November 2026. Authority: FEATURE_SPECIFICATION.md; detailed requirem
 - [ ] Agent 3: percentage item discounts, explicit rounding/reasons, checkout UI and regression tests.
 - [ ] Agent 4: receipt-based supplier statements and dated, reconciled exports; scheduled as a concurrency slot becomes available.
 - [ ] Root: integrate CSV/schema/UI changes, review permissions/retries/financial invariants, run integrated tests/package, inspect native renders where possible and record unperformed checks.
+- [x] Root: recorded-date historical customer debt and configurable report ageing bands, including correction chronology and date validation.
+- [x] Root: product sales/refunds and recorded-staff activity exports.
 
 ## Following dependency batches
 

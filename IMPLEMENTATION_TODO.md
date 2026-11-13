@@ -77,7 +77,8 @@ A checked box means that specific item has implementation and recorded verificat
 - [x] Contact details, enforced credit limits and agreed due dates.
 - [x] Explicit repayment assignments and current-debt ageing bands/CSV.
 - [x] Reasoned assignment undo and explicit reassignment with original history retained.
-- [ ] Historical as-of debt and configurable ageing bands.
+- [x] Recorded-date historical debt/assignment reconstruction and configurable report ageing bands.
+- [ ] Persist shop-wide default ageing preferences and historical customer profile snapshots.
 - [ ] Customer advance/unapplied-credit accounts and merchant-owed balances.
 - [ ] Debt adjustments, write-offs, reinstatement and disputes with authorization.
 - [ ] Duplicate customer merge with review and immutable source links.
@@ -152,7 +153,8 @@ A checked box means that specific item has implementation and recorded verificat
 
 ## Reporting, communication, tax and product operations
 
-- [ ] Product/category/staff performance, comparisons and custom reports.
+- [x] Product sales/refunds and recorded-staff activity CSV reports with source-date/actor semantics.
+- [ ] Category performance, comparisons, charts and custom reports.
 - [ ] Shrinkage, stock valuation, supplier and settlement reports.
 - [ ] Consolidated completeness/freshness indicators.
 - [ ] Loyalty points/stamps, redemption and offline conflicts.
