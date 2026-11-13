@@ -14,6 +14,7 @@ import pos.data.PosRepository
 import pos.domain.*
 import pos.output.CsvService
 import pos.output.ProductPerformanceService
+import pos.output.StaffPerformanceService
 import pos.ui.components.*
 import java.time.Instant
 import java.time.LocalDate
@@ -110,6 +111,7 @@ fun ReportsScreen(repo: PosRepository, tenantId: String) {
 
             Surface(shape = MaterialTheme.shapes.medium) { Column(Modifier.fillMaxWidth().padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                 SectionHeader("Export this shop's records", "CSV for a spreadsheet · Current product export includes archived items; customer and stock snapshots are not historical views")
+                if(selectedExport=="Staff activity") Text("Sales and refunds are grouped by the person who recorded each action, using their saved name and role. Refunds are not charged to the original salesperson. Earlier actions may have no actor recorded. This is not a commission or profit report.",style=MaterialTheme.typography.bodySmall)
                 if(selectedExport=="Product performance") Text("Sales and refunds use their own recorded dates. Returns may relate to older sales, so net sales and quantities can be negative. This is not profit or cash received. Quantities use each historical base unit.",style=MaterialTheme.typography.bodySmall)
                 if(selectedExport=="Payment assignments") Text("Assignment dates use the selected period; Active/Undone status reflects all corrections saved now.",style=MaterialTheme.typography.bodySmall)
                 if(selectedExport=="Assignment corrections") Text("Includes undo events recorded in the selected period, even when the original assignment is older.",style=MaterialTheme.typography.bodySmall)
@@ -117,12 +119,13 @@ fun ReportsScreen(repo: PosRepository, tenantId: String) {
                     Box {
                         NeutralButton("$selectedExport ▾", { exportMenu = true })
                         DropdownMenu(exportMenu, { exportMenu = false }) {
-                            listOf("Sales", "Product performance", "Products", "Customers", "Expenses", "Cash activity", "Stock received", "Payment assignments", "Assignment corrections", "Activity history", "Stock movements", "Low stock").forEach { kind -> DropdownMenuItem(text = { Text(kind) }, onClick = { selectedExport = kind; exportMenu = false }) }
+                            listOf("Sales", "Product performance", "Staff activity", "Products", "Customers", "Expenses", "Cash activity", "Stock received", "Payment assignments", "Assignment corrections", "Activity history", "Stock movements", "Low stock").forEach { kind -> DropdownMenuItem(text = { Text(kind) }, onClick = { selectedExport = kind; exportMenu = false }) }
                         }
                     }
                     PosButton("Save CSV file", {
                         try {
                             val csv = when(selectedExport) {
+                                "Staff activity" -> StaffPerformanceService.csv(tenantId,records.sales,records.returns,repo.auditEvents(tenantId),range)
                                 "Product performance" -> ProductPerformanceService.csv(tenantId,records.sales,records.returns,range)
                                 "Sales" -> CsvService.sales(tenantId, records.sales.filter { range.contains(it.createdAt) })
                                 "Low stock" -> CsvService.products(tenantId,records.products.filter { !it.archived && it.reorderLevel?.let { level -> it.stock<=level }==true })
