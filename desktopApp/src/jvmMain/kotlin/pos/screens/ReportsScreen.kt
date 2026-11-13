@@ -13,6 +13,7 @@ import androidx.compose.ui.unit.dp
 import pos.data.PosRepository
 import pos.domain.*
 import pos.output.CsvService
+import pos.output.ProductPerformanceService
 import pos.ui.components.*
 import java.time.Instant
 import java.time.LocalDate
@@ -109,18 +110,20 @@ fun ReportsScreen(repo: PosRepository, tenantId: String) {
 
             Surface(shape = MaterialTheme.shapes.medium) { Column(Modifier.fillMaxWidth().padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                 SectionHeader("Export this shop's records", "CSV for a spreadsheet · Current product export includes archived items; customer and stock snapshots are not historical views")
+                if(selectedExport=="Product performance") Text("Sales and refunds use their own recorded dates. Returns may relate to older sales, so net sales and quantities can be negative. This is not profit or cash received. Quantities use each historical base unit.",style=MaterialTheme.typography.bodySmall)
                 if(selectedExport=="Payment assignments") Text("Assignment dates use the selected period; Active/Undone status reflects all corrections saved now.",style=MaterialTheme.typography.bodySmall)
                 if(selectedExport=="Assignment corrections") Text("Includes undo events recorded in the selected period, even when the original assignment is older.",style=MaterialTheme.typography.bodySmall)
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     Box {
                         NeutralButton("$selectedExport ▾", { exportMenu = true })
                         DropdownMenu(exportMenu, { exportMenu = false }) {
-                            listOf("Sales", "Products", "Customers", "Expenses", "Cash activity", "Stock received", "Payment assignments", "Assignment corrections", "Activity history", "Stock movements", "Low stock").forEach { kind -> DropdownMenuItem(text = { Text(kind) }, onClick = { selectedExport = kind; exportMenu = false }) }
+                            listOf("Sales", "Product performance", "Products", "Customers", "Expenses", "Cash activity", "Stock received", "Payment assignments", "Assignment corrections", "Activity history", "Stock movements", "Low stock").forEach { kind -> DropdownMenuItem(text = { Text(kind) }, onClick = { selectedExport = kind; exportMenu = false }) }
                         }
                     }
                     PosButton("Save CSV file", {
                         try {
                             val csv = when(selectedExport) {
+                                "Product performance" -> ProductPerformanceService.csv(tenantId,records.sales,records.returns,range)
                                 "Sales" -> CsvService.sales(tenantId, records.sales.filter { range.contains(it.createdAt) })
                                 "Low stock" -> CsvService.products(tenantId,records.products.filter { !it.archived && it.reorderLevel?.let { level -> it.stock<=level }==true })
                                 "Stock movements" -> CsvService.inventoryMovements(tenantId,records.products,records.products.flatMap { repo.inventoryMovements(tenantId,it.id) }.filter { range.contains(it.createdAt) })
