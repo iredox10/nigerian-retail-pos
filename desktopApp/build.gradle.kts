@@ -3,7 +3,15 @@ kotlin {
     jvm()
     jvmToolchain(17)
     sourceSets {
-        jvmMain.dependencies { implementation(project(":shared")); implementation(compose.desktop.currentOs); implementation(compose.material3); implementation("org.xerial:sqlite-jdbc:3.49.1.0"); implementation("org.slf4j:slf4j-nop:2.0.17") }
+        jvmMain.dependencies {
+            implementation(project(":shared"))
+            implementation(compose.desktop.currentOs)
+            implementation(compose.material3)
+            implementation("org.xerial:sqlite-jdbc:3.49.1.0")
+            implementation("org.slf4j:slf4j-nop:2.0.17")
+            implementation("com.google.zxing:core:3.5.4")
+            implementation("org.apache.pdfbox:pdfbox:3.0.8")
+        }
         jvmTest.dependencies { implementation(kotlin("test")) }
     }
 }
