@@ -18,9 +18,11 @@ import pos.domain.money
 import pos.domain.parseNaira
 import pos.output.CustomerStatement
 import pos.output.CustomerStatementService
+import pos.output.DatedCustomerStatementService
 import pos.output.CsvService
 import pos.ui.components.*
 import java.time.Instant
+import java.time.LocalDate
 import java.math.BigDecimal
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -132,6 +134,15 @@ private fun TenantCustomers(repo: PosRepository, tenantId: String, onChanged: ()
 @Composable
 private fun ColumnScope.CustomerHistory(statement: CustomerStatement, pay: () -> Unit, edit: () -> Unit, assign: () -> Unit, export: () -> Unit) {
     val customer = statement.customer
+    var dated by remember(customer.id) { mutableStateOf(false) }
+    val today=remember {LocalDate.now(ZoneId.of("Africa/Lagos"))}
+    var from by remember(customer.id) {mutableStateOf(today.withDayOfMonth(1).toString())}
+    var through by remember(customer.id) {mutableStateOf(today.toString())}
+    var exportNotice by remember(customer.id) {mutableStateOf<String?>(null)}
+    val period=remember(from,through,statement) {runCatching {
+        require(from.matches(Regex("\\d{4}-\\d{2}-\\d{2}")) && through.matches(Regex("\\d{4}-\\d{2}-\\d{2}"))) {"Use dates as YYYY-MM-DD."}
+        DatedCustomerStatementService.build(statement,ReportDateRange(LocalDate.parse(from),LocalDate.parse(through)))
+    }}
     LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         item {
             Surface(shape = MaterialTheme.shapes.medium) {
@@ -155,6 +166,28 @@ private fun ColumnScope.CustomerHistory(statement: CustomerStatement, pay: () ->
                         NeutralButton("Assign payments to receipts", assign)
                         NeutralButton("Edit details & credit limit", edit)
                         NeutralButton("Save CSV statement", export)
+                        NeutralButton("Dated statement", {dated=!dated;exportNotice=null})
+                    }
+                    if(dated) {
+                        HorizontalDivider()
+                        Text("Statement for selected dates",style=MaterialTheme.typography.titleMedium)
+                        PosTextField(from,{from=it;exportNotice=null},"From (YYYY-MM-DD)",Modifier.fillMaxWidth())
+                        PosTextField(through,{through=it;exportNotice=null},"Through (YYYY-MM-DD)",Modifier.fillMaxWidth())
+                        Text("Includes the whole day in West Africa Time. Customer names and contact details are current. Later repayments do not rewrite the closing debt at your selected date.",style=MaterialTheme.typography.bodySmall)
+                        period.getOrNull()?.let {view ->
+                            LabelValueRow("Opening debt before period",money(view.openingMinor))
+                            LabelValueRow("Closing debt through selected date",money(view.closingMinor),emphasized=true)
+                            LabelValueRow("Current debt — all saved dates",money(customer.balanceMinor))
+                        }
+                        period.exceptionOrNull()?.let {InlineNotice("Statement unavailable",it.message ?: "Check the dates and refresh the complete history.",NoticeTone.Warning)}
+                        NeutralButton("Save dated CSV statement",{
+                            try {
+                                val text=DatedCustomerStatementService.csv(statement,period.getOrThrow().range)
+                                val file=CsvService.save(text,"customer-${customer.id.take(8)}-$from-to-$through.csv")
+                                exportNotice=if(file==null) "Export cancelled." else "Dated statement saved to ${file.name}."
+                            } catch(e:Exception) {exportNotice="Export failed: ${e.message}"}
+                        },enabled=period.isSuccess)
+                        exportNotice?.let {Text(it,style=MaterialTheme.typography.bodySmall)}
                     }
                     Text("Repayments reduce the customer's total debt. Use Assign payments to receipts to specify which credit sales they cover. Unassigned payments are never automatically applied to a receipt. Cash-sale refunds stay under Sales.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
