@@ -28,7 +28,18 @@ import java.util.UUID
 /** Receipt-backed supplier balances; free-text names do not establish supplier account identity. */
 @Composable
 fun SuppliersScreen(repo: PosRepository, tenantId: String, onChanged: () -> Unit) {
-    key(tenantId) { TenantSuppliers(repo, tenantId, onChanged) }
+    key(tenantId) {
+        var tab by remember {mutableStateOf("Supplier accounts")}
+        Column(Modifier.fillMaxSize(),verticalArrangement=Arrangement.spacedBy(16.dp)) {
+            Row(horizontalArrangement=Arrangement.spacedBy(8.dp)) {
+                listOf("Supplier accounts","Receipts & payments").forEach {label -> FilterChip(tab==label,{tab=label},label={Text(label)})}
+            }
+            Box(Modifier.weight(1f)) {
+                if(tab=="Supplier accounts") SupplierProfilesPanel(repo,tenantId,onChanged)
+                else TenantSuppliers(repo,tenantId,onChanged)
+            }
+        }
+    }
 }
 
 private data class ReceiptBalance(val receipt: StockReceipt, val payments: List<SupplierPayment>, val outstanding: Long)

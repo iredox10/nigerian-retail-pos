@@ -15,7 +15,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import pos.data.PosRepository
+import pos.data.*
 import pos.domain.matchesCatalogueSearch
 import pos.domain.Product
 import pos.domain.PurchaseUnit
@@ -31,12 +31,12 @@ import java.util.UUID
 
 /** Every read and write remains scoped to the selected business, including editor state. */
 @Composable
-fun StockScreen(repo: PosRepository, tenantId: String, onChanged: () -> Unit, onImport: (() -> Unit)? = null) {
-    key(tenantId) { TenantStockScreen(repo, tenantId, onChanged, onImport) }
+fun StockScreen(repo: PosRepository, tenantId: String, onChanged: () -> Unit, onImport: (() -> Unit)? = null, onCounts: (() -> Unit)? = null) {
+    key(tenantId) { TenantStockScreen(repo, tenantId, onChanged, onImport, onCounts) }
 }
 
 @Composable
-private fun TenantStockScreen(repo: PosRepository, tenantId: String, onChanged: () -> Unit, onImport: (() -> Unit)?) {
+private fun TenantStockScreen(repo: PosRepository, tenantId: String, onChanged: () -> Unit, onImport: (() -> Unit)?, onCounts: (() -> Unit)?) {
     var revision by remember { mutableStateOf(0) }
     val allProducts = remember(tenantId, revision) { repo.products(tenantId, includeArchived = true) }
     val products = allProducts.filterNot { it.archived }
@@ -63,6 +63,7 @@ private fun TenantStockScreen(repo: PosRepository, tenantId: String, onChanged: 
                 Row(if (compact) Modifier.fillMaxWidth().horizontalScroll(toolbarScroll) else Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     if (!compact) SectionHeader("Stock", "Know what is available and record what came in.", Modifier.weight(1f))
                     if (editor == null) {
+                        if(onCounts!=null) NeutralButton("Count several items",onCounts)
                         if(onImport!=null) NeutralButton("Import CSV",onImport)
                         NeutralButton("Add item", { savedMessage = null; editor = "item" })
                         PosButton("Add stock", {
@@ -77,9 +78,10 @@ private fun TenantStockScreen(repo: PosRepository, tenantId: String, onChanged: 
                 repo.addProduct(tenantId, name, unit, price, projectedQuantity(quantity.toLong(),precision), barcode, precision)
                 refresh("Item saved on this computer")
             }
-            "receive" -> ReceiveStockForm(repo, tenantId, products, selectedProductId) { product, quantity, cost, paid, supplier, operation, buyingUnit ->
-                repo.receiveStock(tenantId, product.id, quantity, cost, paid, supplier, operation,
+            "receive" -> ReceiveStockForm(repo, tenantId, products, selectedProductId) { product, quantity, cost, paid, supplier, operation, buyingUnit, profile ->
+                if(profile==null) repo.receiveStock(tenantId, product.id, quantity, cost, paid, supplier, operation,
                     purchaseUnitId = buyingUnit?.id, expectedBaseUnitsPerUnit = buyingUnit?.baseUnitsPerUnit ?: 1)
+                else repo.receiveStockForSupplier(tenantId,product.id,quantity,cost,paid,profile.id,operation,buyingUnit?.id,buyingUnit?.baseUnitsPerUnit ?: 1,profile.version)
                 refresh("Stock received and saved on this computer")
             }
             "manage" -> {
@@ -248,7 +250,7 @@ private fun ReceiveStockForm(
     tenantId: String,
     products: List<Product>,
     initialProductId: String?,
-    save: (Product, Int, Long, Long, String, String, PurchaseUnit?) -> Unit,
+    save: (Product, Int, Long, Long, String, String, PurchaseUnit?, SupplierProfile?) -> Unit,
 ) {
     var selectedId by remember { mutableStateOf(initialProductId) }
     var choosing by remember { mutableStateOf(initialProductId == null) }
@@ -257,6 +259,10 @@ private fun ReceiveStockForm(
     var cost by remember { mutableStateOf("") }
     var paid by remember { mutableStateOf("") }
     var supplier by remember { mutableStateOf("") }
+    var supplierProfileId by remember {mutableStateOf<String?>(null)}
+    var supplierMenu by remember {mutableStateOf(false)}
+    val supplierProfilesResult=remember(tenantId) {runCatching {repo.supplierProfiles(tenantId)}}
+    val supplierProfile=supplierProfilesResult.getOrDefault(emptyList()).find {it.id==supplierProfileId}
     var error by remember { mutableStateOf<String?>(null) }
     var saving by remember { mutableStateOf(false) }
     var buyingUnitId by remember { mutableStateOf<String?>(null) }
@@ -269,7 +275,7 @@ private fun ReceiveStockForm(
     val selectedUnitMissing = buyingUnitId != null && buyingUnit == null
     val unitName = buyingUnit?.name ?: product?.unit ?: "unit"
     val factor = buyingUnit?.baseUnitsPerUnit ?: 1
-    val operationId = remember(selectedId, buyingUnitId, quantity, cost, paid, supplier) { UUID.randomUUID().toString() }
+    val operationId = remember(selectedId, buyingUnitId, quantity, cost, paid, supplier, supplierProfileId) { UUID.randomUUID().toString() }
     val precision=if(buyingUnitId==null) product?.quantityPrecision ?: 0 else 0
     val count = quantityCount(quantity,precision)
     val addedBaseQuantity = if (count != null) runCatching { Quantity(count.toLong(),precision).rescale(product?.quantityPrecision ?: 0).timesWhole(factor.toLong()).scaledUnits }.getOrNull() else null
@@ -337,7 +343,20 @@ private fun ReceiveStockForm(
                     }
                 }
                 if (!conversionSupported) InlineNotice("Quantity is too large", "Reduce the received quantity. Its conversion exceeds the supported stock range.", NoticeTone.Danger)
-                PosTextField(supplier, { supplier = it }, "Who supplied it?", hint = "Supplier name")
+                Text("Who supplied it?",style=MaterialTheme.typography.titleMedium)
+                Box {
+                    NeutralButton(supplierProfile?.details?.name ?: "Enter a name without linking an account",{supplierMenu=true})
+                    DropdownMenu(supplierMenu,{supplierMenu=false}) {
+                        DropdownMenuItem(text={Text("Enter a name without an account link")},onClick={supplierProfileId=null;supplierMenu=false})
+                        supplierProfilesResult.getOrDefault(emptyList()).forEach {profile ->
+                            DropdownMenuItem(text={Text("${profile.details.name} · ${profile.id.takeLast(8)}")},onClick={supplierProfileId=profile.id;supplierMenu=false})
+                        }
+                    }
+                }
+                if(supplierProfile==null) PosTextField(supplier,{supplier=it},"Supplier name",hint="Name saved on this purchase only")
+                else Text("Linked supplier account ${supplierProfile.id.takeLast(8)}. This purchase keeps the current name ${supplierProfile.details.name} as its historical name.",style=MaterialTheme.typography.bodySmall)
+                Text("Manage supplier profiles under More → Suppliers & payments. A typed name is not automatically linked or merged.",style=MaterialTheme.typography.bodySmall,color=PosPalette.Secondary)
+                supplierProfilesResult.exceptionOrNull()?.let {InlineNotice("Supplier accounts unavailable",it.message ?: "You can record an unlinked supplier name, or return and try again.",NoticeTone.Warning)}
                 PosTextField(paid, { paid = it }, "Cash paid now (₦)", hint = "Enter 0 only if fully on supplier credit")
                 Text("Cash paid is taken from the open cash shift. Open Today's cash first if you are paying cash. Other payment methods are not supported in this form yet.",
                     style = MaterialTheme.typography.bodySmall, color = PosPalette.Secondary)
@@ -358,9 +377,9 @@ private fun ReceiveStockForm(
                         val cashPaid = parseStockMoney(paid, "cash paid")
                         val buyingTotal = Quantity(count.toLong(),precision).lineTotalMinor(unitCost)
                         require(cashPaid <= buyingTotal) { "Cash paid cannot exceed the total buying cost." }
-                        require(supplier.isNotBlank()) { "Enter who supplied these goods." }
+                        require(supplierProfile!=null || supplier.isNotBlank()) { "Enter who supplied these goods." }
                         require(buyingUnitsResult.isSuccess && !selectedUnitMissing && conversionSupported) { "Choose an available buying unit before saving." }
-                        save(chosen, count, unitCost, cashPaid, supplier.trim(), operationId, buyingUnit)
+                        save(chosen, count, unitCost, cashPaid, supplierProfile?.details?.name ?: supplier.trim(), operationId, buyingUnit,supplierProfile)
                     } catch (e: Exception) { error = e.message ?: "Stock could not be saved. Your entries are still here." }
                     finally { saving = false }
                 }, enabled = !saving && product != null && buyingUnitsResult.isSuccess && !selectedUnitMissing && conversionSupported)
