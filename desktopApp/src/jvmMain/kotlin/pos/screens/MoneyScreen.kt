@@ -59,6 +59,7 @@ fun MoneyScreen(repo: PosRepository, tenantId: String, onChanged: () -> Unit) {
                         Row(verticalAlignment = Alignment.CenterVertically) { SectionHeader("Cash expected", "Shift opened ${cashTime(active.openedAt)}", Modifier.weight(1f)); StatusPill("Drawer open", NoticeTone.Success) }
                         MoneyText(expectedResult.getOrThrow(), large = true)
                         LabelValueRow("Opening cash counted", money(active.openingMinor))
+                        active.openingCount?.let { SavedCashCount("opening count sheet", it) }
                         Text("Includes this shift's cash sales, repayments, expenses and money moved in or out. Bank transfers and earlier unassigned records are excluded.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         PosButton("Count cash & close shift", { action = "close" })
                     } } }
@@ -104,6 +105,9 @@ fun MoneyScreen(repo: PosRepository, tenantId: String, onChanged: () -> Unit) {
                         Text("Opened ${cashTime(shift.openedAt)}", style = MaterialTheme.typography.bodySmall)
                         LabelValueRow("Cash expected", shift.expectedMinor?.let(::money) ?: "Not recorded")
                         LabelValueRow("Cash counted", shift.countedMinor?.let(::money) ?: "Not recorded")
+                        if (shift.blindClosing) Text("Expected cash hidden in the closing form", style = MaterialTheme.typography.bodySmall)
+                        shift.openingCount?.let { SavedCashCount("opening count sheet", it) }
+                        shift.closingCount?.let { SavedCashCount("closing count sheet", it) }
                         if (shift.expectedMinor != null && shift.countedMinor != null) Text(cashDifference(shift.countedMinor!!, shift.expectedMinor!!), fontWeight = FontWeight.SemiBold)
                     } }
                 }
@@ -117,17 +121,38 @@ fun MoneyScreen(repo: PosRepository, tenantId: String, onChanged: () -> Unit) {
         var category by remember(kind) { mutableStateOf("Other") }
         var error by remember(kind) { mutableStateOf<String?>(null) }
         var submitting by remember(kind) { mutableStateOf(false) }
+        var countByDenomination by remember(kind) { mutableStateOf(false) }
+        var denominationInputs by remember(kind) { mutableStateOf<Map<Long, String>>(emptyMap()) }
+        var blindClosing by remember(kind) { mutableStateOf(kind == "close") }
         val operationId = remember(kind) { UUID.randomUUID().toString() }
-        val parsed = cashInput(amount)
+        val countSheet = if (countByDenomination) cashCountFromInputs(denominationInputs) else null
+        val parsed = if (countByDenomination) countSheet?.totalMinor else cashInput(amount)
         val expected = expectedResult.getOrNull() ?: 0L
         val title = when(kind) { "open" -> "Open cash drawer"; "close" -> "Count cash & close shift"; "expense" -> "Record expense"; "in" -> "Add money"; else -> "Take money out" }
         AlertDialog(onDismissRequest = { if (!submitting) action = null }, title = { Text(title) }, text = {
             Column(Modifier.widthIn(max = 480.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                 if (kind == "open") Text("Count all money physically in the drawer now. This is your starting cash, not a new sale.")
-                if (kind == "close") { LabelValueRow("Cash expected", money(expected)); Text("Count the physical cash and enter what is actually there. Any difference stays in the closing record.") }
+                if (kind == "close") {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Checkbox(blindClosing, { blindClosing = it })
+                        Text("Hide cash expected while counting")
+                    }
+                    Text("This hides the expected amount in this form. You may already have seen it on Today's cash.", style = MaterialTheme.typography.bodySmall)
+                    if (!blindClosing) LabelValueRow("Cash expected", money(expected))
+                    Text("Count the physical cash and enter what is actually there. Any difference stays in the closing record.")
+                }
                 if (kind == "in" || kind == "out") Text(if (kind == "out") "Record money removed from the drawer. Owner withdrawals and bank deposits are money movements, not business expenses." else "Record cash added to the drawer. Owner contributions are not sales.")
-                PosTextField(amount, { amount = it; error = null }, if (kind == "close") "Cash counted in naira" else if (kind == "open") "Opening cash in naira" else "Amount in naira", hint = "0.00")
-                if (kind == "close" && parsed != null) Text(cashDifference(parsed, expected), fontWeight = FontWeight.SemiBold)
+                if (kind in listOf("open", "close")) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Checkbox(countByDenomination, { countByDenomination = it; error = null })
+                        Text("Count notes and coins separately")
+                    }
+                }
+                if (countByDenomination) {
+                    CashDenominationPanel(denominationInputs) { denomination, text -> denominationInputs = denominationInputs + (denomination to text); error = null }
+                    Text("The count sheet is saved with this shift.", style = MaterialTheme.typography.bodySmall)
+                } else PosTextField(amount, { amount = it; error = null }, if (kind == "close") "Cash counted in naira" else if (kind == "open") "Opening cash in naira" else "Amount in naira", hint = "0.00")
+                if (kind == "close" && !blindClosing && parsed != null) Text(cashDifference(parsed, expected), fontWeight = FontWeight.SemiBold)
                 if (kind == "expense") PosTextField(category, { category = it }, "Expense category", hint = "Fuel, transport, electricity…")
                 if (kind in listOf("expense", "in", "out")) PosTextField(description, { description = it }, if (kind == "expense") "What did you pay for?" else "Why is this money moving?")
                 error?.let { InlineNotice("Not saved", it, NoticeTone.Danger) }
@@ -136,7 +161,7 @@ fun MoneyScreen(repo: PosRepository, tenantId: String, onChanged: () -> Unit) {
             PosButton(if (submitting) "Saving…" else if (kind == "close") "Save count & close shift" else title, {
                 val value = parsed
                 when {
-                    value == null -> error = "Enter a non-negative amount with no more than two decimal places."
+                    value == null -> error = if (countByDenomination) "Enter whole counts of notes and coins within the supported amount." else "Enter a non-negative amount with no more than two decimal places."
                     kind in listOf("expense", "in", "out") && value == 0L -> error = "Enter an amount greater than zero."
                     kind in listOf("expense", "in", "out") && description.isBlank() -> error = "Describe what this money was for."
                     kind == "expense" && category.isBlank() -> error = "Enter an expense category."
@@ -144,8 +169,8 @@ fun MoneyScreen(repo: PosRepository, tenantId: String, onChanged: () -> Unit) {
                         submitting = true
                         try {
                             when (kind) {
-                                "open" -> repo.openCashShift(tenantId, value)
-                                "close" -> repo.closeCashShift(tenantId, requireNotNull(active).id, value)
+                                "open" -> repo.openCashShift(tenantId, value, openingCount = countSheet)
+                                "close" -> repo.closeCashShift(tenantId, requireNotNull(active).id, value, closingCount = countSheet, blindClosing = blindClosing)
                                 "expense" -> repo.recordExpense(tenantId, category.trim(), description.trim(), value, operationId)
                                 "in" -> repo.recordCashMovement(tenantId, value, description.trim(), operationId)
                                 else -> repo.recordCashMovement(tenantId, Math.negateExact(value), description.trim(), operationId)
