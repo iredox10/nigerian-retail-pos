@@ -16,8 +16,11 @@ import pos.domain.StockReceipt
 import pos.domain.SupplierPayment
 import pos.domain.money
 import pos.domain.parseNaira
+import pos.output.CsvService
+import pos.output.SupplierStatementService
 import pos.ui.components.*
 import java.time.Instant
+import java.time.LocalDate
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.UUID
@@ -35,6 +38,7 @@ private fun TenantSuppliers(repo: PosRepository, tenantId: String, onChanged: ()
     var revision by remember { mutableIntStateOf(0) }
     var search by remember { mutableStateOf("") }
     var selected by remember { mutableStateOf<StockReceipt?>(null) }
+    var statementSupplier by remember { mutableStateOf<String?>(null) }
     var message by remember { mutableStateOf<String?>(null) }
     var showPaid by remember { mutableStateOf(false) }
     val result = remember(revision) { runCatching {
@@ -76,6 +80,7 @@ private fun TenantSuppliers(repo: PosRepository, tenantId: String, onChanged: ()
                         Text(total?.let { "Owed on these receipts ${money(it)}" } ?: "See individual receipt balances", fontWeight = FontWeight.SemiBold)
                     }
                     Text("${purchases.size} matching receipt(s) · This shop only", style = MaterialTheme.typography.bodySmall)
+                    NeutralButton("View supplier statement", { statementSupplier=name })
                 }
                 items(purchases, key = { it.receipt.id }) { row ->
                     SupplierReceipt(row, shiftResult.getOrNull() != null) { selected = row.receipt; message = null }
@@ -91,6 +96,79 @@ private fun TenantSuppliers(repo: PosRepository, tenantId: String, onChanged: ()
             onChanged()
         }
     }
+    statementSupplier?.let { name ->
+        SupplierStatementDialog(repo,tenantId,name) { statementSupplier=null }
+    }
+}
+
+/** Uses fresh complete histories, independently of the balances screen's filters. */
+@Composable
+private fun SupplierStatementDialog(repo:PosRepository,tenantId:String,supplierName:String,dismiss:()->Unit) {
+    val today=remember {LocalDate.now(ZoneId.of("Africa/Lagos"))}
+    var fromText by remember {mutableStateOf(today.withDayOfMonth(1).toString())}
+    var throughText by remember {mutableStateOf(today.toString())}
+    var revision by remember {mutableIntStateOf(0)}
+    var message by remember {mutableStateOf<String?>(null)}
+    var exportError by remember {mutableStateOf<String?>(null)}
+    val history=remember(tenantId,revision) {runCatching {repo.stockReceipts(tenantId) to repo.supplierPayments(tenantId)}}
+    val loaded=remember(history,fromText,throughText) {runCatching {
+        require(listOf(fromText,throughText).all {it.matches(Regex("\\d{4}-\\d{2}-\\d{2}"))}) {"Use YYYY-MM-DD for both dates."}
+        val from=LocalDate.parse(fromText)
+        val through=LocalDate.parse(throughText)
+        require(!through.isAfter(today)) {"Choose today or an earlier end date."}
+        val records=history.getOrThrow()
+        SupplierStatementService.build(tenantId,supplierName,records.first,records.second,from,through)
+    }}
+    AlertDialog(
+        onDismissRequest=dismiss,
+        title={Text("Statement · ${supplierName.ifBlank {"Supplier not recorded"}}")},
+        text={
+            Column(Modifier.heightIn(max=520.dp).verticalScroll(rememberScrollState()),verticalArrangement=Arrangement.spacedBy(12.dp)) {
+                Text("Saved receipt and cash-payment history for this exact recorded name. Includes fully paid receipts and ignores the supplier list's search filters. This is not a supplier master account.",style=MaterialTheme.typography.bodySmall)
+                PosTextField(fromText,{fromText=it;message=null;exportError=null},"From (YYYY-MM-DD)",Modifier.fillMaxWidth())
+                PosTextField(throughText,{throughText=it;message=null;exportError=null},"Through (YYYY-MM-DD)",Modifier.fillMaxWidth())
+                Text("Dates include the whole day in West Africa Time.",style=MaterialTheme.typography.bodySmall)
+                NeutralButton("Refresh statement",{revision++;message=null;exportError=null})
+                loaded.exceptionOrNull()?.let {InlineNotice("Statement unavailable",it.message ?: "Check the dates or refresh the saved records.",NoticeTone.Warning)}
+                loaded.getOrNull()?.let {statement ->
+                    LabelValueRow("Opening debt before ${statement.from}",money(statement.openingMinor))
+                    LabelValueRow("Purchases received in range",money(statement.purchasesMinor))
+                    LabelValueRow("Cash paid when receiving this stock",money(statement.paidAtReceiptMinor))
+                    LabelValueRow("Later cash payments in range",money(statement.laterPaymentsMinor))
+                    LabelValueRow("Closing debt through ${statement.through}",money(statement.closingMinor),emphasized=true)
+                    HorizontalDivider()
+                    LabelValueRow("Current outstanding — all recorded dates",money(statement.currentOutstandingMinor))
+                    Text("Current outstanding includes records after the chosen end date. No supplier credits, purchase returns or opening balances outside saved receipts are assumed.",style=MaterialTheme.typography.bodySmall)
+                    HorizontalDivider()
+                    Text("Activity in this date range",style=MaterialTheme.typography.titleSmall)
+                    if(statement.events.isEmpty()) Text("No purchases or payments were recorded in this period. Any opening debt is carried into the closing debt.",style=MaterialTheme.typography.bodySmall)
+                    statement.events.forEach {event ->
+                        Column(verticalArrangement=Arrangement.spacedBy(4.dp)) {
+                            Text(if(event.laterPaymentMinor>0) "Later cash payment" else "Stock received",fontWeight=FontWeight.SemiBold)
+                            Text("${supplierTime(event.createdAt)} · Receipt ${event.receiptId.takeLast(8).uppercase()}",style=MaterialTheme.typography.bodySmall)
+                            if(event.laterPaymentMinor>0) LabelValueRow("Cash paid",money(event.laterPaymentMinor))
+                            else {
+                                LabelValueRow("Purchase total",money(event.purchaseMinor))
+                                LabelValueRow("Cash paid at receipt",money(event.paidAtReceiptMinor))
+                            }
+                            LabelValueRow("Debt after this record",money(event.balanceAfterMinor))
+                        }
+                    }
+                }
+                message?.let {Text(it,style=MaterialTheme.typography.bodySmall)}
+                exportError?.let {InlineNotice("CSV not saved",it,NoticeTone.Danger)}
+            }
+        },
+        confirmButton={PosButton("Save statement CSV",{
+            exportError=null;message=null
+            try {
+                val statement=loaded.getOrThrow()
+                val file=CsvService.save(SupplierStatementService.csv(statement),"supplier-statement-${statement.from}-to-${statement.through}.csv")
+                message=if(file==null) "Export cancelled." else "Statement CSV saved to ${file.name}."
+            } catch(e:Exception) {exportError=e.message ?: "The statement could not be exported. No records changed."}
+        },enabled=loaded.isSuccess)},
+        dismissButton={TextButton(onClick=dismiss) {Text("Close")}},
+    )
 }
 
 @Composable
