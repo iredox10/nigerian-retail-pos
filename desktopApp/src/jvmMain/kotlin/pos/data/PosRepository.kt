@@ -80,6 +80,10 @@ class PosRepository(path: String = File(System.getProperty("user.home"), ".niger
             if("reorder_level" !in productColumns) db.createStatement().use { it.execute("ALTER TABLE products ADD COLUMN reorder_level INTEGER CHECK(reorder_level>=0)") }
             if("opening_stock" !in productColumns) db.createStatement().use { it.execute("ALTER TABLE products ADD COLUMN opening_stock REAL CHECK(opening_stock>=0)") }
             if("created_at" !in productColumns) db.createStatement().use { it.execute("ALTER TABLE products ADD COLUMN created_at TEXT") }
+            listOf("sku TEXT", "category TEXT", "brand TEXT", "aliases TEXT NOT NULL DEFAULT ''", "favourite INTEGER NOT NULL DEFAULT 0 CHECK(favourite IN(0,1))").forEach { definition ->
+                if(definition.substringBefore(" ") !in productColumns) execute("ALTER TABLE products ADD COLUMN $definition")
+            }
+            execute("CREATE UNIQUE INDEX IF NOT EXISTS product_sku_per_tenant ON products(tenant_id,sku COLLATE NOCASE) WHERE sku IS NOT NULL")
             val receiptColumns=query("PRAGMA table_info(stock_receipts)") { it.getString("name") }
             if("base_unit" !in receiptColumns) db.createStatement().use { it.execute("ALTER TABLE stock_receipts ADD COLUMN base_unit TEXT") }
             if("base_units_per_unit" !in receiptColumns) db.createStatement().use { it.execute("ALTER TABLE stock_receipts ADD COLUMN base_units_per_unit INTEGER NOT NULL DEFAULT 1 CHECK(base_units_per_unit>0)") }
@@ -110,8 +114,44 @@ class PosRepository(path: String = File(System.getProperty("user.home"), ".niger
         }
         // This table is created only after the legacy outbox key has been migrated.
         db.createStatement().use { it.execute("CREATE TABLE IF NOT EXISTS activity_audit(id TEXT NOT NULL,tenant_id TEXT NOT NULL,kind TEXT NOT NULL,entity_id TEXT NOT NULL,created_at TEXT NOT NULL,actor_id TEXT,actor_name TEXT,actor_role TEXT CHECK(actor_role IN('OWNER','MANAGER','CASHIER')),description TEXT,PRIMARY KEY(tenant_id,id),FOREIGN KEY(tenant_id,id) REFERENCES outbox(tenant_id,id))") }
+        createMetadataHistory()
         execute("CREATE TRIGGER IF NOT EXISTS activity_audit_no_update BEFORE UPDATE ON activity_audit BEGIN SELECT RAISE(ABORT,'Activity history cannot be edited'); END")
         execute("CREATE TRIGGER IF NOT EXISTS activity_audit_no_delete BEFORE DELETE ON activity_audit BEGIN SELECT RAISE(ABORT,'Activity history cannot be removed'); END")
+    }
+
+    private fun createMetadataHistory() {
+        execute("CREATE TABLE IF NOT EXISTS product_metadata_changes(id TEXT NOT NULL,tenant_id TEXT NOT NULL,product_id TEXT NOT NULL,previous_sku TEXT,previous_category TEXT,previous_brand TEXT,previous_aliases TEXT NOT NULL,previous_favourite INTEGER NOT NULL CHECK(previous_favourite IN(0,1)),sku TEXT,category TEXT,brand TEXT,aliases TEXT NOT NULL,favourite INTEGER NOT NULL CHECK(favourite IN(0,1)),created_at TEXT NOT NULL,sequence INTEGER NOT NULL CHECK(sequence>0),PRIMARY KEY(tenant_id,id),UNIQUE(tenant_id,product_id,sequence),FOREIGN KEY(tenant_id,product_id) REFERENCES products(tenant_id,id))")
+        execute("CREATE TRIGGER IF NOT EXISTS metadata_history_no_update BEFORE UPDATE ON product_metadata_changes BEGIN SELECT RAISE(ABORT,'Catalogue history cannot be edited'); END")
+        execute("CREATE TRIGGER IF NOT EXISTS metadata_history_no_delete BEFORE DELETE ON product_metadata_changes BEGIN SELECT RAISE(ABORT,'Catalogue history cannot be removed'); END")
+    }
+
+    @Synchronized fun updateProductMetadata(tenantId:String,productId:String,metadata:ProductMetadata,operationId:String,expected:ProductMetadata?=null):Product = transaction {
+        requirePermission(tenantId,StaffPermission.MANAGE_STOCK)
+        requireTenant(tenantId)
+        require(operationId.isNotBlank()) { "Operation identifier cannot be blank." }
+        val item=requireProduct(tenantId,productId)
+        val previous=query("SELECT * FROM product_metadata_changes WHERE tenant_id=? AND id=?",tenantId,operationId,map=::metadataChange).singleOrNull()
+        if(previous!=null) {
+            require(previous.productId==productId && previous.current==metadata) { "This catalogue edit was already saved with different details." }
+            return@transaction item
+        }
+        require(!item.archived) { "Restore this item before changing catalogue details." }
+        require(expected==null || expected==item.metadata()) { "Catalogue details changed since this form was opened. Reopen the item and review them." }
+        if(metadata==item.metadata()) return@transaction item
+        if(metadata.sku!=null) require(query("SELECT id FROM products WHERE tenant_id=? AND sku=? COLLATE NOCASE AND id<>?",tenantId,metadata.sku,productId) {it.getString(1)}.isEmpty()) { "This SKU is already used by another item in this shop, including archived items." }
+        val old=item.metadata()
+        execute("UPDATE products SET sku=?,category=?,brand=?,aliases=?,favourite=? WHERE tenant_id=? AND id=?",metadata.sku,metadata.category,metadata.brand,encodeProductAliases(metadata.aliases),if(metadata.favourite)1 else 0,tenantId,productId)
+        execute("INSERT INTO product_metadata_changes VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",operationId,tenantId,productId,old.sku,old.category,old.brand,encodeProductAliases(old.aliases),if(old.favourite)1 else 0,metadata.sku,metadata.category,metadata.brand,encodeProductAliases(metadata.aliases),if(metadata.favourite)1 else 0,Instant.now().toString(),productMetadataChanges(tenantId,productId).size.toLong()+1)
+        enqueue(tenantId,"product.metadata_changed",operationId)
+        requireProduct(tenantId,productId)
+    }
+    @Synchronized fun productMetadataChanges(tenantId:String,productId:String):List<ProductMetadataChange> {
+        requireTenant(tenantId); requireProduct(tenantId,productId)
+        return query("SELECT * FROM product_metadata_changes WHERE tenant_id=? AND product_id=? ORDER BY sequence",tenantId,productId,map=::metadataChange)
+    }
+    private fun metadataChange(row:ResultSet):ProductMetadataChange {
+        fun fields(prefix:String)=ProductMetadata(row.getString(prefix+"sku"),row.getString(prefix+"category"),row.getString(prefix+"brand"),decodeProductAliases(row.getString(prefix+"aliases")),row.getInt(prefix+"favourite")==1)
+        return ProductMetadataChange(row.getString("id"),row.getString("tenant_id"),row.getString("product_id"),fields("previous_"),fields(""),row.getString("created_at"),row.getLong("sequence"))
     }
 
     /** New writes only: legacy events are not retrospectively attributed to the current owner. */
@@ -810,7 +850,7 @@ class PosRepository(path: String = File(System.getProperty("user.home"), ".niger
     }
     private fun supplierPayment(r:ResultSet)=SupplierPayment(r.getString("id"),r.getString("tenant_id"),r.getString("receipt_id"),r.getString("supplier_name"),r.getLong("amount_minor"),r.getString("created_at"))
 
-    private val snapshotTableOrder get() = listOf("products","selling_units","stock_settings_changes","purchase_units","customers","customer_changes","cash_shifts","sales","sale_lines","repayments","repayment_allocations","allocation_reversals","stock_receipts","expenses","sale_returns","return_lines","supplier_payments","cash_entries","catalogue_changes","stock_adjustments","outbox","activity_audit")
+    private val snapshotTableOrder get() = listOf("products","product_metadata_changes","selling_units","stock_settings_changes","purchase_units","customers","customer_changes","cash_shifts","sales","sale_lines","repayments","repayment_allocations","allocation_reversals","stock_receipts","expenses","sale_returns","return_lines","supplier_payments","cash_entries","catalogue_changes","stock_adjustments","outbox","activity_audit")
     @Synchronized fun exportTenantSnapshot(tenantId:String):TenantSnapshot = transaction {
         requirePermission(tenantId, StaffPermission.BACKUP)
         requireTenant(tenantId)
@@ -838,7 +878,7 @@ class PosRepository(path: String = File(System.getProperty("user.home"), ".niger
                 schema.values.forEach { (name,type,required) ->
                     val value=row[name]
                     val generatedId=(table=="sale_lines" || table=="return_lines") && name=="id"
-                    require(!required || value!=null || generatedId || (table=="products" && name=="archived" && name !in row) || (table in setOf("stock_receipts","sale_lines","return_lines") && name=="base_units_per_unit" && name !in row) || (table=="sale_lines" && name=="discount_per_unit_minor" && name !in row)) { "Backup is missing a required value in $table." }
+                    require(!required || value!=null || generatedId || (table=="products" && name in setOf("archived","aliases","favourite") && name !in row) || (table in setOf("stock_receipts","sale_lines","return_lines") && name=="base_units_per_unit" && name !in row) || (table=="sale_lines" && name=="discount_per_unit_minor" && name !in row)) { "Backup is missing a required value in $table." }
                     if(value!=null && type=="INTEGER") require(value.toLongOrNull()!=null) { "Backup has invalid integer data in $table." }
                     if(value!=null && name=="quantity" && table in setOf("sale_lines","stock_receipts","return_lines")) {
                         val quantity=value.toLongOrNull()
@@ -871,6 +911,15 @@ class PosRepository(path: String = File(System.getProperty("user.home"), ".niger
         // Reconstruct domain records to enforce cross-field invariants as well as SQL constraints.
         products(tenant.id,includeArchived=true).forEach { item -> item.createdAt?.let { Instant.parse(it) } }
         stockSettingsChanges(tenant.id).forEach { Instant.parse(it.createdAt) }
+        products(tenant.id,includeArchived=true).forEach { item ->
+            val history=productMetadataChanges(tenant.id,item.id)
+            history.forEachIndexed { index,event ->
+                Instant.parse(event.createdAt)
+                require(event.sequence==index.toLong()+1) { "Backup catalogue history sequence is incomplete." }
+                require(index==0 || event.previous==history[index-1].current) { "Backup catalogue history is inconsistent." }
+            }
+            require(history.isEmpty() || history.last().current==item.metadata()) { "Backup catalogue details do not match their latest history." }
+        }
         customers(tenant.id); sales(tenant.id); stockReceipts(tenant.id)
         stockAdjustments(tenant.id); priceHistory(tenant.id); repayments(tenant.id); customerChanges(tenant.id)
         val restoredSellingUnits=sellingUnits(tenant.id,includeArchived=true)
@@ -1024,7 +1073,7 @@ class PosRepository(path: String = File(System.getProperty("user.home"), ".niger
     private fun stockSettingsChange(r:ResultSet)=StockSettingsChange(r.getString("id"),r.getString("tenant_id"),r.getString("product_id"),r.getObject("previous_reorder_level")?.let { (it as Number).toInt() },r.getObject("reorder_level")?.let { (it as Number).toInt() },r.getString("created_at"))
     private fun stockAdjustment(r:ResultSet)=StockAdjustment(r.getString("id"),r.getString("tenant_id"),r.getString("product_id"),r.getString("product_name"),r.getString("unit"),r.getDouble("previous_stock"),r.getInt("counted_stock"),r.getString("reason"),r.getString("created_at"))
     private fun requireTenant(tenantId: String) { require(query("SELECT id FROM tenants WHERE id=?",tenantId) { it.getString(1) }.isNotEmpty()) { "Shop not found." } }
-    private fun product(r: ResultSet)=Product(r.getString("id"),r.getString("tenant_id"),r.getString("name"),r.getString("unit"),r.getLong("price_minor"),r.getDouble("stock"),r.getString("barcode"),r.getInt("archived")==1,r.getObject("reorder_level")?.let { (it as Number).toInt() },r.getObject("opening_stock")?.let { (it as Number).toDouble() },r.getString("created_at"))
+    private fun product(r: ResultSet)=Product(r.getString("id"),r.getString("tenant_id"),r.getString("name"),r.getString("unit"),r.getLong("price_minor"),r.getDouble("stock"),r.getString("barcode"),r.getInt("archived")==1,r.getObject("reorder_level")?.let { (it as Number).toInt() },r.getObject("opening_stock")?.let { (it as Number).toDouble() },r.getString("created_at"),r.getString("sku"),r.getString("category"),r.getString("brand"),decodeProductAliases(r.getString("aliases")),r.getInt("favourite")==1)
     private fun auditEvent(row: ResultSet): AuditEvent {
         val tenantId=row.getString("tenant_id")
         val actorId=row.getString("actor_id")

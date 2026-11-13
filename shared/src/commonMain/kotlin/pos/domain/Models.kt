@@ -17,8 +17,14 @@ data class Product(
     val reorderLevel: Int? = null,
     val openingStock: Double? = null,
     val createdAt: String? = null,
+    val sku: String? = null,
+    val category: String? = null,
+    val brand: String? = null,
+    val aliases: List<String> = emptyList(),
+    val favourite: Boolean = false,
 ) {
     init {
+        ProductMetadata(sku, category, brand, aliases, favourite)
         require(id.isNotBlank() && tenantId.isNotBlank())
         require(name.isNotBlank() && unit.isNotBlank())
         require(priceMinor >= 0) { "Selling price cannot be negative." }
