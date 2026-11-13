@@ -5,11 +5,20 @@
 ## Verified
 
 - Shared and desktop compilation with Kotlin 2.2.20, Compose 1.9.1 and JDK 17.
-- **220 automated tests pass**, with zero failures or errors. The negotiated-price checkpoint added 13 tests to the previous 170-test checkpoint; six ageing-band tests brought the total to 189. Fifteen correction/domain/export tests bring the total to 204.
+- **231 automated tests pass**, with zero failures or errors. The negotiated-price checkpoint added 13 tests to the previous 170-test checkpoint; six ageing-band tests brought the total to 189. Fifteen correction/domain/export tests bring the total to 204.
 - Coverage includes cross-tenant rejection, exact kobo amounts, retry deduplication, return limits/restocking, supplier overpayment, atomic import rejection, WAT date boundaries, spreadsheet formula protection, encrypted tenant-only backup, wrong passwords, corrupted input, repeated restore and cash/debt-history consistency.
 - Linux desktop distribution rebuilt successfully using `gradle :desktopApp:createDistributable` at `desktopApp/build/compose/binaries/main/app/RetailPOS`.
 - Native isolated previews rendered for Reports, Sales, Suppliers, Backup and Import. Reports filled the 1920 × 1080 display; Sales and Suppliers were also inspected in the compositor-provided narrower window. See [Reports](artifacts/desktop-reports.png), [Sales](artifacts/desktop-sales.png), and [Suppliers](artifacts/desktop-suppliers.png), [Backup](artifacts/desktop-backup.png), and [Import](artifacts/desktop-import.png).
 - Previous fullscreen verification remains recorded in [the fullscreen render](artifacts/desktop-fullscreen.png). Startup requests true fullscreen with F11 and visible window controls. Window-manager behavior still needs Windows and multi-monitor verification.
+
+## Login throttling and inactivity locking — 13 November 2026
+
+- Five unsuccessful sign-in attempts pause that shop/account for 60 seconds. Correct passwords cannot bypass the pause. Attempts persist across staff-service instances and restarts, and owner/staff identities are counted separately.
+- Genuine sessions expire after 15 minutes without authorized activity. Key press, mouse press and wheel activity in this app refreshes the session at most once per second; no entered content is read or retained. The 15-second background check validates without extending the timer.
+- Expired/revoked sessions cannot be revived. Idle session checks and activity use the same validated clock reading; backward clock changes fail closed.
+- Eleven additional clock-driven tests cover exact boundaries, polling/activity, denied permissions, forged/expired/revoked tokens, cooldown scope/persistence/reopen, clock rollback and timestamp reuse. All 231 integrated tests pass and the Linux package was rebuilt.
+- Native staff/access-dialog and compact-form renders were inspected after adding the event listener: [access dialog](artifacts/desktop-staff-access-dialog.png), [compact form](artifacts/desktop-staff-form-compact.png). A controlled native idle-to-lock transition and full minute-long cooldown were not confirmed in this pass; exact service behavior is covered by the automated clock tests. Do not treat a timer screenshot filename as proof of a transition.
+- Preview-only POS_PREVIEW_IDLE_MS can shorten the isolated fixture's timeout. The installed app retains the 15-minute default. PINs, owner credential recovery, actor attribution, approval workflows and a broader security review remain unfinished.
 
 ## Local staff identities and permissions — 13 November 2026
 
@@ -17,7 +26,7 @@
 - Owner-managed local staff accounts use separate salted PBKDF2 password credentials. Owners add cashier/manager accounts, rename/change roles, disable/enable and reset passwords. Staff accounts and credentials are excluded from business backups.
 - Cashiers can make cash sales and view/print/export individual receipts. Managers have operational stock/customer/credit/discount/refund/money/report/supplier access. Staff management and encrypted shop backups are owner-only.
 - The app installs a genuine-session validator on repository mutations, including successful-operation replays. Credit and discounted checkout require additional permissions. Credential/role/active changes invalidate staff sessions across instances through version checks; the shell rechecks sessions every 15 seconds and on navigation.
-- Restore from the locked picker uses an explicit trusted recovery connection and still requires backup decryption plus new-owner credential provisioning. It returns to owner sign-in. Working business DB encryption, staff PINs, attempt throttling, idle expiry, actor attribution and approval flows remain pending.
+- Restore from the locked picker uses an explicit trusted recovery connection and still requires backup decryption plus new-owner credential provisioning. It returns to owner sign-in. Working business DB encryption, staff PINs, actor attribution and approval flows remain pending.
 - Sixteen additional tests cover role policy, denied mutations leaving whole snapshots unchanged, genuine credentials, forged sessions, revocation/reset, cross-instance persistence, safe create retries, backup exclusion and JVM class loading. All 220 integrated tests pass; Linux distributable rebuilt.
 - Native isolated preview: inspected owner staff management, locked the workspace, selected Sample cashier, entered its password and unlocked the restricted Sell/Sales workspace. Evidence: [management](artifacts/desktop-staff-management.png), [sign-in](artifacts/desktop-staff-sign-in.png), [cashier workspace](artifacts/desktop-cashier-workspace.png).
 - A runtime bytecode/class-loading problem in the first screen structure was corrected and is covered by a regression test. Native cashier payment completion, full staff creation/reset dialogs, manager sign-in, restored-backup sign-in and automatic revocation polling were not exercised end-to-end in this visual pass; their service/repository paths have automated coverage.

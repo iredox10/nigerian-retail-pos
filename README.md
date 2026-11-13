@@ -108,3 +108,5 @@ Payment assignments can be corrected under Customers → View history → Assign
 The remaining whole-product work is tracked in [IMPLEMENTATION_TODO.md](IMPLEMENTATION_TODO.md). Checkboxes represent verified subtasks, and the full feature specification remains authoritative.
 
 Local staff access uses owner, manager and cashier roles. Owners manage staff under More → Staff & permissions. Staff use full passwords on this computer; PINs, remote accounts and actor attribution are separate unfinished items. Cashiers can make cash sales and view receipts; managers can perform operational work; owner-only staff management and backup actions are enforced through the active application session.
+
+Local sign-in pauses for 60 seconds after five unsuccessful attempts per shop/account. Sessions lock after 15 minutes of inactivity; ordinary app input keeps a valid session active. Restarting the app does not clear failed-login cooldowns.

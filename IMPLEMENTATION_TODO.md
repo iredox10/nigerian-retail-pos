@@ -19,7 +19,9 @@ A checked box means that specific item has implementation and recorded verificat
 - [ ] Short staff PIN unlock with attempt limits and secure device policy.
 - [ ] Attribute every financial/catalogue/correction event to an actor.
 - [ ] Owner/manager approval requests and auditable overrides.
-- [ ] Session expiry, inactivity lock, credential recovery and staff security review.
+- [x] Persistent failed-login throttling.
+- [x] Session expiry and inactivity lock.
+- [ ] Owner credential recovery and staff security review.
 - [ ] Staff commissions and performance reports.
 
 ## Next implementation: quantities and catalogue
