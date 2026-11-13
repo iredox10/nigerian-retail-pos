@@ -15,6 +15,41 @@ data class CreditReceiptBalance(val sale: Sale, val allocatedMinor: Long, val re
     }
 }
 
+enum class DebtAgeBand(val label: String) {
+    NOT_LATE("Due today or later"),
+    LATE_1_7("1–7 days late"),
+    LATE_8_30("8–30 days late"),
+    LATE_31_60("31–60 days late"),
+    LATE_61_90("61–90 days late"),
+    LATE_OVER_90("Over 90 days late"),
+    UNDATED("No agreed due date");
+
+    companion object {
+        fun classify(dueDate: String?, asOf: LocalDate): DebtAgeBand {
+            if (dueDate == null) return UNDATED
+            val days = java.time.temporal.ChronoUnit.DAYS.between(LocalDate.parse(dueDate), asOf)
+            return when {
+                days <= 0 -> NOT_LATE
+                days <= 7 -> LATE_1_7
+                days <= 30 -> LATE_8_30
+                days <= 60 -> LATE_31_60
+                days <= 90 -> LATE_61_90
+                else -> LATE_OVER_90
+            }
+        }
+    }
+}
+
+/** Null means exact ageing is unavailable, rather than a zero debt in every band. */
+data class DebtAgeingAmounts(val amounts: Map<DebtAgeBand, Long>) {
+    init {
+        require(amounts.keys == DebtAgeBand.entries.toSet() && amounts.values.all { it >= 0 })
+        exactTotal(amounts.values.toList())
+    }
+    val totalMinor: Long get() = exactTotal(amounts.values.toList())
+    val overdueMinor: Long get() = exactTotal(amounts.filterKeys { it != DebtAgeBand.NOT_LATE && it != DebtAgeBand.UNDATED }.values.toList())
+}
+
 /** Original due-date groups are historical; receipt balances use explicit allocations only. */
 data class CreditReviewRow(
     val customer: Customer,
@@ -26,6 +61,7 @@ data class CreditReviewRow(
     val invoiceBalances: List<CreditReceiptBalance> = emptyList(),
     val unallocatedRepaymentsMinor: Long = 0,
     val preciseOverdueMinor: Long? = null,
+    val ageing: DebtAgeingAmounts? = null,
 ) {
     val currentDebtMinor: Long get() = customer.balanceMinor
     val pastDueOriginalCreditMinor: Long get() = exactTotal(pastDueSales.map { it.creditMinor })
@@ -39,6 +75,25 @@ private fun exactTotal(values: List<Long>): Long = values.fold(BigInteger.ZERO) 
 
 object DebtAgeingService {
     const val ALLOCATION_NOTICE = "Payments not allocated to receipts remain explicitly unassigned. Assign them before calculating an exact overdue invoice balance. Current customer debt includes all saved dates."
+
+    /** Export every customer in the supplied review, with blanks when ageing is unknown. */
+    fun csv(tenantId: String, rows: List<CreditReviewRow>, asOf: LocalDate): String {
+        require(rows.all { it.customer.tenantId == tenantId }) { "Credit export includes another shop." }
+        require(rows.map { it.customer.id }.distinct().size == rows.size) { "Credit export has duplicate customers." }
+        fun amount(value: Long) = CsvCell.Number(java.math.BigDecimal.valueOf(value, 2).toPlainString())
+        return CsvService.encode(
+            listOf("Customer ID", "Customer", "Due-date classification WAT", "Balance basis", "Current debt NGN", "Unassigned repayments NGN", "Exact ageing available") + DebtAgeBand.entries.map { it.label + " NGN" },
+            rows.map { row ->
+                // Prevent a caller from relabeling a review with another classification date.
+                val expected = if (row.unallocatedRepaymentsMinor == 0L) DebtAgeBand.entries.associateWith { band ->
+                    exactTotal(row.invoiceBalances.filter { DebtAgeBand.classify(it.sale.dueDate, asOf) == band }.map { it.remainingMinor })
+                } else null
+                require(row.ageing?.amounts == expected) { "Refresh credit ageing for the export date." }
+                listOf(CsvCell.Text(row.customer.id), CsvCell.Text(row.customer.name), CsvCell.Text(asOf.toString()), CsvCell.Text("Current saved balances; not a historical balance"), amount(row.currentDebtMinor), amount(row.unallocatedRepaymentsMinor), CsvCell.Text((row.ageing != null).toString())) +
+                    DebtAgeBand.entries.map { band -> row.ageing?.amounts?.get(band)?.let(::amount) ?: CsvCell.Text("") }
+            },
+        )
+    }
 
     /**
      * Supply complete local history. [asOf] classifies due dates only: balances remain current,
@@ -100,7 +155,11 @@ object DebtAgeingService {
             val remaining=exactTotal(receiptBalances.map { it.remainingMinor })
             require(remaining>=unassigned && remaining-unassigned==customer.balanceMinor) { "Receipt allocations do not reconcile with current customer debt." }
             if (customer.balanceMinor == 0L) return@mapNotNull null
-            val overdue=if(unassigned==0L) exactTotal(receiptBalances.filter { dueDates[it.sale.id]?.isBefore(asOf)==true }.map { it.remainingMinor }) else null
+            val ageing = if (unassigned == 0L) DebtAgeingAmounts(DebtAgeBand.entries.associateWith { band ->
+                exactTotal(receiptBalances.filter { DebtAgeBand.classify(it.sale.dueDate, asOf) == band }.map { it.remainingMinor })
+            }) else null
+            require(ageing == null || ageing.totalMinor == customer.balanceMinor) { "Debt ageing does not reconcile with current customer debt." }
+            val overdue=ageing?.overdueMinor
             CreditReviewRow(
                 customer,
                 past,
@@ -111,6 +170,7 @@ object DebtAgeingService {
                 receiptBalances,
                 unassigned,
                 overdue,
+                ageing,
             )
         }.sortedWith(compareBy<CreditReviewRow> { if (it.pastDueSales.isNotEmpty()) 0 else 1 }
             .thenBy(nullsLast()) { it.earliestRecordedDueDate }.thenBy { it.customer.name }.thenBy { it.customer.id })
