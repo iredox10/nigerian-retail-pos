@@ -44,9 +44,22 @@ data class Customer(
     }
 }
 
-data class CartLine(val product: Product, val quantity: Int) {
-    init { require(quantity > 0) { "Choose a quantity greater than zero." } }
-    val totalMinor: Long get() = multiplyMoney(product.priceMinor, quantity)
+data class CartLine(
+    val product: Product, val quantity: Int,
+    val sellingUnitId: String? = null,
+    val sellingUnit: String = product.unit,
+    val unitPriceMinor: Long = product.priceMinor,
+    val baseUnitsPerUnit: Int = 1,
+) {
+    init {
+        require(quantity > 0) { "Choose a quantity greater than zero." }
+        require(sellingUnitId == null || sellingUnitId.isNotBlank())
+        require(sellingUnit.isNotBlank() && unitPriceMinor >= 0 && baseUnitsPerUnit > 0)
+        require(sellingUnitId != null || (sellingUnit == product.unit && unitPriceMinor == product.priceMinor && baseUnitsPerUnit == 1)) { "Base selling units must match the item." }
+    }
+    val key: String get() = sellingUnitId?.let { product.id + "~" + it } ?: product.id
+    val baseQuantity: Long get() = quantity.toLong() * baseUnitsPerUnit
+    val totalMinor: Long get() = multiplyMoney(unitPriceMinor, quantity)
 }
 
 /** Cash means cash applied to this sale, excluding change handed back. */
@@ -66,7 +79,7 @@ data class Sale(
         require(id.isNotBlank() && tenantId.isNotBlank() && createdAt.isNotBlank())
         require(lines.isNotEmpty()) { "Add an item before taking payment." }
         require(lines.all { it.product.tenantId == tenantId }) { "Items belong to another shop." }
-        require(lines.map { it.product.id }.distinct().size == lines.size) { "Combine repeated items into one line." }
+        require(lines.map { it.key }.distinct().size == lines.size) { "Combine repeated items into one line." }
         require(totalMinor >= 0 && totalMinor == cartTotal(lines)) { "Sale total does not match its items." }
         require(cashMinor >= 0 && creditMinor >= 0 && addMoney(cashMinor, creditMinor) == totalMinor) {
             "Cash and credit must cover the sale exactly."
@@ -96,7 +109,7 @@ fun checkout(
     require(customer == null || customer.tenantId == tenantId) { "Customer belongs to another shop." }
     require(lines.isNotEmpty()) { "Add an item before taking payment." }
     require(lines.all { it.product.tenantId == tenantId }) { "Items belong to another shop." }
-    require(lines.all { it.quantity.toDouble() <= it.product.stock }) { "There is not enough stock for this sale." }
+    require(lines.groupBy { it.product.id }.values.all { group -> group.fold(0L) { sum, line -> addMoney(sum, line.baseQuantity) }.toDouble() <= group.first().product.stock }) { "There is not enough stock for this sale." }
     val total = cartTotal(lines)
     val appliedCash = minOf(cashGivenMinor, total)
     val credit = total - appliedCash
