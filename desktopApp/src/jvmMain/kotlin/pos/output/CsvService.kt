@@ -45,8 +45,8 @@ object CsvService {
 
     fun products(tenantId: String, values: List<Product>): String {
         require(values.all { it.tenantId == tenantId }) { "Export includes another shop's stock." }
-        return encode(listOf("Product ID", "Name", "Selling unit", "Selling price NGN", "Current stock quantity", "Barcode", "Archived", "Reorder level (blank means disabled)", "Opening quantity (blank means unknown)", "Opening recorded at UTC", "SKU", "Category", "Brand", "Aliases", "Favourite"), values.map {
-            listOf(text(it.id), text(it.name), text(it.unit), naira(it.priceMinor), CsvCell.Number(BigDecimal.valueOf(it.stock).toPlainString()), text(it.barcode.orEmpty()), text(it.archived.toString()),it.reorderLevel?.let { level -> CsvCell.Number(level.toString()) } ?: text(""),it.openingStock?.let { stock -> CsvCell.Number(BigDecimal.valueOf(stock).toPlainString()) } ?: text(""),text(it.createdAt.orEmpty()),text(it.sku.orEmpty()),text(it.category.orEmpty()),text(it.brand.orEmpty()),text(it.aliases.joinToString(" | ")),text(it.favourite.toString()))
+        return encode(listOf("Product ID", "Name", "Selling unit", "Selling price NGN", "Current stock quantity", "Barcode", "Archived", "Reorder level (blank means disabled)", "Opening quantity (blank means unknown)", "Opening recorded at UTC", "SKU", "Category", "Brand", "Aliases", "Favourite", "Quantity decimal places"), values.map {
+            listOf(text(it.id), text(it.name), text(it.unit), naira(it.priceMinor), CsvCell.Number(it.stockLabel), text(it.barcode.orEmpty()), text(it.archived.toString()),it.reorderLevel?.let { level -> CsvCell.Number(level.toString()) } ?: text(""),it.openingStock?.let { stock -> CsvCell.Number(BigDecimal.valueOf(stock).toPlainString()) } ?: text(""),text(it.createdAt.orEmpty()),text(it.sku.orEmpty()),text(it.category.orEmpty()),text(it.brand.orEmpty()),text(it.aliases.joinToString(" | ")),text(it.favourite.toString()),CsvCell.Number(it.quantityPrecision.toString()))
         })
     }
 
@@ -72,7 +72,7 @@ object CsvService {
     fun stockReceipts(tenantId: String, values: List<StockReceipt>): String {
         require(values.all { it.tenantId == tenantId }) { "Export includes another shop's purchases." }
         return encode(listOf("Receipt ID", "Recorded at UTC", "Product ID", "Item", "Buying unit", "Quantity", "Buying price per unit NGN", "Purchase total NGN", "Cash paid at purchase NGN", "Credit at purchase NGN", "Supplier", "Base selling unit", "Base units per buying unit", "Base quantity added", "Buying unit ID"), values.map {
-            listOf(text(it.id), text(it.createdAt), text(it.productId), text(it.productName), text(it.unit), CsvCell.Number(it.quantity.toString()), naira(it.unitCostMinor), naira(it.totalCostMinor), naira(it.paidCashMinor), naira(it.unpaidMinor), text(it.supplierName), text(it.baseUnit), CsvCell.Number(it.baseUnitsPerUnit.toString()), CsvCell.Number(it.baseQuantity.toString()), text(it.purchaseUnitId.orEmpty()))
+            listOf(text(it.id), text(it.createdAt), text(it.productId), text(it.productName), text(it.unit), CsvCell.Number(it.quantityLabel), naira(it.unitCostMinor), naira(it.totalCostMinor), naira(it.paidCashMinor), naira(it.unpaidMinor), text(it.supplierName), text(it.baseUnit), CsvCell.Number(it.baseUnitsPerUnit.toString()), CsvCell.Number(it.baseQuantityLabel), text(it.purchaseUnitId.orEmpty()))
         })
     }
 

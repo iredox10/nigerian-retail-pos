@@ -1,5 +1,7 @@
 package pos.output
 
+import pos.domain.*
+
 import pos.domain.Sale
 import pos.domain.SaleReturn
 import pos.domain.Tenant
@@ -38,13 +40,13 @@ object ReceiptService {
             appendLine("----------------------------------------")
             sale.lines.forEach { line ->
                 appendLine(line.product.name)
-                appendLine("  ${line.quantity} ${line.sellingUnit} x ${money(line.unitPriceMinor)}")
+                appendLine("  ${line.quantityLabel} ${line.sellingUnit} x ${money(line.unitPriceMinor)}")
                 if (line.discountPerUnitMinor > 0) {
                     appendLine("  Discount: ${money(line.discountPerUnitMinor)} per ${line.sellingUnit}")
                     appendLine("  Reason: ${line.discountReason}")
                     appendLine("  Price paid: ${money(line.netUnitPriceMinor)} per ${line.sellingUnit}")
                 }
-                if (line.baseUnitsPerUnit > 1) appendLine("  Contains ${line.baseQuantity} ${line.product.unit}")
+                if (line.baseUnitsPerUnit > 1) appendLine("  Contains ${quantityLabel(line.baseQuantity,line.product.quantityPrecision)} ${line.product.unit}")
                 appendLine("  ${money(line.totalMinor)}")
             }
             appendLine("----------------------------------------")
@@ -66,7 +68,7 @@ object ReceiptService {
                 returns.forEach { item ->
                     appendLine("Return: ${item.id}")
                     appendLine(receiptDate(item.createdAt))
-                    item.lines.forEach { line -> appendLine("  ${line.quantity} ${line.unit} ${line.name}") }
+                    item.lines.forEach { line -> appendLine("  ${line.quantityLabel} ${line.unit} ${line.name}") }
                     appendLine("Cash refunded: ${money(item.refundMinor)}")
                     appendLine(if (item.restock) "Returned goods added back to stock" else "Returned goods not added to sellable stock")
                     appendLine("Reason: ${item.reason}")
