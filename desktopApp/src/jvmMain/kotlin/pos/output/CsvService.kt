@@ -45,8 +45,8 @@ object CsvService {
 
     fun products(tenantId: String, values: List<Product>): String {
         require(values.all { it.tenantId == tenantId }) { "Export includes another shop's stock." }
-        return encode(listOf("Product ID", "Name", "Selling unit", "Selling price NGN", "Current stock quantity", "Barcode", "Archived", "Reorder level (blank means disabled)", "Opening quantity (blank means unknown)", "Opening recorded at UTC"), values.map {
-            listOf(text(it.id), text(it.name), text(it.unit), naira(it.priceMinor), CsvCell.Number(BigDecimal.valueOf(it.stock).toPlainString()), text(it.barcode.orEmpty()), text(it.archived.toString()),it.reorderLevel?.let { level -> CsvCell.Number(level.toString()) } ?: text(""),it.openingStock?.let { stock -> CsvCell.Number(BigDecimal.valueOf(stock).toPlainString()) } ?: text(""),text(it.createdAt.orEmpty()))
+        return encode(listOf("Product ID", "Name", "Selling unit", "Selling price NGN", "Current stock quantity", "Barcode", "Archived", "Reorder level (blank means disabled)", "Opening quantity (blank means unknown)", "Opening recorded at UTC", "SKU", "Category", "Brand", "Aliases", "Favourite"), values.map {
+            listOf(text(it.id), text(it.name), text(it.unit), naira(it.priceMinor), CsvCell.Number(BigDecimal.valueOf(it.stock).toPlainString()), text(it.barcode.orEmpty()), text(it.archived.toString()),it.reorderLevel?.let { level -> CsvCell.Number(level.toString()) } ?: text(""),it.openingStock?.let { stock -> CsvCell.Number(BigDecimal.valueOf(stock).toPlainString()) } ?: text(""),text(it.createdAt.orEmpty()),text(it.sku.orEmpty()),text(it.category.orEmpty()),text(it.brand.orEmpty()),text(it.aliases.joinToString(" | ")),text(it.favourite.toString()))
         })
     }
 

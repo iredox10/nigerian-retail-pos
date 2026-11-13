@@ -15,7 +15,10 @@ class InventoryCsvTest {
     }
     @Test fun unknownOpeningIsNotExportedAsZeroAndForeignMovementsAreRejected() {
         val p=Product("p","shop","Soap","piece",10000,8.0)
-        assertTrue(CsvService.products("shop",listOf(p)).lines()[1].endsWith("\"\",\"\",\"\""))
+        val cells=CsvService.products("shop",listOf(p)).lines()[1].split(',')
+        assertEquals("\"\"",cells[7],"Reorder level remains unset")
+        assertEquals("\"\"",cells[8],"Unknown opening quantity is blank, not zero")
+        assertEquals("\"\"",cells[9],"Unknown opening date remains blank")
         val m=InventoryMovement("s","other","p","sale",-1.0,"source","2026-11-13T11:00:00Z","Sold")
         assertFailsWith<IllegalArgumentException> {CsvService.inventoryMovements("shop",listOf(p),listOf(m))}
         assertFailsWith<IllegalArgumentException> {CsvService.inventoryMovements("shop",emptyList(),listOf(m.copy(tenantId="shop")))}
