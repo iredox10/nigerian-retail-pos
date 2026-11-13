@@ -82,3 +82,7 @@ The existing Stock contextual-detail pattern and Carbon table reference own this
 ## Selling units and shared stock — 13 November 2026
 
 Keep packaging setup inside item management. Show a labeled “Sell as” control only when alternate selling definitions exist, with each whole-unit price and base equivalent. Selecting another unit never reinterprets a basket line; carton and loose quantities remain distinct. Show base-stock deduction beneath pack lines. Both controls and the repository aggregate mixed-line stock requirements. Archived definitions preserve historical receipts/refunds but cannot create new sales. Persist opaque line keys in drafts; absent units must block payment with an explicit recovery action. Preserve the existing reference lock and tokens.
+
+## Negotiated prices — 13 November 2026
+
+Use the existing labeled contextual action on each basket line. Adapt the locked guide's recognition principle: show the catalogue price, new price per named unit, required reason and resulting total. Keep the fixed payment action and the original receipt-like total panel. No new tokens or navigation. Persist discount and price reference with the draft; a changed catalogue price requires explicit review. Receipts explain original price, reduction and net price so partial returns can refund an exact amount. Only the current owner workspace exists; do not imply staff approval enforcement.

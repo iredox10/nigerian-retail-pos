@@ -5,11 +5,20 @@
 ## Verified
 
 - Shared and desktop compilation with Kotlin 2.2.20, Compose 1.9.1 and JDK 17.
-- **170 automated tests pass**, with zero failures or errors. This adds 11 selling-unit integrity tests, a mixed-pack receipt test and a mixed-key draft recovery test to the previous 157-test checkpoint.
+- **183 automated tests pass**, with zero failures or errors. The discount checkpoint adds 10 persistence/recovery/output integration tests and three shared calculation tests to the previous 170-test checkpoint.
 - Coverage includes cross-tenant rejection, exact kobo amounts, retry deduplication, return limits/restocking, supplier overpayment, atomic import rejection, WAT date boundaries, spreadsheet formula protection, encrypted tenant-only backup, wrong passwords, corrupted input, repeated restore and cash/debt-history consistency.
 - Linux desktop distribution rebuilt successfully using `gradle :desktopApp:createDistributable` at `desktopApp/build/compose/binaries/main/app/RetailPOS`.
 - Native isolated previews rendered for Reports, Sales, Suppliers, Backup and Import. Reports filled the 1920 × 1080 display; Sales and Suppliers were also inspected in the compositor-provided narrower window. See [Reports](artifacts/desktop-reports.png), [Sales](artifacts/desktop-sales.png), and [Suppliers](artifacts/desktop-suppliers.png), [Backup](artifacts/desktop-backup.png), and [Import](artifacts/desktop-import.png).
 - Previous fullscreen verification remains recorded in [the fullscreen render](artifacts/desktop-fullscreen.png). Startup requests true fullscreen with F11 and visible window controls. Window-manager behavior still needs Windows and multi-monitor verification.
+
+## Negotiated unit prices — 13 November 2026
+
+- Each basket line offers Change price with the original unit price, agreed lower price and required reason. Discounts use integer kobo per sold unit; quantities/pack factors stay unchanged. Full discounts are explicit and reasoned; markups, basket/percentage discounts, minimum margins and staff approval limits remain pending.
+- Receipts retain catalogue price, reduction, reason and price paid. Cash returns use the net unit price, including partial pack/loose returns; original transactions stay intact. Sales CSV includes original subtotal and discount totals.
+- Drafts preserve discount values and reasons through restart/hold/resume. If the current catalogue price differs from the saved reference price, payment is blocked until the discount is reviewed or removed. Old backups/drafts default to no discount.
+- Automated checks cover net credit limits, overflow, unchanged catalogue/stock conversion, partial refunds, tenant isolation, duplicate retries, malformed backups/drafts and older backup defaults.
+- Native isolated preview: changed 3 Malt bottles from ₦500 to ₦450 each, entered a reason, observed ₦150 discount and ₦13,850 basket total, paid exact cash and reopened the saved receipt. Evidence: [price entry](artifacts/desktop-discount-price.png), [basket](artifacts/desktop-discount-basket.png), [saved sale](artifacts/desktop-discount-saved.png), [receipt](artifacts/desktop-discount-receipt.png).
+- Linux distributable rebuilt successfully. Merchant research, physical printer/scanner checks and staff authorization remain outstanding.
 
 ## Selling packs and loose units — 13 November 2026
 
