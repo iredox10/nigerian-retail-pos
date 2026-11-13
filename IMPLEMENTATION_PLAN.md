@@ -37,6 +37,22 @@ outstanding implementation, not completed work. External integrations are unavai
 
 ## Phase 3: trading and financial completeness
 
+### Current five-agent assignments
+
+The following work is underway; assignment does not mean completion. Each agent
+must deliver a usable local journey, meaningful integrity checks and small commits.
+The coordinator integrates migrations, backups, routes and rendered/offline checks.
+
+- [ ] Basket discounts: exact fixed/percentage allocation, measured quantities, saved baskets and refund conservation.
+- [ ] Supplier profiles: contact/terms/history, explicit purchase links and stable-account statements.
+- [ ] Stock-count sessions: durable multi-item drafts, cutoff/stale-count checks, atomic posting and preserved history.
+- [ ] Barcode labels: validated supported symbology, file generation and native print submission with hardware limits recorded.
+- [ ] Shop and receipt settings: durable business/contact settings, history, backups and rendered receipt branding.
+
+These run in waves of up to three workers alongside the coordinator. The full
+remaining specification below remains in scope; account/hardware/field research
+dependencies must not be marked successful without evidence.
+
 - [ ] Nested packages/repacking, variants/images, labels, reviewed bulk catalogue updates.
 - [ ] Basket discounts, price lists, promotions, bundles, floor-price approvals.
 - [ ] Explicit manual electronic-payment records, split tenders, customer advances/change owed and reversals.
