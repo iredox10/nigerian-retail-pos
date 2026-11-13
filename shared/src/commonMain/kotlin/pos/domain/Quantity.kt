@@ -99,3 +99,17 @@ private fun quantitySum(left: Long, right: Long): Long {
     require(left <= Long.MAX_VALUE - right) { "Quantity or amount exceeds supported range." }
     return left + right
 }
+
+/** Legacy Double fields are display projections; scaled integers are authoritative for new goods. */
+fun quantityScaleFactor(precision: Int): Long {
+    require(precision in 0..6)
+    var scale = 1L
+    repeat(precision) { scale *= 10 }
+    return scale
+}
+fun quantityLabel(scaled: Long, precision: Int): String = Quantity(scaled, precision).toString().let {
+    if (precision == 0) it else it.trimEnd('0').trimEnd('.')
+}
+fun quantityCount(text: String, precision: Int): Int? = parseQuantity(text, precision)?.scaledUnits
+    ?.takeIf { it in 1..Int.MAX_VALUE.toLong() }?.toInt()
+fun projectedQuantity(scaled: Long, precision: Int): Double = scaled.toDouble() / quantityScaleFactor(precision)

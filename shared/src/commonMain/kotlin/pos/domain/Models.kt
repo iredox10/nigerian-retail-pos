@@ -22,8 +22,12 @@ data class Product(
     val brand: String? = null,
     val aliases: List<String> = emptyList(),
     val favourite: Boolean = false,
+    val quantityPrecision: Int = 0,
+    val stockScaled: Long? = null,
 ) {
     init {
+        require(quantityPrecision in 0..6)
+        require(stockScaled == null || stockScaled in 0..9_007_199_254_740_991L)
         ProductMetadata(sku, category, brand, aliases, favourite)
         require(id.isNotBlank() && tenantId.isNotBlank())
         require(name.isNotBlank() && unit.isNotBlank())
@@ -35,6 +39,11 @@ data class Product(
         require(barcode == null || (barcode.isNotBlank() && barcode == barcode.trim() && barcode.length <= 128 && barcode.none { it.isISOControl() })) { "Use a non-empty barcode of at most 128 characters." }
         require(stock.isFinite() && stock >= 0 && stock <= 9_007_199_254_740_991.0) { "Stock must be a non-negative quantity within the supported exact range." }
     }
+    // Older catalogues allowed fractional opening balances without a precision policy.
+    // Keep their displayed balance; only its whole portion is available for whole-unit sales.
+    val exactStockScaled: Long get() = stockScaled ?: if (quantityPrecision == 0) stock.toLong() else
+        (stock * quantityScaleFactor(quantityPrecision)).toLong().also { require(projectedQuantity(it, quantityPrecision) == stock) { "Stock does not match this item precision." } }
+    val stockLabel: String get() = if (stockScaled == null && quantityPrecision == 0 && stock != stock.toLong().toDouble()) stock.toString() else quantityLabel(exactStockScaled, quantityPrecision)
 }
 
 data class Customer(
@@ -58,8 +67,10 @@ data class CartLine(
     val baseUnitsPerUnit: Int = 1,
     val discountPerUnitMinor: Long = 0,
     val discountReason: String? = null,
+    val quantityPrecision: Int = if (sellingUnitId == null) product.quantityPrecision else 0,
 ) {
     init {
+        require(quantityPrecision in 0..6 && quantityPrecision == (if(sellingUnitId==null) product.quantityPrecision else 0))
         require(quantity > 0) { "Choose a quantity greater than zero." }
         require(discountPerUnitMinor >= 0 && discountPerUnitMinor <= unitPriceMinor) { "Discount must be between zero and the selling price." }
         require((discountPerUnitMinor == 0L) == (discountReason == null)) { "A discount needs a reason; remove the reason when removing a discount." }
@@ -69,11 +80,12 @@ data class CartLine(
         require(sellingUnitId != null || (sellingUnit == product.unit && unitPriceMinor == product.priceMinor && baseUnitsPerUnit == 1)) { "Base selling units must match the item." }
     }
     val key: String get() = sellingUnitId?.let { product.id + "~" + it } ?: product.id
-    val baseQuantity: Long get() = quantity.toLong() * baseUnitsPerUnit
+    val quantityLabel: String get() = quantityLabel(quantity.toLong(), quantityPrecision)
+    val baseQuantity: Long get() = Quantity(quantity.toLong(), quantityPrecision).rescale(product.quantityPrecision).timesWhole(baseUnitsPerUnit.toLong()).scaledUnits
     val netUnitPriceMinor: Long get() = unitPriceMinor - discountPerUnitMinor
-    val grossTotalMinor: Long get() = multiplyMoney(unitPriceMinor, quantity)
-    val discountTotalMinor: Long get() = multiplyMoney(discountPerUnitMinor, quantity)
-    val totalMinor: Long get() = multiplyMoney(netUnitPriceMinor, quantity)
+    val grossTotalMinor: Long get() = Quantity(quantity.toLong(), quantityPrecision).lineTotalMinor(unitPriceMinor)
+    val discountTotalMinor: Long get() = grossTotalMinor - totalMinor
+    val totalMinor: Long get() = Quantity(quantity.toLong(), quantityPrecision).lineTotalMinor(netUnitPriceMinor)
 }
 
 /** Cash means cash applied to this sale, excluding change handed back. */
@@ -128,7 +140,7 @@ fun checkout(
     require(customer == null || customer.tenantId == tenantId) { "Customer belongs to another shop." }
     require(lines.isNotEmpty()) { "Add an item before taking payment." }
     require(lines.all { it.product.tenantId == tenantId }) { "Items belong to another shop." }
-    require(lines.groupBy { it.product.id }.values.all { group -> group.fold(0L) { sum, line -> addMoney(sum, line.baseQuantity) }.toDouble() <= group.first().product.stock }) { "There is not enough stock for this sale." }
+    require(lines.groupBy { it.product.id }.values.all { group -> group.fold(0L) { sum, line -> addMoney(sum, line.baseQuantity) } <= group.first().product.exactStockScaled }) { "There is not enough stock for this sale." }
     val total = cartTotal(lines)
     val appliedCash = minOf(cashGivenMinor, total)
     val credit = total - appliedCash

@@ -6,19 +6,23 @@ data class StockReceipt(
     val unit: String, val quantity: Int, val unitCostMinor: Long, val totalCostMinor: Long,
     val paidCashMinor: Long, val supplierName: String, val createdAt: String,
     val baseUnit: String = unit, val baseUnitsPerUnit: Int = 1, val purchaseUnitId: String? = null,
+    val quantityPrecision: Int = 0, val basePrecision: Int = quantityPrecision,
 ) {
     init {
+        require(quantityPrecision in 0..6 && basePrecision in 0..6 && quantityPrecision == (if (purchaseUnitId == null) basePrecision else 0))
         require(id.isNotBlank() && tenantId.isNotBlank() && productId.isNotBlank())
         require(productName.isNotBlank() && unit.isNotBlank() && quantity > 0)
         require(baseUnit.isNotBlank() && baseUnitsPerUnit > 0)
         require(purchaseUnitId == null || purchaseUnitId.isNotBlank())
         require(purchaseUnitId != null || (baseUnitsPerUnit == 1 && unit == baseUnit)) { "A converted receipt must identify its buying unit." }
         require(baseQuantity <= 9_007_199_254_740_991L) { "Converted stock exceeds the exact supported range." }
-        require(unitCostMinor >= 0 && totalCostMinor == multiplyMoney(unitCostMinor, quantity))
+        require(unitCostMinor >= 0 && totalCostMinor == Quantity(quantity.toLong(), quantityPrecision).lineTotalMinor(unitCostMinor))
         require(paidCashMinor in 0..totalCostMinor)
         require((paidCashMinor == totalCostMinor || supplierName.isNotBlank()) && createdAt.isNotBlank())
     }
-    val baseQuantity: Long get() = quantity.toLong() * baseUnitsPerUnit.toLong()
+    val quantityLabel: String get() = quantityLabel(quantity.toLong(), quantityPrecision)
+    val baseQuantity: Long get() = Quantity(quantity.toLong(), quantityPrecision).rescale(basePrecision).timesWhole(baseUnitsPerUnit.toLong()).scaledUnits
+    val baseQuantityLabel: String get() = quantityLabel(baseQuantity, basePrecision)
     val unpaidMinor: Long get() = totalCostMinor - paidCashMinor
 }
 
@@ -26,9 +30,12 @@ data class Expense(val id: String, val tenantId: String, val category: String, v
     init { require(id.isNotBlank() && tenantId.isNotBlank() && category.isNotBlank() && description.isNotBlank() && amountMinor > 0 && createdAt.isNotBlank()) }
 }
 
-data class CashShift(val id: String, val tenantId: String, val openingMinor: Long, val openedAt: String, val closedAt: String?, val expectedMinor: Long?, val countedMinor: Long?) {
+data class CashShift(val id: String, val tenantId: String, val openingMinor: Long, val openedAt: String, val closedAt: String?, val expectedMinor: Long?, val countedMinor: Long?, val openingCount: CashCount? = null, val closingCount: CashCount? = null, val blindClosing: Boolean = false) {
     init {
         require(id.isNotBlank() && tenantId.isNotBlank() && openingMinor >= 0 && openedAt.isNotBlank())
+        require(openingCount == null || openingCount.totalMinor == openingMinor) { "Opening count sheet does not match the opening cash." }
+        require(closingCount == null || (closedAt != null && closingCount.totalMinor == countedMinor)) { "Closing count sheet does not match the counted cash." }
+        require(!blindClosing || closedAt != null) { "A closing count method needs a closed shift." }
         require((closedAt == null && expectedMinor == null && countedMinor == null) || (closedAt != null && expectedMinor != null && expectedMinor >= 0 && countedMinor != null && countedMinor >= 0))
     }
     val differenceMinor: Long? get() = if (countedMinor != null && expectedMinor != null) countedMinor - expectedMinor else null
