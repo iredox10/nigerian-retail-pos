@@ -28,6 +28,7 @@ fun CreditReviewScreen(repo:PosRepository,tenantId:String) {
         var notice by remember { mutableStateOf<String?>(null) }
         var search by remember { mutableStateOf("") }
         var pastDueOnly by remember { mutableStateOf(false) }
+        var editBands by remember { mutableStateOf(false) }
         var bandText by remember { mutableStateOf("7,30,60,90") }
         val scheduleResult=runCatching {AgeingSchedule.parse(bandText)}
         val today=remember(revision) { LocalDate.now(ZoneId.of("Africa/Lagos")) }
@@ -45,17 +46,19 @@ fun CreditReviewScreen(repo:PosRepository,tenantId:String) {
             if(historical) HistoricalCreditService.build(tenantId,repo.customers(tenantId),repo.sales(tenantId),repo.repayments(tenantId),repo.repaymentAllocations(tenantId,includeReversed=true),repo.allocationReversals(tenantId),reviewDate).rows
             else DebtAgeingService.build(tenantId,repo.customers(tenantId),repo.sales(tenantId),repo.repayments(tenantId),today,repo.repaymentAllocations(tenantId))
         }}
-        Column(Modifier.fillMaxSize(),verticalArrangement=Arrangement.spacedBy(16.dp)) {
+        LazyColumn(Modifier.fillMaxSize(),verticalArrangement=Arrangement.spacedBy(16.dp)) {
+            item { Column(verticalArrangement=Arrangement.spacedBy(16.dp)) {
             SectionHeader("Review customer credit",if(historical) "Recorded history through $throughText · End of day in West Africa Time" else "Current balances · $today · West Africa Time")
             Row(horizontalArrangement=Arrangement.spacedBy(16.dp)) {
                 FilterChip(historical,{historical=!historical;notice=null},label={Text("Review an earlier date")})
+                FilterChip(editBands,{editBands=!editBands},label={Text("Change ageing bands")})
             }
             if(historical) {
                 PosTextField(throughText,{throughText=it;notice=null},"Include records through (YYYY-MM-DD)",Modifier.fillMaxWidth(),hint="For example, 2026-11-01")
                 Text("Balances use actions recorded by the end of that date. Later payments, assignments and assignment corrections are excluded. Customer names and contact details are current.",style=MaterialTheme.typography.bodySmall)
             }
             InlineNotice("Receipt balances use assigned payments",if(historical) "Only assignments recorded by the selected date count here. Assigning a payment now does not rewrite this historical view. Exact overdue totals are unavailable when payments were unassigned at that date." else "Assign existing payments under Customers → View history → Assign payments to receipts. While payments remain unassigned, receipt balances are shown before those payments and an exact overdue total is unavailable.",NoticeTone.Info)
-            PosTextField(bandText,{bandText=it;notice=null},"Late-day band limits",Modifier.fillMaxWidth(),hint="7,30,60,90")
+            if(editBands) PosTextField(bandText,{bandText=it;notice=null},"Late-day band limits",Modifier.fillMaxWidth(),hint="7,30,60,90")
             scheduleResult.exceptionOrNull()?.let {InlineNotice("Check the ageing bands",it.message ?: "Use increasing whole day limits.",NoticeTone.Warning)}
             PosTextField(search,{search=it},"Find a customer",Modifier.fillMaxWidth(),hint="Name or phone")
             Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),horizontalArrangement=Arrangement.spacedBy(16.dp)) {
@@ -71,9 +74,10 @@ fun CreditReviewScreen(repo:PosRepository,tenantId:String) {
             }
             notice?.let { Text(it,style=MaterialTheme.typography.bodySmall) }
             loaded.exceptionOrNull()?.let {InlineNotice("Credit review could not be loaded",it.message ?: "Refresh to try again.",NoticeTone.Danger)}
+            } }
             loaded.getOrNull()?.let { rows ->
                 val visible=rows.filter { (!pastDueOnly || it.invoiceBalances.any { balance -> balance.remainingMinor>0 && balance.sale.dueDate?.let { due -> LocalDate.parse(due).isBefore(reviewDate) }==true }) && (it.customer.name.contains(search,true) || it.customer.phone?.contains(search)==true) }
-                LazyColumn(Modifier.weight(1f),verticalArrangement=Arrangement.spacedBy(16.dp)) {
+
                     if(visible.isEmpty())item {EmptyState("No matching customer debts",if(historical) "Customers with debt at the selected date appear here." else "Customers with a current balance appear here. Use Customers to review a profile or record cash received.")}
                     items(visible,key={it.customer.id}) { row ->
                         Surface(shape=MaterialTheme.shapes.medium) {
@@ -104,7 +108,6 @@ fun CreditReviewScreen(repo:PosRepository,tenantId:String) {
                             }
                         }
                     }
-                }
             }
         }
     }
