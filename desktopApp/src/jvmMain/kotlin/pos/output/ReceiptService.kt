@@ -44,15 +44,21 @@ object ReceiptService {
                 if (line.discountPerUnitMinor > 0) {
                     appendLine("  Discount: ${money(line.discountPerUnitMinor)} per ${line.sellingUnit}")
                     appendLine("  Reason: ${line.discountReason}")
-                    appendLine("  Price paid: ${money(line.netUnitPriceMinor)} per ${line.sellingUnit}")
+                    appendLine("  ${if(line.basketDiscountMinor>0) "Price before basket discount" else "Price paid"}: ${money(line.netUnitPriceMinor)} per ${line.sellingUnit}")
                 }
+                if(line.basketDiscountMinor>0) appendLine("  Basket discount share: ${money(line.basketDiscountMinor)}")
                 if (line.baseUnitsPerUnit > 1) appendLine("  Contains ${quantityLabel(line.baseQuantity,line.product.quantityPrecision)} ${line.product.unit}")
                 appendLine("  ${money(line.totalMinor)}")
             }
             appendLine("----------------------------------------")
-            if (sale.lines.any { it.discountPerUnitMinor > 0 }) {
+            if (sale.lines.any { it.discountTotalMinor > 0 }) {
                 appendLine("Before discounts: ${money(cartSubtotal(sale.lines))}")
                 appendLine("Total discount: ${money(cartDiscountTotal(sale.lines))}")
+            }
+            sale.basketDiscount?.let {rule ->
+                appendLine("Basket discount: ${money(sale.lines.sumOf {it.basketDiscountMinor})}")
+                appendLine("Basket discount reason: ${rule.reason}")
+                if(rule.kind=="percentage") appendLine("Requested basket percentage: ${DiscountPercentage(rule.value.toInt()).display()}")
             }
             appendLine("Original sale total: ${money(sale.totalMinor)}")
             appendLine("Cash applied at sale: ${money(sale.cashMinor)}")

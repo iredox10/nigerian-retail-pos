@@ -177,7 +177,7 @@ private fun ReturnItemsDialog(
             val input = quantities[line.key].orEmpty()
             val count = if (input.isBlank()) 0 else quantityCount(input,line.quantityPrecision) ?: error("Invalid quantity")
             require(count in 0..(returnable[line.key] ?: 0))
-            Math.addExact(sum, Quantity((line.quantity-(returnable[line.key] ?: 0)+count).toLong(),line.quantityPrecision).lineTotalMinor(line.netUnitPriceMinor)-Quantity((line.quantity-(returnable[line.key] ?: 0)).toLong(),line.quantityPrecision).lineTotalMinor(line.netUnitPriceMinor))
+            Math.addExact(sum, line.cumulativeRefundMinor(line.quantity-(returnable[line.key] ?: 0)+count)-line.cumulativeRefundMinor(line.quantity-(returnable[line.key] ?: 0)))
         }
     }.getOrNull()
     AlertDialog(onDismissRequest = { if (!saving) dismiss() }, title = { Text("Return items · ${sale.id.take(8)}") },

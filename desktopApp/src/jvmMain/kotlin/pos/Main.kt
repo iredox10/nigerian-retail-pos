@@ -192,8 +192,8 @@ fun main(args: Array<String>) {
                 Box(Modifier.weight(1f).padding(24.dp)) {
                     if (!routeAllowed(route)) Text("Your role cannot open this workspace. Lock the shop to sign in with another account.")
                     else when (route) {
-                        "Sell" -> saleStates.SaveableStateProvider(current.id) { SellScreen(current.id, products, customers, remember(current.id, revision) { repo.sellingUnits(current.id) }, allowCredit = allowed(StaffPermission.SELL_CREDIT), allowDiscounts = allowed(StaffPermission.DISCOUNT)) { lines, cash, customer, operationId, dueDate ->
-                            try { repo.checkout(current.id, lines, cash, customer, operationId,dueDate); revision++; null } catch (e: Exception) { e.message ?: "Sale not saved" }
+                        "Sell" -> saleStates.SaveableStateProvider(current.id) { SellScreen(current.id, products, customers, remember(current.id, revision) { repo.sellingUnits(current.id) }, allowCredit = allowed(StaffPermission.SELL_CREDIT), allowDiscounts = allowed(StaffPermission.DISCOUNT)) { lines, cash, customer, operationId, dueDate, basketDiscount ->
+                            try { repo.checkout(current.id, lines, cash, customer, operationId,dueDate,basketDiscount); revision++; null } catch (e: Exception) { e.message ?: "Sale not saved" }
                         } }
                         "Stock" -> StockScreen(repo, current.id, onChanged={ revision++ }, onImport={ route="Import" })
                         "Customers" -> CustomerWorkspace(repo,current.id) { revision++ }

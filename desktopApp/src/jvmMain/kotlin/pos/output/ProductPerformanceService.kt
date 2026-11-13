@@ -21,6 +21,7 @@ object ProductPerformanceService {
         require(sales.map {it.id}.distinct().size==sales.size && returns.map {it.id}.distinct().size==returns.size) { "Product report contains repeated records." }
         val source=sales.associateBy {it.id}
         val returned=mutableMapOf<Pair<String,String>,Long>()
+        val refunded=mutableMapOf<Pair<String,String>,Long>()
         returns.forEach { refund ->
             val sale=requireNotNull(source[refund.saleId]) { "Return sale is missing from the complete history." }
             require(sale.creditMinor==0L && Instant.parse(refund.createdAt)>=Instant.parse(sale.createdAt)) { "Return has an unsupported sale or recorded date." }
@@ -31,8 +32,13 @@ object ProductPerformanceService {
                 val quantity=Math.addExact(returned[key] ?: 0,line.quantity.toLong())
                 require(quantity<=original.quantity) { "Returned quantity exceeds the original sale." }
                 returned[key]=quantity
+                refunded[key]=Math.addExact(refunded[key] ?: 0,line.totalMinor)
             }
         }
+        sales.forEach {sale -> sale.lines.forEach {line ->
+            val key=sale.id to line.key
+            require((refunded[key] ?: 0)==line.cumulativeRefundMinor(Math.toIntExact(returned[key] ?: 0))) { "Refund amounts do not match the original saved line amount." }
+        }}
         val rows=mutableMapOf<Pair<String,String>,ProductPerformanceRow>()
         val names=mutableMapOf<Pair<String,String>,Pair<Instant,String>>()
         fun append(id:String,name:String,unit:String,time:String,sourceId:String,sold:Long=0,returned:Long=0,amount:Long=0,refund:Long=0,precision:Int=0) {

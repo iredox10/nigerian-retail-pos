@@ -38,8 +38,8 @@ object CsvService {
 
     fun sales(tenantId: String, values: List<Sale>): String {
         require(values.all { it.tenantId == tenantId }) { "Export includes another shop's sales." }
-        return encode(listOf("Sale ID", "Recorded at UTC", "Sale total NGN", "Cash applied at sale NGN", "Credit granted at sale NGN", "Customer ID", "Agreed repayment due date WAT", "Before discounts NGN", "Discount NGN"), values.map {
-            listOf(text(it.id), text(it.createdAt), naira(it.totalMinor), naira(it.cashMinor), naira(it.creditMinor), text(it.customerId.orEmpty()), text(it.dueDate.orEmpty()), naira(cartSubtotal(it.lines)), naira(cartDiscountTotal(it.lines)))
+        return encode(listOf("Sale ID", "Recorded at UTC", "Sale total NGN", "Cash applied at sale NGN", "Credit granted at sale NGN", "Customer ID", "Agreed repayment due date WAT", "Before discounts NGN", "Discount NGN", "Basket discount NGN", "Basket rule", "Basket requested value (kobo or basis points)", "Basket reason"), values.map {
+            listOf(text(it.id), text(it.createdAt), naira(it.totalMinor), naira(it.cashMinor), naira(it.creditMinor), text(it.customerId.orEmpty()), text(it.dueDate.orEmpty()), naira(cartSubtotal(it.lines)), naira(cartDiscountTotal(it.lines)),naira(it.lines.sumOf {line -> line.basketDiscountMinor}),text(it.basketDiscount?.kind.orEmpty()),text(it.basketDiscount?.value?.toString().orEmpty()),text(it.basketDiscount?.reason.orEmpty()))
         })
     }
 
