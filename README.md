@@ -102,3 +102,5 @@ The chosen stack direction is Kotlin Multiplatform/Compose for installed apps, R
 Negotiated unit prices are available through Sell → Change price. Enter the lower price and reason; receipts retain the original price and cash returns refund the net amount. Staff approval limits and percentage/basket discounts remain pending.
 
 Credit review now shows current unpaid balances by days late, including a separate undated group, and exports all customer ageing to CSV. Exact bands remain unavailable while repayments are unassigned; assign payments to receipts under Customers first.
+
+Payment assignments can be corrected under Customers → View history → Assign payments to receipts → Undo assignment. Enter a reason; the original assignment stays in history. Its amount becomes available to assign again. This changes receipt coverage only; customer debt, cash and stock stay unchanged.

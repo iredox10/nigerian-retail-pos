@@ -5,11 +5,22 @@
 ## Verified
 
 - Shared and desktop compilation with Kotlin 2.2.20, Compose 1.9.1 and JDK 17.
-- **189 automated tests pass**, with zero failures or errors. The negotiated-price checkpoint added 13 tests to the previous 170-test checkpoint; six ageing-band tests bring the total to 189.
+- **204 automated tests pass**, with zero failures or errors. The negotiated-price checkpoint added 13 tests to the previous 170-test checkpoint; six ageing-band tests brought the total to 189. Fifteen correction/domain/export tests bring the total to 204.
 - Coverage includes cross-tenant rejection, exact kobo amounts, retry deduplication, return limits/restocking, supplier overpayment, atomic import rejection, WAT date boundaries, spreadsheet formula protection, encrypted tenant-only backup, wrong passwords, corrupted input, repeated restore and cash/debt-history consistency.
 - Linux desktop distribution rebuilt successfully using `gradle :desktopApp:createDistributable` at `desktopApp/build/compose/binaries/main/app/RetailPOS`.
 - Native isolated previews rendered for Reports, Sales, Suppliers, Backup and Import. Reports filled the 1920 × 1080 display; Sales and Suppliers were also inspected in the compositor-provided narrower window. See [Reports](artifacts/desktop-reports.png), [Sales](artifacts/desktop-sales.png), and [Suppliers](artifacts/desktop-suppliers.png), [Backup](artifacts/desktop-backup.png), and [Import](artifacts/desktop-import.png).
 - Previous fullscreen verification remains recorded in [the fullscreen render](artifacts/desktop-fullscreen.png). Startup requests true fullscreen with F11 and visible window controls. Window-manager behavior still needs Windows and multi-monitor verification.
+
+## Correcting payment assignments — 13 November 2026
+
+- Customers → View history → Assign payments to receipts now retains each original assignment and offers Undo assignment with a required reason. Undone history shows its correction time and reason.
+- Undo releases the assigned amount on both the payment and receipt. Reassign it explicitly through the existing form. It records no new payment, refund, stock movement or customer-debt change.
+- Ageing uses active assignments only; released money remains unassigned and exact ageing is unavailable until reassigned. Retrying an old assignment cannot reactivate an undone record.
+- Reports → Payment assignments exports original assignment dates with current Active/Undone status and correction details. Assignment corrections exports events by correction date, even when the original assignment is older.
+- Backups preserve original assignments and undo events, and older backups without corrections remain supported. Staff correction permissions, cash repayment reversals and historical as-of reporting remain separate work.
+- Fifteen additional tests cover correction reason validation, effective caps, reassignment, replay safety, competing undo requests, tenant boundaries, ageing changes, corrupt backup rollback, actual old-database upgrade/reopen and formula-safe correction CSV.
+- Native isolated preview: undid the ₦250 sample assignment, confirmed debt stayed ₦750 and unassigned funds became ₦250, inspected correction history, then explicitly assigned that payment again. Original Undone and new Active rows remained together; available payment returned to ₦0. Evidence: [confirmation](artifacts/desktop-assignment-undo-confirm.png), [released amount](artifacts/desktop-assignment-undone.png), [history](artifacts/desktop-assignment-correction-history.png), [reassigned](artifacts/desktop-assignment-reassigned.png).
+- Linux distributable rebuilt with the integrated checks. CSV formatters are tested; their native save dialogs were not exercised in this correction pass. No merchant or physical peripheral study was performed.
 
 ## Debt-ageing bands — 13 November 2026
 
@@ -18,7 +29,7 @@
 - Export all customer ageing creates spreadsheet-safe CSV with classification date, current-balance basis, unassigned amounts and all bands. Unknown amounts are blank, not zero. Export includes all reviewed customers regardless of the on-screen filter.
 - Six tests verify every boundary, leap-day calendar arithmetic, partial/fully settled receipt bands, reconciliation, unknown values, tenant restrictions, duplicate rows and relabeled export dates.
 - Native isolated preview inspected the rendered rows: Amina's ₦750 current debt appeared entirely under Due today or later, with zero unassigned payments and zero overdue. [Screenshot](artifacts/desktop-debt-ageing.png). The export formatter is tested; the OS save dialog was not exercised in this pass.
-- Current balances are classified using the review date; this is not historical accounting as of that date. Allocation reversals/reassignment, write-offs and reminders remain pending.
+- Current balances are classified using the review date; this is not historical accounting as of that date. Reasoned allocation undo and reassignment are implemented in the correction section below; staff approval limits, write-offs and reminders remain pending.
 
 ## Negotiated unit prices — 13 November 2026
 
@@ -58,7 +69,7 @@
 - Credit review shows remaining receipt balances and exact recorded-date overdue debt only when the customer's repayments are fully assigned. With unassigned funds it explains why an exact overdue total is unavailable; undated credit is excluded from dated overdue totals.
 - Reports exports assignment history as a spreadsheet-safe CSV with both source references and exact amounts. Backups preserve assignments and reject invalid cross-customer references or over-assignment on restore.
 - The allocation-aware credit review was rendered and inspected using isolated sample data: [assigned credit review](artifacts/desktop-credit-assigned-review.png). The contextual [assignment screen](artifacts/desktop-payment-assignments.png) was also opened and inspected with the sample payment fully assigned. Creating an assignment through the form and merchant testing remain unverified.
-- Reassignment, allocation reversals and correction approvals remain future workflows; saved links cannot be edited in this release.
+- The later correction workflow now appends reasoned undo events and permits explicit reassignment; original saved links stay immutable. Staff correction approvals remain pending.
 
 ## Previous customer-credit additions
 
