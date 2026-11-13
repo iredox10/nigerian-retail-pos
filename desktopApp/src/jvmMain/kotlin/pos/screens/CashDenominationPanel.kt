@@ -28,7 +28,7 @@ internal fun CashDenominationPanel(inputs: Map<Long, String>, onChange: (Long, S
 private fun CashCountRow(denomination: Long, value: String, coin: Boolean, onChange: (Long, String) -> Unit) {
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
         PosTextField(value, { onChange(denomination, it) }, "${money(denomination)} ${if (coin) "coins" else "notes"}", Modifier.weight(1f), hint = "Number, e.g. 3")
-        val subtotal = cashCountFromInputs(mapOf(denomination to value))?.totalMinor
+        val subtotal = if (value.isBlank()) 0L else cashCountFromInputs(mapOf(denomination to value))?.totalMinor
         Text(subtotal?.let(::money) ?: "Check count", Modifier.widthIn(min = 96.dp), style = MaterialTheme.typography.bodySmall)
     }
 }

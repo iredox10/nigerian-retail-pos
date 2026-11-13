@@ -91,6 +91,8 @@ private fun AuditEventRow(event: AuditEvent) {
 }
 
 private fun activityLabel(kind: String): String = when (kind) {
+    "staff.pin_configured" -> "Staff PIN configured"
+    "staff.pin_removed" -> "Staff PIN removed"
     "product.created" -> "Item added"
     "product.updated" -> "Item details changed"
     "product.metadata_changed" -> "Item catalogue details changed"
