@@ -28,6 +28,21 @@ class PosRepository(path: String = File(System.getProperty("user.home"), ".niger
     private fun requirePermission(tenantId: String, permission: StaffPermission) {
         permissionCheck?.invoke(tenantId, permission)
     }
+
+    /** Feature modules share this connection, transaction, session guard and actor history. */
+    @Synchronized internal fun <T> featureWrite(tenantId:String,permission:StaffPermission,block:PosRepository.()->T):T = transaction {
+        requirePermission(tenantId,permission)
+        requireTenant(tenantId)
+        block()
+    }
+    @Synchronized internal fun <T> featureRead(tenantId:String,permission:StaffPermission,block:PosRepository.()->T):T {
+        requirePermission(tenantId,permission)
+        requireTenant(tenantId)
+        return block()
+    }
+    internal fun featureExecute(sql:String,vararg args:Any?):Int = execute(sql,*args)
+    internal fun <T> featureQuery(sql:String,vararg args:Any?,map:(ResultSet)->T):List<T> = query(sql,*args,map=map)
+    internal fun featureEvent(tenantId:String,kind:String,entityId:String) = enqueue(tenantId,kind,entityId)
     init {
         if (path != ":memory:") File(path).absoluteFile.parentFile?.mkdirs()
         Class.forName("org.sqlite.JDBC")
