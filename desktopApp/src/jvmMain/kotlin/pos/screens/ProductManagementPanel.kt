@@ -9,6 +9,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import pos.data.PosRepository
+import pos.domain.ProductMetadata
+import pos.domain.metadata
 import pos.domain.Product
 import pos.domain.PurchaseUnit
 import pos.domain.money
@@ -48,7 +50,7 @@ internal fun ProductManagementPanel(
             SectionHeader(product.name, "Selling unit: ${product.unit} · ${quantityText(product.stock)} available")
             if (product.archived) InlineNotice("Archived item", "Saved sales and history are kept. Restore this item before selling, receiving or counting it.", NoticeTone.Warning)
             Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                listOf("Details", "Selling units", "Buying units", "Count stock", "History").forEach { label ->
+                listOf("Details", "Catalogue", "Selling units", "Buying units", "Count stock", "History").forEach { label ->
                     FilterChip(selected = tab == label, onClick = { tab = label; error = null }, label = { Text(label) })
                 }
             }
@@ -82,6 +84,7 @@ internal fun ProductManagementPanel(
                             else "Archive goods you no longer sell. They leave the active catalogue; their recorded stock and history stay saved.", style = MaterialTheme.typography.bodySmall, color = PosPalette.Secondary)
                     }
                 }
+                "Catalogue" -> ProductCataloguePanel(repo, tenantId, product, onChanged)
                 "Selling units" -> SellingUnitsPanel(repo, tenantId, product)
                 "Buying units" -> BuyingUnitsPanel(repo, tenantId, product)
                 "Count stock" -> Surface(shape = MaterialTheme.shapes.medium, color = PosPalette.Surface) {
@@ -236,5 +239,57 @@ private fun BuyingUnitsPanel(repo: PosRepository, tenantId: String, product: Pro
                 } catch (e: Exception) { error = e.message ?: "The buying unit could not be changed." }
                 confirming = null
             }) }, dismissButton = { TextButton({ confirming = null }) { Text("Cancel") } })
+    }
+}
+
+/** Optional catalogue organization stays outside the checkout payment flow. */
+@Composable
+private fun ProductCataloguePanel(repo: PosRepository, tenantId: String, product: Product, onChanged: (String) -> Unit) {
+    var sku by remember { mutableStateOf(product.sku.orEmpty()) }
+    var category by remember { mutableStateOf(product.category.orEmpty()) }
+    var brand by remember { mutableStateOf(product.brand.orEmpty()) }
+    var aliases by remember { mutableStateOf(product.aliases.joinToString("\n")) }
+    var favourite by remember { mutableStateOf(product.favourite) }
+    var error by remember { mutableStateOf<String?>(null) }
+    val operation = remember(sku, category, brand, aliases, favourite) { UUID.randomUUID().toString() }
+    val history = remember(tenantId, product.id) { runCatching { repo.productMetadataChanges(tenantId, product.id).asReversed() } }
+    Surface(shape = MaterialTheme.shapes.medium, color = PosPalette.Surface) {
+        Column(Modifier.fillMaxWidth().padding(24.dp), verticalArrangement = Arrangement.spacedBy(20.dp)) {
+            SectionHeader("Catalogue details", "Help staff find this item by familiar names")
+            Column(Modifier.widthIn(max = 620.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                error?.let { InlineNotice("Catalogue details not saved", it, NoticeTone.Danger) }
+                PosTextField(sku, { sku=it; error=null }, "SKU / item code (optional)", enabled=!product.archived, hint="Unique in this shop, including archived items")
+                PosTextField(category, { category=it; error=null }, "Category (optional)", enabled=!product.archived, hint="For example, Drinks")
+                PosTextField(brand, { brand=it; error=null }, "Brand (optional)", enabled=!product.archived)
+                PosTextField(aliases, { aliases=it; error=null }, "Other search names (optional)", enabled=!product.archived, singleLine=false, hint="One familiar or local name per line; up to 20 names")
+                Row(verticalAlignment=androidx.compose.ui.Alignment.CenterVertically) {
+                    Checkbox(favourite, { favourite=it; error=null }, enabled=!product.archived)
+                    Text("Show in Favourites at checkout")
+                }
+                Text("These details organize the catalogue. Prices, quantities, units and saved receipts stay unchanged. Clearing an optional field removes it from future catalogue searches.", style=MaterialTheme.typography.bodySmall, color=PosPalette.Secondary)
+                PosButton("Save catalogue details", {
+                    try {
+                        val next=ProductMetadata(sku.trim().ifEmpty {null},category.trim().ifEmpty {null},brand.trim().ifEmpty {null},aliases.lines().map {it.trim()}.filter {it.isNotEmpty()},favourite)
+                        repo.updateProductMetadata(tenantId,product.id,next,operation,product.metadata())
+                        onChanged("Catalogue details saved on this computer")
+                    } catch (e:Exception) {error=e.message ?: "Catalogue details could not be saved. Your entries are still here."}
+                }, enabled=!product.archived)
+            }
+            HorizontalDivider(color=PosPalette.Border)
+            SectionHeader("Catalogue change history", "Original details are kept for each saved change")
+            history.exceptionOrNull()?.let { InlineNotice("History could not be loaded",it.message ?: "Reopen this item and try again.",NoticeTone.Danger) }
+            history.getOrNull()?.let { changes ->
+                if(changes.isEmpty()) Text("No catalogue changes recorded for this item.",color=PosPalette.Secondary)
+                changes.forEach { change ->
+                    Column(verticalArrangement=Arrangement.spacedBy(8.dp)) {
+                        Text(managementDate(change.createdAt),style=MaterialTheme.typography.titleMedium)
+                        fun summary(value:ProductMetadata):String = "SKU: ${value.sku ?: "None"} · Category: ${value.category ?: "None"} · Brand: ${value.brand ?: "None"} · Search names: ${value.aliases.joinToString("; ").ifEmpty {"None"}} · Favourite: ${if(value.favourite) "Yes" else "No"}"
+                        Text("Before: ${summary(change.previous)}",style=MaterialTheme.typography.bodySmall)
+                        Text("After: ${summary(change.current)}",style=MaterialTheme.typography.bodySmall)
+                        HorizontalDivider(color=PosPalette.Border)
+                    }
+                }
+            }
+        }
     }
 }

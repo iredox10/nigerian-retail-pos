@@ -1,6 +1,7 @@
 package pos.screens
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -38,6 +39,9 @@ fun SellScreen(
     val draftStore = draftStoreResult.getOrNull()
     val restoredDraft = remember(tenantId) { runCatching { draftStore?.load() } }
     var search by rememberSaveable { mutableStateOf("") }
+    var favouritesOnly by rememberSaveable(tenantId) { mutableStateOf(false) }
+    var selectedCategory by rememberSaveable(tenantId) { mutableStateOf<String?>(null) }
+    var categoryMenu by remember { mutableStateOf(false) }
     // Catalogue prices are refreshed; explicit discounts retain a reference price for review.
     var encodedCart by rememberSaveable { mutableStateOf(restoredDraft.getOrNull()?.cart ?: "") }
     var encodedDiscounts by rememberSaveable { mutableStateOf(DraftDiscountCodec.encode(restoredDraft.getOrNull()?.discounts.orEmpty())) }
@@ -150,17 +154,23 @@ fun SellScreen(
                     }, singleLine = true,
                         label = { Text("Search for an item") }, placeholder = { Text("Type a name or scan a barcode, then Enter") }, shape = MaterialTheme.shapes.small)
                     if(compact && !showSaleOnly) error?.let { Text(it,color=MaterialTheme.colorScheme.error) }
-                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                        Text("All items", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        Spacer(Modifier.weight(1f))
-                        Text("${products.size} in your shop", style = MaterialTheme.typography.bodySmall)
+                    Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), verticalAlignment = Alignment.CenterVertically, horizontalArrangement=Arrangement.spacedBy(8.dp)) {
+                        FilterChip(!favouritesOnly,{favouritesOnly=false},label={Text("All items")})
+                        FilterChip(favouritesOnly,{favouritesOnly=true},label={Text("Favourites")})
+                        Box {
+                            OutlinedButton({categoryMenu=true},shape=MaterialTheme.shapes.small) {Text(selectedCategory ?: "All categories")}
+                            DropdownMenu(categoryMenu,{categoryMenu=false}) {
+                                DropdownMenuItem(text={Text("All categories")},onClick={selectedCategory=null;categoryMenu=false})
+                                products.mapNotNull {it.category}.distinct().sorted().forEach { category -> DropdownMenuItem(text={Text(category)},onClick={selectedCategory=category;categoryMenu=false}) }
+                            }
+                        }
                     }
-                    val filtered = products.filter { it.name.contains(search, ignoreCase = true) || it.unit.contains(search,ignoreCase=true) || it.barcode?.contains(search.trim())==true || sellingUnits.any { unit -> unit.productId==it.id && !unit.archived && (unit.name.contains(search,true) || unit.barcode?.contains(search.trim())==true) } }
+                    val filtered = products.filter { product -> (!favouritesOnly || product.favourite) && (selectedCategory==null || product.category==selectedCategory) && (product.matchesCatalogueSearch(search) || sellingUnits.any { unit -> unit.productId==product.id && !unit.archived && (unit.name.contains(search,true) || unit.barcode?.contains(search.trim())==true) }) }
                     if (filtered.isEmpty()) Surface(Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.medium) {
                         Column(Modifier.padding(28.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             Text(if (products.isEmpty()) "Add your first item" else "No matching items", style = MaterialTheme.typography.titleLarge)
-                            Text(if (products.isEmpty()) "Open Stock → Add item to enter goods, selling prices and opening quantities." else "Try a different name or clear your search.")
-                            if (search.isNotEmpty()) TextButton(shape = MaterialTheme.shapes.small, onClick = { search = "" }) { Text("Clear search") }
+                            Text(if (products.isEmpty()) "Open Stock → Add item to enter goods, selling prices and opening quantities." else "Try another name or code, or clear the search and filters.")
+                            if (search.isNotEmpty() || favouritesOnly || selectedCategory!=null) TextButton(shape = MaterialTheme.shapes.small, onClick = { search = ""; favouritesOnly=false; selectedCategory=null }) { Text("Clear search and filters") }
                         }
                     }
                     LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
