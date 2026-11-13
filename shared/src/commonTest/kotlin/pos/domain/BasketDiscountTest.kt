@@ -42,6 +42,11 @@ class BasketDiscountTest {
         assertEquals(176L,cartTotal(allocated))
         assertEquals(26L,cartDiscountTotal(allocated))
     }
+    @Test fun oversizedUnallocatedDraftCanReachTheExistingTotalValidation() {
+        val source=line("a",Long.MAX_VALUE).copy(quantity=2)
+        assertFails {cartTotal(listOf(source))}
+        assertFails {allocateBasketDiscount(listOf(source),BasketDiscount("fixed",1,"Review amount"))}
+    }
     @Test fun invalidRulesAndOverAllocationAreRejected() {
         assertFails {BasketDiscount("fixed",0,"Reason")}
         assertFails {BasketDiscount("percentage",10001,"Reason")}

@@ -73,7 +73,7 @@ data class CartLine(
     init {
         require(quantityPrecision in 0..6 && quantityPrecision == (if(sellingUnitId==null) product.quantityPrecision else 0))
         require(quantity > 0) { "Choose a quantity greater than zero." }
-        require(basketDiscountMinor>=0 && basketDiscountMinor<=beforeBasketMinor) { "Basket allocation exceeds this line amount." }
+        require(basketDiscountMinor>=0 && (basketDiscountMinor==0L || basketDiscountMinor<=beforeBasketMinor)) { "Basket allocation exceeds this line amount." }
         require(discountPerUnitMinor >= 0 && discountPerUnitMinor <= unitPriceMinor) { "Discount must be between zero and the selling price." }
         require((discountPerUnitMinor == 0L) == (discountReason == null)) { "A discount needs a reason; remove the reason when removing a discount." }
         if (discountPerUnitMinor > 0) UnitDiscount(unitPriceMinor, discountPerUnitMinor, requireNotNull(discountReason))
