@@ -9,10 +9,12 @@ A checked box means that specific item has implementation and recorded verificat
 
 ## Current batch and evidence rules
 
-The recent source includes percentage item discounts, catalogue metadata and checkout filters, dated customer CSV statements, and receipt-name supplier statements. Their old unchecked entries meant acceptance was unfinished; they must not be read as absence of code. BUILD_STATUS.md previously recorded 258 tests for historical credit/performance reports. During this implementation batch the coordinating agent verified a fresh 287-test baseline (30 shared and 257 desktop). This documentation task itself ran no tests or UI sessions; fractional changes and further integrations require their own subsequent run. Desktop/keyboard/offline acceptance for recent UI additions remains separate.
+The current integrated batch passes **324 tests** (35 shared, 289 desktop; zero failures, errors or skips), and the Linux distributable builds. This supersedes the initial 287-test baseline. The coordinating agent performed an isolated Linux desktop check with no external network routes: fractional quantity edits blocked payment until applied, keyboard Tab/Return applied the edit, a discounted 1.375 kg sale completed with correct change, and a separate 0.375 kg cash return restored stock. A denomination closing check saved 9 × ₦1,000 against ₦10,000 expected and retained the ₦1,000 shortage and sheet in Past shifts. Offline Help rendered, and the rebuilt installed binary passed direct practice-launch readiness, duplicate suppression and child termination checks (not the full Help-button journey). These targeted checks do not establish every keyboard journey, Windows/hardware support or merchant usability. See BUILD_STATUS.md and IMPLEMENTATION_PLAN.md for evidence and limits.
 
-- [ ] Finish the current fractional-quantity journey: the existing `Quantity` arithmetic/parser is a foundation, not yet proof of fractional checkout, receiving, counts or returns. **In progress.**
-- [ ] Verify the recent percentage-discount, metadata/filter and dated-statement journeys against real rendered desktop screens, keyboard input, denied permissions and local/offline failure states; record actual results before checking their acceptance items below.
+- [x] Finish the current exact fractional-quantity service/persistence journey, including receive/sell/count/return, historical snapshots, drafts, CSV and encrypted backups; integrated tests and targeted actual offline desktop checks pass.
+- [x] Integrate and test percentage item discounts, catalogue metadata/filters and dated customer/supplier statement services. Their core implementation is present; broader UI acceptance remains separate.
+- [x] Add and test atomic opening/closing denomination sheets, local six-digit staff PIN policy and searchable offline help with a separate sample process.
+- [ ] Complete full rendered/keyboard/permission/failure acceptance for recent metadata, statement, denomination, PIN and help journeys; retain the distinction between targeted checks and full acceptance.
 - [ ] Preserve and review pre-existing uncommitted test/artifact changes separately; never absorb unrelated changes into a feature commit.
 
 ## Dependency-ordered execution plan
@@ -21,10 +23,10 @@ See [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md) for the coordinating agent'
 
 Work is ordered by dependencies, not by hiding any part of the full specification. Each phase uses small working journeys with repository/domain tests, migration and retry checks where relevant, an actual desktop render for changed UI, and truthful evidence in BUILD_STATUS.md. Keep a feature unavailable until its persistence and failure behavior work.
 
-1. **Finish and commit the local feature batch.** Complete exact quantities with immutable per-product precision and historical snapshots; integrate checkout/receiving/counts/returns/drafts/backup/import/export; exercise legacy migrations, partial-return rounding, over-return/over-sell rejection, restart recovery and cash/debt reconciliation. Verify recent discounts/catalogue/statements and reconcile this checklist afterward.
-2. **Close daily local retail gaps.** Add catalogue variants/images/labels and bulk updates; basket discounts/price lists/promotions; customer/supplier profiles and corrections; count sessions and inventory dispositions. Each slice must preserve audit and unit semantics and pass tenant/permission/retry tests. Add settings/document branding and offline help without expanding the primary navigation.
-3. **Establish accounting and custody.** Select and document historical costing/backdating policy before valuation/COGS/profit. Add cashier/register drawers, denomination/blind counts, handovers and controlled period corrections, then source-linked journals and accountant reports. Never call purchase subtraction profit. Verify full stock/cash/debt/journal reconciliation with returns and corrections.
-4. **Harden local identity, storage and recovery.** Implement PIN/approval policy, credential recovery, protected storage keys, working-data encryption, migration/interruption recovery, diagnostics and versioned backups. Verify denial leaves records unchanged, session revocation, bad keys/corruption/disk-full behavior and restore on another machine. Broader security assessment remains separate.
+1. **Local feature batch — core integrated; broader acceptance remains.** Exact quantities, historical snapshots, checkout/receiving/counts/returns/drafts/backup/import/export, percentage discounts, catalogue and dated statement services are integrated and tested. Retain pending full UI/failure/keyboard journeys and independent-machine migration/recovery checks; do not reopen completed core work or declare broad acceptance from the targeted renders.
+2. **Close daily local retail gaps.** Add catalogue variants/images/labels and bulk updates; basket discounts/price lists/promotions; customer/supplier profiles and corrections; count sessions and inventory dispositions. Each slice must preserve audit and unit semantics and pass tenant/permission/retry tests. Add settings/document branding and extend the existing offline help/practice guidance without expanding the primary navigation.
+3. **Establish accounting and custody.** Select and document historical costing/backdating policy before valuation/COGS/profit. Extend the existing denomination sheets/count-entry hiding into cashier/register drawers, secure blind accountability, handovers and controlled period corrections, then source-linked journals and accountant reports. Never call purchase subtraction profit. Verify full stock/cash/debt/journal reconciliation with returns and corrections.
+4. **Harden local identity, storage and recovery.** Extend the implemented local staff PIN policy with approval workflows, credential recovery, protected storage keys, working-data encryption, migration/interruption recovery, diagnostics and versioned backups. Verify denial leaves records unchanged, session revocation, bad keys/corruption/disk-full behavior and restore on another machine. Broader security assessment remains separate.
 5. **Build the online foundation.** Settle device identity, offline authorization duration, command/event schema, movement-based stock and conflict policies. Implement backend accounts/memberships, Postgres migrations, authenticated idempotent API, cursors/acknowledgements/retries and attachment transfer. Test two disconnected devices, duplicate delivery, stale permissions and late closed-period events before showing sync completion.
 6. **Integrate payment and communication services.** Add explicit manual/unverified tender states and split payments; implement Paystack backend verification/webhooks/rechecks/refunds/settlement, then consent-linked Telegram queues and other approved channels. Automated fake-provider tests may verify adapters but do not prove live integration. Credentials, reachable staging/webhooks and real sandbox checks are external prerequisites.
 7. **Extend business and platform workflows.** Implement orders/deposits/layaway/fulfilment, branches/transfer custody, loyalty and selected trade modules; add Android/iOS adapters and React/TanStack web with explicitly tested offline capability. Tax/fiscal and specialist pharmacy features require applicable requirements review before enabling them.
@@ -47,7 +49,8 @@ Work is ordered by dependencies, not by hiding any part of the full specificatio
 - [x] Enforce mutation permissions at the repository boundary and restrict visible routes/actions.
 - [x] Protect owner backup and staff management operations.
 - [x] Verify migration, tenant isolation, revocation, denied actions, actual desktop login and packaging.
-- [ ] Short staff PIN unlock with attempt limits and secure device policy.
+- [x] Local staff six-digit convenience PIN, bootstrapped with the staff full password, sharing failed-login cooldown and fixed 12-hour authorization expiry; clock/revocation/persistence paths have automated coverage.
+- [ ] Broader PIN/device security assessment, biometric adapters and full keyboard/desktop acceptance; PINs do not encrypt working records.
 - [x] Attribute new repository financial/catalogue/correction events to the signed-in actor; preserve snapshots, retries and backup history.
 - [x] Searchable business activity history, date-filtered CSV export and owner-only staff-change history.
 - [ ] Broader audit of platform/admin actions and security review; historical actors cannot be reconstructed.
@@ -60,14 +63,17 @@ Work is ordered by dependencies, not by hiding any part of the full specificatio
 
 ## Quantities and catalogue — current implementation batch
 
-- [ ] Exact scaled fractional quantities and explicit precision per product. Arithmetic/parser and domain tests exist; end-to-end integration is in progress.
-- [ ] Fractional checkout, stock receiving, returns, counts and conversion snapshots.
-- [ ] Safe migration of existing quantities and backward-compatible backup/import handling.
+- [x] Exact scaled fractional quantities with immutable per-product precision 0–6. Stock uses Long scaled units capped at 9,007,199,254,740,991 with exact projection checks; each transaction quantity is bounded by Int.MAX_VALUE scaled units.
+- [x] Fractional checkout, stock receiving, cash returns, counts and historical precision/conversion snapshots with tested exact kobo rounding.
+- [x] Legacy quantity migration and backward-compatible drafts/encrypted backups/CSV, including optional quantity_precision import. Legacy fractional precision-zero balances remain visible without silent conversion; only their whole portion is sellable until explicitly reconciled.
+- [ ] Independent-machine restore/migration drills and comprehensive quantity UI/failure acceptance.
 - [ ] Nested package conversion definitions and explicit repacking/break-bulk reconciliation.
-- [ ] Accept SKU/category/brand/alias editing, immutable metadata history, CSV snapshots and checkout search/category filters. Code and targeted tests exist; integrated and rendered acceptance evidence must be recorded.
+- [x] SKU/category/brand/alias editing, immutable metadata history, CSV snapshots and checkout search/category filters; integrated automated coverage passes.
+- [ ] Complete rendered keyboard/failure acceptance for catalogue metadata/filter workflows.
 - [ ] Product variants and unique variant barcodes.
 - [ ] Product images and offline attachment storage.
-- [ ] Accept the implemented checkout Favourites filter; automatic frequently-sold selection remains unimplemented.
+- [x] Checkout Favourites filter.
+- [ ] Automatic frequently-sold selection.
 - [ ] Barcode label generation and printing.
 - [ ] Bulk edit/update CSV preview, validation, conflict handling and audit.
 - [ ] Opening balance imports for customers/suppliers with source history.
@@ -76,7 +82,8 @@ Work is ordered by dependencies, not by hiding any part of the full specificatio
 
 - [x] Named whole selling packs, independent prices/barcodes, mixed loose/pack baskets and base-stock deduction.
 - [x] Reasoned lower unit prices, original/net price snapshots, exact discounted cash returns and recovered baskets.
-- [ ] Accept implemented per-selling-unit percentage discounts with explicit kobo rounding, recovered drafts and net-price returns. Code and targeted tests exist; full batch verification remains pending.
+- [x] Per-selling-unit percentage discounts with explicit kobo rounding, recovered drafts and net-price returns; integrated tests and a targeted actual offline fractional-discount sale pass.
+- [ ] Broader percentage-discount UI/failure/keyboard acceptance, including partial-return journeys.
 - [ ] Whole-basket discounts with deterministic line allocation and return handling.
 - [ ] Retail/wholesale/customer price lists and quantity breaks.
 - [ ] Promotions, validity periods, usage rules and explicit offline time policy.
@@ -114,7 +121,8 @@ Work is ordered by dependencies, not by hiding any part of the full specificatio
 - [ ] Customer advance/unapplied-credit accounts and merchant-owed balances.
 - [ ] Debt adjustments, write-offs, reinstatement and disputes with authorization.
 - [ ] Duplicate customer merge with review and immutable source links.
-- [ ] Accept implemented dated customer CSV statements with reconciled opening/closing debt and WAT cutoffs. Code and targeted tests exist; current integrated/desktop evidence remains pending.
+- [x] Dated customer CSV statements with reconciled opening/closing debt and WAT cutoffs; integrated automated coverage passes.
+- [ ] Complete dated customer statement desktop/keyboard/failure acceptance.
 - [ ] PDF statements, sharing and server document delivery.
 - [ ] Consented repayment reminders and delivery status.
 
@@ -126,7 +134,8 @@ Work is ordered by dependencies, not by hiding any part of the full specificatio
 - [ ] Supplier invoice duplicate detection and attachments.
 - [ ] Landed-cost allocation and purchase-cost history/comparisons.
 - [ ] Purchase returns, supplier credit notes and account adjustments.
-- [ ] Accept implemented dated receipt-name supplier statements and CSV, including paid receipts, opening/closing debt and current debt. Code and targeted tests exist; full acceptance evidence remains pending.
+- [x] Dated receipt-name supplier statements and CSV, including paid receipts, opening/closing debt and current debt; integrated automated coverage passes.
+- [ ] Complete supplier statement desktop/keyboard/failure acceptance.
 - [ ] Extend statements to supplier master accounts, credits, adjustments and attachments after those source workflows exist.
 - [ ] Reorder suggestions and supplier order export.
 
@@ -143,7 +152,10 @@ Work is ordered by dependencies, not by hiding any part of the full specificatio
 ## Cash and accounting
 
 - [ ] Per-register/per-cashier drawers.
-- [ ] Denomination counts, blind closing and handover/sign-off.
+- [x] Optional denomination sheets persisted atomically with opening/closing cash counts, with typed-total agreement and retry/backup coverage.
+- [x] Hide expected cash inside the closing count form. This is count-entry hiding only: the preceding dashboard can show expected cash.
+- [x] Targeted actual desktop denomination close retained the count sheet and shortage in Past shifts.
+- [ ] Secure blind-accountability policy, cashier handover/sign-off and full denomination UI/keyboard acceptance.
 - [ ] Cash custody transfers and controlled period corrections.
 - [ ] Accrued/recurring expenses, attachments and non-cash funding sources.
 - [ ] Explicit contributions/drawings accounts.
@@ -199,7 +211,8 @@ Work is ordered by dependencies, not by hiding any part of the full specificatio
 - [ ] Tax invoices/summaries and applicable fiscal connector.
 - [ ] Privacy notices, access/export/deletion requests and retention rules.
 - [ ] Regional language translations and broader address/phone support.
-- [ ] In-app offline help, tutorials and practice workflows.
+- [x] Searchable in-app offline help and a separately launched, isolated sample practice process.
+- [ ] Full help/practice UI/keyboard acceptance, guided tutorials and expanded practice workflows.
 - [ ] Consented diagnostics, support and peripheral troubleshooting.
 - [ ] Application updater, subscriptions and grace policies.
 - [ ] Integration authentication, outbound/webhook event logs and retries.
