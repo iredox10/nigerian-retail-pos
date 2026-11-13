@@ -113,13 +113,15 @@ fun ReportsScreen(repo: PosRepository, tenantId: String) {
                     Box {
                         NeutralButton("$selectedExport ▾", { exportMenu = true })
                         DropdownMenu(exportMenu, { exportMenu = false }) {
-                            listOf("Sales", "Products", "Customers", "Expenses", "Cash activity", "Stock received", "Payment assignments").forEach { kind -> DropdownMenuItem(text = { Text(kind) }, onClick = { selectedExport = kind; exportMenu = false }) }
+                            listOf("Sales", "Products", "Customers", "Expenses", "Cash activity", "Stock received", "Payment assignments", "Stock movements", "Low stock").forEach { kind -> DropdownMenuItem(text = { Text(kind) }, onClick = { selectedExport = kind; exportMenu = false }) }
                         }
                     }
                     PosButton("Save CSV file", {
                         try {
                             val csv = when(selectedExport) {
                                 "Sales" -> CsvService.sales(tenantId, records.sales.filter { range.contains(it.createdAt) })
+                                "Low stock" -> CsvService.products(tenantId,records.products.filter { !it.archived && it.reorderLevel?.let { level -> it.stock<=level }==true })
+                                "Stock movements" -> CsvService.inventoryMovements(tenantId,records.products,records.products.flatMap { repo.inventoryMovements(tenantId,it.id) }.filter { range.contains(it.createdAt) })
                                 "Products" -> CsvService.products(tenantId, records.products)
                                 "Customers" -> CsvService.customers(tenantId, records.customers)
                                 "Expenses" -> CsvService.expenses(tenantId, records.expenses.filter { range.contains(it.createdAt) })
@@ -127,7 +129,7 @@ fun ReportsScreen(repo: PosRepository, tenantId: String) {
                                 "Payment assignments" -> CsvService.repaymentAllocations(tenantId,repo.repaymentAllocations(tenantId).filter { range.contains(it.createdAt) })
                                 else -> CsvService.stockReceipts(tenantId, records.receipts.filter { range.contains(it.createdAt) })
                             }
-                            val file = CsvService.save(csv, "retail-pos-${selectedExport.lowercase().replace(' ', '-')}-${if(selectedExport in listOf("Products", "Customers")) "current" else "$start-to-$end"}.csv")
+                            val file = CsvService.save(csv, "retail-pos-${selectedExport.lowercase().replace(' ', '-')}-${if(selectedExport in listOf("Products", "Customers", "Low stock")) "current" else "$start-to-$end"}.csv")
                             if(file != null) { message = "CSV saved to ${file.absolutePath}"; error = null }
                         } catch(e: Exception) { error = e.message ?: "CSV could not be saved. No business records changed."; message = null }
                     })

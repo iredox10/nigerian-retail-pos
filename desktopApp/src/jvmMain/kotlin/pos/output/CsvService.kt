@@ -45,8 +45,8 @@ object CsvService {
 
     fun products(tenantId: String, values: List<Product>): String {
         require(values.all { it.tenantId == tenantId }) { "Export includes another shop's stock." }
-        return encode(listOf("Product ID", "Name", "Selling unit", "Selling price NGN", "Current stock quantity", "Barcode", "Archived"), values.map {
-            listOf(text(it.id), text(it.name), text(it.unit), naira(it.priceMinor), CsvCell.Number(BigDecimal.valueOf(it.stock).toPlainString()), text(it.barcode.orEmpty()), text(it.archived.toString()))
+        return encode(listOf("Product ID", "Name", "Selling unit", "Selling price NGN", "Current stock quantity", "Barcode", "Archived", "Reorder level (blank means disabled)", "Opening quantity (blank means unknown)", "Opening recorded at UTC"), values.map {
+            listOf(text(it.id), text(it.name), text(it.unit), naira(it.priceMinor), CsvCell.Number(BigDecimal.valueOf(it.stock).toPlainString()), text(it.barcode.orEmpty()), text(it.archived.toString()),it.reorderLevel?.let { level -> CsvCell.Number(level.toString()) } ?: text(""),it.openingStock?.let { stock -> CsvCell.Number(BigDecimal.valueOf(stock).toPlainString()) } ?: text(""),text(it.createdAt.orEmpty()))
         })
     }
 
@@ -80,6 +80,16 @@ object CsvService {
         require(values.all {it.tenantId==tenantId}) { "Export includes another shop's assignments." }
         return encode(listOf("Assignment ID","Customer ID","Payment ID","Credit receipt ID","Assigned amount NGN","Assigned at UTC"),values.map {
             listOf(text(it.id),text(it.customerId),text(it.repaymentId),text(it.saleId),naira(it.amountMinor),text(it.createdAt))
+        })
+    }
+
+    fun inventoryMovements(tenantId:String,products:List<Product>,values:List<InventoryMovement>):String {
+        require(products.all {it.tenantId==tenantId} && products.map {it.id}.distinct().size==products.size) { "Choose this shop's product records." }
+        val byId=products.associateBy {it.id}
+        require(values.all {it.tenantId==tenantId && it.productId in byId}) { "Movement export includes another shop's or unavailable items." }
+        return encode(listOf("Movement ID","Product ID","Item","Base unit","Signed stock change","Kind","Source ID","Recorded at UTC","Description","Opening history known"),values.map { movement ->
+            val product=byId.getValue(movement.productId)
+            listOf(text(movement.id),text(product.id),text(product.name),text(product.unit),CsvCell.Number(BigDecimal.valueOf(movement.quantityDelta).toPlainString()),text(movement.kind),text(movement.sourceId),text(movement.createdAt),text(movement.description),text((product.openingStock!=null).toString()))
         })
     }
 
