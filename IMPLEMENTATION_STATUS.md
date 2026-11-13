@@ -4,9 +4,9 @@ Source audit: 13 November 2026.
 
 This document compares the **entire** [feature specification](FEATURE_SPECIFICATION.md) with the source currently present. It is not a claim that the desktop application, long-term specification, or multi-tenant SaaS is complete.
 
-The current product is a local Kotlin/Compose desktop foundation. Tenant-scoped shop records, owner/staff password access, cash/credit sales, buying/selling packs, stock receiving/counts/history, cash shifts, linked cash returns, reports/CSV, receipt output and encrypted manual backup/recovery exist. The last recorded integrated checkpoint in BUILD_STATUS.md is **258 passing tests** for historical credit and performance reports; this is recorded evidence, not a fresh test run during this source reconciliation.
+The current product is a local Kotlin/Compose desktop foundation. Tenant-scoped shop records, owner/staff password access, cash/credit sales, buying/selling packs, stock receiving/counts/history, cash shifts, linked cash returns, reports/CSV, receipt output and encrypted manual backup/recovery exist. BUILD_STATUS.md previously recorded **258 passing tests** for historical credit and performance reports. The coordinating agent has now verified a fresh **287-test baseline** (30 shared, 257 desktop). This source reconciliation did not itself run tests, and later fractional/integration changes still require a new run.
 
-Recent commits add percentage item discounts with saved net-price returns, SKU/category/brand/alias/favourite metadata and checkout filters, dated customer CSV statements and dated receipt-name supplier statement viewing/CSV. Source and targeted tests exist for these additions, but current integrated and desktop acceptance evidence still needs to be recorded. Do not treat their old unchecked TODO entries as absence of code, or their source files as proof of merchant/hardware acceptance.
+Recent commits add percentage item discounts with saved net-price returns, SKU/category/brand/alias/favourite metadata and checkout filters, dated customer CSV statements and dated receipt-name supplier statement viewing/CSV. Source and targeted tests exist for these additions, and the current baseline passes, but desktop/keyboard/offline acceptance for these additions still needs to be recorded. Do not treat their old unchecked TODO entries as absence of code, or their source files as proof of merchant/hardware acceptance.
 
 Exact scaled quantity arithmetic and parsing exist in the shared domain. **Fractional transaction integration is in progress**: arithmetic alone does not make checkout, receiving, returns, counts, historical snapshots or backups fractional-safe. Keep those acceptance items open until the integrated journey and migration checks pass.
 
@@ -20,7 +20,7 @@ Product CSV import remains atomic and add-only. Rendered desktop/isolated-offlin
 - **External integration pending:** external services and their integration are absent. Local code near the workflow must not be described as the integration.
 - **Documentation only:** the section defines scope, scenarios, or research rather than an executable feature.
 
-Written code, passing unit tests, a rendered screenshot, hardware testing, merchant usability testing, and production authorization are separate evidence levels. For executed checks, consult [BUILD_STATUS.md](BUILD_STATUS.md); that file records multiple dated checkpoints, including 258 tests for historical reporting, and the limits of desktop visual verification. Later additions need an updated integrated checkpoint.
+Written code, passing unit tests, a rendered screenshot, hardware testing, merchant usability testing, and production authorization are separate evidence levels. For executed checks, consult [BUILD_STATUS.md](BUILD_STATUS.md); that file records dated checkpoints and the limits of desktop visual verification. The current execution plan separately tracks the 287-test baseline and subsequent integration runs.
 
 ## Full specification coverage
 

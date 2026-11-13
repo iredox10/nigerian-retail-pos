@@ -9,13 +9,15 @@ A checked box means that specific item has implementation and recorded verificat
 
 ## Current batch and evidence rules
 
-The recent source includes percentage item discounts, catalogue metadata and checkout filters, dated customer CSV statements, and receipt-name supplier statements. Their old unchecked entries meant acceptance was unfinished; they must not be read as absence of code. The last recorded integrated checkpoint in BUILD_STATUS.md is 258 tests for historical credit/performance reports. Later source changes require a new integrated run; this reconciliation itself ran no tests or UI sessions.
+The recent source includes percentage item discounts, catalogue metadata and checkout filters, dated customer CSV statements, and receipt-name supplier statements. Their old unchecked entries meant acceptance was unfinished; they must not be read as absence of code. BUILD_STATUS.md previously recorded 258 tests for historical credit/performance reports. During this implementation batch the coordinating agent verified a fresh 287-test baseline (30 shared and 257 desktop). This documentation task itself ran no tests or UI sessions; fractional changes and further integrations require their own subsequent run. Desktop/keyboard/offline acceptance for recent UI additions remains separate.
 
 - [ ] Finish the current fractional-quantity journey: the existing `Quantity` arithmetic/parser is a foundation, not yet proof of fractional checkout, receiving, counts or returns. **In progress.**
 - [ ] Verify the recent percentage-discount, metadata/filter and dated-statement journeys against real rendered desktop screens, keyboard input, denied permissions and local/offline failure states; record actual results before checking their acceptance items below.
 - [ ] Preserve and review pre-existing uncommitted test/artifact changes separately; never absorb unrelated changes into a feature commit.
 
 ## Dependency-ordered execution plan
+
+See [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md) for the coordinating agent's current assignments, commit sequence and verification log.
 
 Work is ordered by dependencies, not by hiding any part of the full specification. Each phase uses small working journeys with repository/domain tests, migration and retry checks where relevant, an actual desktop render for changed UI, and truthful evidence in BUILD_STATUS.md. Keep a feature unavailable until its persistence and failure behavior work.
 
