@@ -3,6 +3,7 @@ package pos.output
 import pos.domain.*
 import java.math.BigDecimal
 import java.time.LocalDate
+import java.time.Instant
 
 data class SupplierAccountStatement(
     val profile:SupplierProfile,val links:List<SupplierReceiptLink>,val receipts:List<StockReceipt>,
@@ -17,6 +18,7 @@ object SupplierAccountStatementService {
         require(links.map {it.receiptId}.distinct().size==links.size && receipts.map {it.id}.distinct().size==receipts.size && payments.map {it.id}.distinct().size==payments.size) {"Supplier account contains duplicate records."}
         val byId=receipts.associateBy {it.id}
         require(links.all {it.receiptId in byId}) {"Supplier account link refers to an unavailable receipt."}
+        links.forEach {Instant.parse(it.createdAt)}
         val selectedLinks=links.filter {it.supplierId==profile.id}
         val ids=selectedLinks.map {it.receiptId}.toSet()
         val selectedReceipts=receipts.filter {it.id in ids}

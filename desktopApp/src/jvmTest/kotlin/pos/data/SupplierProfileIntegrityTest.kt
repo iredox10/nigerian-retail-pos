@@ -67,6 +67,8 @@ class SupplierProfileIntegrityTest {
             val item=repo.addProduct(a.id,"Rice","bag",200,0.0)
             val old=repo.receiveStock(a.id,item.id,1,100,0,"Amina","old")
             assertTrue(repo.supplierReceiptLinks(a.id).isEmpty())
+            assertFails {repo.receiveStockForSupplier(a.id,item.id,1,100,0,profile.id,"old")}
+            assertTrue(repo.supplierReceiptLinks(a.id).isEmpty())
             assertFails {repo.linkSupplierReceipt(a.id,old.id,foreign.id,"cross")}
             val link=repo.linkSupplierReceipt(a.id,old.id,profile.id,"reviewed")
             assertEquals(link,repo.linkSupplierReceipt(a.id,old.id,profile.id,"reviewed"))
@@ -112,10 +114,8 @@ class SupplierProfileIntegrityTest {
             val bad=snapshot.copy(tables=snapshot.tables+("supplier_profiles" to snapshot.tables.getValue("supplier_profiles").map {it+("version" to "9")}))
             assertFails {repo.restoreTenantSnapshot(bad,"Bad")}
             assertEquals(before,repo.tenants())
-            val old=snapshot.copy(tables=snapshot.tables-supplierProfileSnapshotTables.toSet())
-            val legacy=repo.restoreTenantSnapshot(old,"Legacy without profiles")
-            assertTrue(repo.supplierProfiles(legacy.id).isEmpty())
-            assertEquals("Supplier",repo.stockReceipts(legacy.id).single().supplierName)
+            assertFails {repo.restoreTenantSnapshot(snapshot.copy(tables=snapshot.tables-supplierProfileSnapshotTables.toSet()),"Missing supplier records")}
+            assertEquals(before,repo.tenants())
         }
     }
     @Test fun historyCannotBeEditedAndProfilesPersistAcrossDatabaseReopen() {
@@ -127,6 +127,18 @@ class SupplierProfileIntegrityTest {
             assertFails {db.createStatement().use {it.execute("DELETE FROM supplier_profile_changes")}}
         }
         PosRepository(path).use {repo -> assertEquals("Supplier",repo.supplierProfiles(tenant).single().details.name);assertEquals(1,repo.supplierProfileChanges(tenant,"supplier").size)}
+    }
+    @Test fun legacyBackupsWithoutProfileTablesKeepTheirUnlinkedPurchaseNames() {
+        PosRepository(":memory:").use {repo ->
+            val shop=repo.createTenant("Old shop")
+            val item=repo.addProduct(shop.id,"Rice","bag",200,0.0)
+            repo.receiveStock(shop.id,item.id,1,100,0,"Old supplier name","old-purchase")
+            val snapshot=repo.exportTenantSnapshot(shop.id)
+            val legacy=repo.restoreTenantSnapshot(snapshot.copy(tables=snapshot.tables-supplierProfileSnapshotTables.toSet()),"Legacy restored")
+            assertTrue(repo.supplierProfiles(legacy.id).isEmpty())
+            assertTrue(repo.supplierReceiptLinks(legacy.id).isEmpty())
+            assertEquals("Old supplier name",repo.stockReceipts(legacy.id).single().supplierName)
+        }
     }
     @Test fun staleSupplierSelectionCannotSilentlyReceiveUnderRenamedDetails() {
         PosRepository(":memory:").use {repo ->

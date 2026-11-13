@@ -69,9 +69,11 @@ fun PosRepository.linkSupplierReceipt(tenantId:String,receiptId:String,supplierI
     if(replay!=null) {require(replay.receiptId==receiptId && replay.supplierId==supplierId) {"This receipt link was already saved with different details."};return@featureWrite replay}
     val supplier=requireSupplierProfile(tenantId,supplierId)
     require(!supplier.archived) {"Restore this supplier before linking purchases."}
-    require(stockReceipts(tenantId).any {it.id==receiptId}) {"Stock receipt does not belong to this shop."}
+    val receipt=stockReceipts(tenantId).singleOrNull {it.id==receiptId} ?: error("Stock receipt does not belong to this shop.")
     require(featureQuery("SELECT receipt_id FROM supplier_receipt_links WHERE tenant_id=? AND receipt_id=?",tenantId,receiptId) {it.getString(1)}.isEmpty()) {"This receipt is already linked to a supplier. Its identity cannot be silently changed."}
-    val link=SupplierReceiptLink(tenantId,receiptId,supplierId,operationId,Instant.now().toString())
+    val now=Instant.now()
+    require(!now.isBefore(Instant.parse(receipt.createdAt)) && !now.isBefore(Instant.parse(supplier.createdAt))) {"The computer clock moved backwards. Correct it before linking this purchase."}
+    val link=SupplierReceiptLink(tenantId,receiptId,supplierId,operationId,now.toString())
     featureExecute("INSERT INTO supplier_receipt_links VALUES(?,?,?,?,?)",tenantId,receiptId,supplierId,operationId,link.createdAt)
     featureEvent(tenantId,"supplier.receipt_linked",receiptId)
     link
@@ -82,6 +84,7 @@ fun PosRepository.receiveStockForSupplier(tenantId:String,productId:String,quant
     validSupplierOperation(operationId)
     val saved=featureQuery("SELECT * FROM supplier_receipt_links WHERE tenant_id=? AND receipt_id=?",tenantId,operationId,map=::supplierLink).singleOrNull()
     val profile=requireSupplierProfile(tenantId,supplierId)
+    require(saved!=null || stockReceipts(tenantId).none {it.id==operationId}) {"This purchase already exists without an account link. Open the supplier profile and explicitly link the reviewed receipt."}
     require(saved!=null || expectedSupplierVersion==null || profile.version==expectedSupplierVersion) {"Supplier details changed. Reopen stock receiving and review the supplier."}
     require(saved!=null || !profile.archived) {"Restore this supplier before receiving more goods."}
     require(saved==null || saved.supplierId==supplierId) {"This purchase was already linked to another supplier."}
@@ -105,10 +108,15 @@ internal fun PosRepository.validateSupplierProfileSnapshot(tenantId:String) {
         }
         require(changes.last().current==profile.details && changes.last().currentArchived==profile.archived && changes.last().version==profile.version && changes.first().createdAt==profile.createdAt) {"Backup supplier profile does not match its history."}
     }
-    featureQuery("SELECT * FROM supplier_receipt_links WHERE tenant_id=?",tenantId,map=::supplierLink).forEach {link ->
+    val links=featureQuery("SELECT * FROM supplier_receipt_links WHERE tenant_id=?",tenantId,map=::supplierLink)
+    links.forEach {link ->
         Instant.parse(link.createdAt)
-        require(profiles.any {it.id==link.supplierId}) {"Backup receipt link has no supplier."}
-        require(stockReceipts(tenantId).any {it.id==link.receiptId}) {"Backup receipt link has no purchase."}
+        val profile=requireNotNull(profiles.find {it.id==link.supplierId}) {"Backup receipt link has no supplier."}
+        val receipt=requireNotNull(stockReceipts(tenantId).find {it.id==link.receiptId}) {"Backup receipt link has no purchase."}
+        require(!Instant.parse(link.createdAt).isBefore(Instant.parse(profile.createdAt)) && !Instant.parse(link.createdAt).isBefore(Instant.parse(receipt.createdAt))) {"Backup receipt link predates its source records."}
+    }
+    featureQuery("SELECT kind,entity_id FROM outbox WHERE tenant_id=? AND kind IN ('supplier.created','supplier.updated','supplier.receipt_linked')",tenantId) {it.getString(1) to it.getString(2)}.forEach {(kind,entity) ->
+        require(if(kind=="supplier.receipt_linked") links.any {it.receiptId==entity} else profiles.any {it.id==entity}) {"Backup supplier activity refers to missing account records."}
     }
 }
 
