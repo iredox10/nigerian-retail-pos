@@ -37,6 +37,8 @@ Desktop distributions are built for the host operating system. Build and test th
 - Tenant-scoped SQLite products, customers, sales, repayments, and outbox entries.
 - Product creation, name/unit/barcode search, price/name/barcode edits, archive/restore and preserved price history.
 - Whole-unit stock counts with previous/count/difference history, reason and stale-count rejection.
+- Source-linked stock history for opening counts, purchases in converted base units, sales, restocked returns and count corrections. Older goods without saved opening counts remain explicitly unknown.
+- Optional per-item reorder levels and a Low stock filter; archived goods are excluded. Product/low-stock snapshots and dated stock movements can be exported as CSV.
 - Cash checkout, exact amount/change, and explicit named-customer partial credit.
 - Atomic stock/debt/sale writes and retry deduplication with stable operation identifiers.
 - Tenant-scoped active and named held basket recovery after restart, including payment-entry text/customer/method; screen-state retention across navigation.

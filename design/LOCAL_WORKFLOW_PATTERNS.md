@@ -66,3 +66,15 @@ This extends the customer detail pattern from the locked Refero/Carbon direction
 - With unassigned payments, label receipt amounts as balances before those payments. Exact recorded-date overdue totals become available only once that customer's payments are fully assigned. Undated receipts remain separate.
 - Archived products and changed customer credit limits do not prevent assignment to completed receipts; those original sales are historical records.
 - Backup recovery validates both source records, same-customer links and cumulative limits before creating a recovered shop. Older backups carry no invented assignments.
+
+## Stock history and reorder levels
+
+The existing Stock contextual-detail pattern and Carbon table reference own this workflow. The feature specification's inventory-history and reorder requirements supply its behavior; existing surface/teal/warning tokens retain their roles.
+
+- Show source-linked stock movements under each item's History: known opening quantity, purchases in base units, sales, sellable returns and counted corrections. Damaged/non-restocked returns do not add goods.
+- Completed source records supply the movement history. A display query cannot create another purchase, sale or correction.
+- Older items with no historical opening quantity are marked unknown. Do not infer a starting count, claim a complete running balance or label unknown as zero.
+- Set an optional whole-unit reorder level under item Details. Blank disables the alert; zero alerts only when the item has no stock. Alert when recorded stock is at or below the level.
+- Low stock filters active items only. Archiving goods keeps their historical movements but removes them from reorder alerts.
+- Movement exports retain signed base quantities, timestamps, source IDs and opening-history certainty. Low-stock/product exports are current snapshots rather than historical stock balances.
+- Changing a reorder level keeps setting history but never changes stock or cash. This is an owner workspace tool; delegated staff approval remains a separate unfinished feature.

@@ -1,17 +1,29 @@
 # Desktop build status
 
-13 November 2026 · Explicit repayment allocation update
+13 November 2026 · Stock history and reorder alerts update
 
 ## Verified
 
 - Shared and desktop compilation with Kotlin 2.2.20, Compose 1.9.1 and JDK 17.
-- **147 automated tests pass**, with zero failures or errors: 39 prior tests plus six after-sales, four tenant-snapshot, four receipt, six CSV/report-date, eight encrypted-backup, three restore-regression, four product-import tests, eight catalogue/stock/customer-query tests, eight held-sale/recovery tests, five customer-statement tests, five purchase-unit persistence/migration tests, ten independent conversion-integrity tests, two purchase CSV tests, three credit-domain tests, seven customer-credit persistence tests, eight credit-review tests two credit-output/draft tests, seven repayment-allocation persistence tests, six additional allocation-aware credit-review tests and two allocation CSV tests.
+- **157 automated tests pass**, with zero failures or errors: 39 prior tests plus six after-sales, four tenant-snapshot, four receipt, six CSV/report-date, eight encrypted-backup, three restore-regression, four product-import tests, eight catalogue/stock/customer-query tests, eight held-sale/recovery tests, five customer-statement tests, five purchase-unit persistence/migration tests, ten independent conversion-integrity tests, two purchase CSV tests, three credit-domain tests, seven customer-credit persistence tests, eight credit-review tests two credit-output/draft tests, seven repayment-allocation persistence tests, six additional allocation-aware credit-review tests two allocation CSV tests, six stock-history integrity tests, two inventory migration/recovery tests and two inventory CSV tests.
 - Coverage includes cross-tenant rejection, exact kobo amounts, retry deduplication, return limits/restocking, supplier overpayment, atomic import rejection, WAT date boundaries, spreadsheet formula protection, encrypted tenant-only backup, wrong passwords, corrupted input, repeated restore and cash/debt-history consistency.
 - Linux desktop distribution rebuilt successfully using `gradle :desktopApp:createDistributable` at `desktopApp/build/compose/binaries/main/app/RetailPOS`.
 - Native isolated previews rendered for Reports, Sales, Suppliers, Backup and Import. Reports filled the 1920 × 1080 display; Sales and Suppliers were also inspected in the compositor-provided narrower window. See [Reports](artifacts/desktop-reports.png), [Sales](artifacts/desktop-sales.png), and [Suppliers](artifacts/desktop-suppliers.png), [Backup](artifacts/desktop-backup.png), and [Import](artifacts/desktop-import.png).
 - Previous fullscreen verification remains recorded in [the fullscreen render](artifacts/desktop-fullscreen.png). Startup requests true fullscreen with F11 and visible window controls. Window-manager behavior still needs Windows and multi-monitor verification.
 
-## Latest repayment-allocation additions
+## Latest inventory additions
+
+- Stock → Manage → History shows opening counts where recorded, purchases in converted base units, sales, restocked returns and count corrections, with source references and timestamps. Damaged/non-restocked returns add no stock movement.
+- New items preserve their opening quantity and recorded time. Older products and old backup rows keep these fields unset; the UI does not invent an opening count or running balance.
+- Optional reorder levels live under item Details. Blank disables the reminder; zero means out-of-stock only. Active goods at or below their threshold appear in Low stock; archived goods are excluded.
+- Threshold changes preserve setting history and retry protection without changing stock or cash. Backups preserve settings and opening metadata and reject invalid ranges or incomplete opening records.
+- Reports exports current low-stock snapshots and dated source movements. Product exports distinguish unknown opening quantities from zero and include reorder levels.
+- History renders the newest 100 movements first, with a labeled option to show more. Large-history database profiling remains outstanding.
+- Tests include receiving 2 cartons as 48 bottles, sale/restock/damaged return/count corrections, duplicate retries, tenant boundaries, actual old-database migration and backup round trips.
+- Native isolated Stock screen and History tab opened and inspected: [stock alerts](artifacts/desktop-stock-alerts.png), [low-stock filter](artifacts/desktop-low-stock-filter.png), [source movements](artifacts/desktop-inventory-movements.png). Sample history shows 240 opening bottles, a source-linked sale of 3 and current stock 237. Full threshold-edit interaction, keyboard-only journeys and merchant testing remain outstanding.
+- This is source history, not costing, inventory valuation or guaranteed running-balance reconstruction of legacy/fractional records.
+
+## Previous repayment-allocation additions
 
 - Assign already-recorded customer repayments to specific credit receipts. One payment may cover several receipts and a receipt may receive several payments, within both source limits.
 - Immutable links preserve the customer, source payment, source receipt, amount and timestamp. Retried assignments do not duplicate coverage.
