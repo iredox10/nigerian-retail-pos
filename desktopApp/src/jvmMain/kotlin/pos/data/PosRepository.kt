@@ -35,10 +35,10 @@ class PosRepository(path: String = File(System.getProperty("user.home"), ".niger
         requireTenant(tenantId)
         block()
     }
-    @Synchronized internal fun <T> featureRead(tenantId:String,permission:StaffPermission,block:PosRepository.()->T):T {
+    @Synchronized internal fun <T> featureRead(tenantId:String,permission:StaffPermission,block:PosRepository.()->T):T = transaction {
         requirePermission(tenantId,permission)
         requireTenant(tenantId)
-        return block()
+        block()
     }
     internal fun featureExecute(sql:String,vararg args:Any?):Int = execute(sql,*args)
     internal fun <T> featureQuery(sql:String,vararg args:Any?,map:(ResultSet)->T):List<T> = query(sql,*args,map=map)
@@ -134,6 +134,7 @@ class PosRepository(path: String = File(System.getProperty("user.home"), ".niger
         // This table is created only after the legacy outbox key has been migrated.
         db.createStatement().use { it.execute("CREATE TABLE IF NOT EXISTS activity_audit(id TEXT NOT NULL,tenant_id TEXT NOT NULL,kind TEXT NOT NULL,entity_id TEXT NOT NULL,created_at TEXT NOT NULL,actor_id TEXT,actor_name TEXT,actor_role TEXT CHECK(actor_role IN('OWNER','MANAGER','CASHIER')),description TEXT,PRIMARY KEY(tenant_id,id),FOREIGN KEY(tenant_id,id) REFERENCES outbox(tenant_id,id))") }
         createMetadataHistory()
+        initializeSupplierProfiles()
         execute("CREATE TRIGGER IF NOT EXISTS activity_audit_no_update BEFORE UPDATE ON activity_audit BEGIN SELECT RAISE(ABORT,'Activity history cannot be edited'); END")
         execute("CREATE TRIGGER IF NOT EXISTS activity_audit_no_delete BEFORE DELETE ON activity_audit BEGIN SELECT RAISE(ABORT,'Activity history cannot be removed'); END")
     }
@@ -142,7 +143,8 @@ class PosRepository(path: String = File(System.getProperty("user.home"), ".niger
         transaction {
             val additions=mapOf(
                 "products" to listOf("quantity_precision INTEGER NOT NULL DEFAULT 0 CHECK(quantity_precision BETWEEN 0 AND 6)","stock_scaled INTEGER CHECK(stock_scaled>=0)"),
-                "sale_lines" to listOf("quantity_precision INTEGER NOT NULL DEFAULT 0 CHECK(quantity_precision BETWEEN 0 AND 6)","base_precision INTEGER NOT NULL DEFAULT 0 CHECK(base_precision BETWEEN 0 AND 6)"),
+                "sales" to listOf("basket_discount_kind TEXT", "basket_discount_value INTEGER", "basket_discount_reason TEXT"),
+                "sale_lines" to listOf("basket_discount_minor INTEGER NOT NULL DEFAULT 0 CHECK(basket_discount_minor>=0)","quantity_precision INTEGER NOT NULL DEFAULT 0 CHECK(quantity_precision BETWEEN 0 AND 6)","base_precision INTEGER NOT NULL DEFAULT 0 CHECK(base_precision BETWEEN 0 AND 6)"),
                 "stock_receipts" to listOf("quantity_precision INTEGER NOT NULL DEFAULT 0 CHECK(quantity_precision BETWEEN 0 AND 6)","base_precision INTEGER NOT NULL DEFAULT 0 CHECK(base_precision BETWEEN 0 AND 6)"),
                 "return_lines" to listOf("quantity_precision INTEGER NOT NULL DEFAULT 0 CHECK(quantity_precision BETWEEN 0 AND 6)","base_precision INTEGER NOT NULL DEFAULT 0 CHECK(base_precision BETWEEN 0 AND 6)","refund_override_minor INTEGER CHECK(refund_override_minor>=0)"),
                 "stock_adjustments" to listOf("quantity_precision INTEGER NOT NULL DEFAULT 0 CHECK(quantity_precision BETWEEN 0 AND 6)")
@@ -477,9 +479,9 @@ class PosRepository(path: String = File(System.getProperty("user.home"), ".niger
         return query("SELECT * FROM sales WHERE tenant_id=? ORDER BY created_at DESC",tenantId,map=::sale)
     }
     /** cashMinor is applied cash, excluding change. Caller must explicitly choose a customer for credit. */
-    @Synchronized fun checkout(tenantId: String, lines: List<CartLine>, cashMinor: Long, customerId: String? = null, operationId: String? = null, dueDate: String? = null): Sale = transaction {
+    @Synchronized fun checkout(tenantId: String, lines: List<CartLine>, cashMinor: Long, customerId: String? = null, operationId: String? = null, dueDate: String? = null,basketDiscount:BasketDiscount?=null): Sale = transaction {
         requirePermission(tenantId, StaffPermission.SELL)
-        if (lines.any { it.discountPerUnitMinor > 0 }) requirePermission(tenantId, StaffPermission.DISCOUNT)
+        if (basketDiscount!=null || lines.any { it.discountPerUnitMinor > 0 || it.basketDiscountMinor>0 }) requirePermission(tenantId, StaffPermission.DISCOUNT)
         if (cashMinor < cartTotal(lines)) requirePermission(tenantId, StaffPermission.SELL_CREDIT)
         requireTenant(tenantId)
         require(lines.isNotEmpty()) { "Choose an item before taking payment." }
@@ -487,6 +489,7 @@ class PosRepository(path: String = File(System.getProperty("user.home"), ".niger
         require(lines.all { it.product.tenantId==tenantId && it.quantity>0 }) { "Items must belong to this shop with a positive quantity." }
         val requested=lines.groupBy { it.key }.values.map { group ->
             val first=group.first()
+            require(group.size==1 || group.all {it.basketDiscountMinor==0L}) { "Combine basket-discounted items before checkout." }
             require(group.all { lineDetails(it.copy(quantity=first.quantity))==lineDetails(first) }) { "Repeated item details disagree. Review the sale." }
             first.copy(quantity=group.fold(0) { sum,line -> Math.addExact(sum,line.quantity) })
         }
@@ -494,7 +497,7 @@ class PosRepository(path: String = File(System.getProperty("user.home"), ".niger
         if (operationId != null) {
             val existing=sales(tenantId).find { it.id==operationId }
             if (existing!=null) {
-                require(existing.cashMinor==cashMinor && existing.customerId==customerId && existing.dueDate==dueDate && existing.lines.sortedBy { it.key }.map(::lineDetails)==requested.sortedBy { it.key }.map(::lineDetails)) { "This operation was already saved with different details." }
+                require(existing.cashMinor==cashMinor && existing.customerId==customerId && existing.dueDate==dueDate && existing.basketDiscount==basketDiscount && existing.lines.sortedBy { it.key }.map(::lineDetails)==requested.sortedBy { it.key }.map(::lineDetails)) { "This operation was already saved with different details." }
                 return@transaction existing
             }
         }
@@ -504,10 +507,11 @@ class PosRepository(path: String = File(System.getProperty("user.home"), ".niger
             require(line.product.priceMinor==current.priceMinor && line.product.unit==current.unit && line.product.name==current.name) { "Item details changed. Review the sale." }
             val unit=line.sellingUnitId?.let { requireSellingUnit(tenantId,it) }
             require(unit==null || (!unit.archived && unit.productId==current.id && unit.baseUnit==current.unit)) { "Choose an active selling unit belonging to this item." }
-            val normalizedLine=CartLine(current.copy(stockScaled=null),line.quantity,unit?.id,unit?.name ?: current.unit,unit?.priceMinor ?: current.priceMinor,unit?.baseUnitsPerUnit ?: 1,line.discountPerUnitMinor,line.discountReason,line.quantityPrecision)
+            val normalizedLine=CartLine(current.copy(stockScaled=null),line.quantity,unit?.id,unit?.name ?: current.unit,unit?.priceMinor ?: current.priceMinor,unit?.baseUnitsPerUnit ?: 1,line.discountPerUnitMinor,line.discountReason,line.quantityPrecision,line.basketDiscountMinor)
             require(lineDetails(line)==lineDetails(normalizedLine)) { "Selling unit details changed. Review the sale." }
             normalizedLine
         }
+        require(if(basketDiscount==null) normalized.all {it.basketDiscountMinor==0L} else allocateBasketDiscount(normalized,basketDiscount).map {it.basketDiscountMinor}==normalized.map {it.basketDiscountMinor}) { "Basket discount changed. Review the sale before payment." }
         val stockUpdates=normalized.groupBy { it.product.id }.map { (productId,group) ->
             val quantity=group.fold(0L) { sum,line -> Math.addExact(sum,line.baseQuantity) }
             productId to scaledStock(requireProduct(tenantId,productId),Math.negateExact(quantity))
@@ -527,10 +531,10 @@ class PosRepository(path: String = File(System.getProperty("user.home"), ".niger
                 require(customer.creditLimitMinor?.let { debt<=it } != false) { "This sale would exceed the customer's credit limit of ${customer.creditLimitMinor?.let(::money)}. Reduce the credit or review the customer limit." }
             }
         } else null
-        val sale=Sale(operationId ?: id(),tenantId,normalized,total,cashMinor,credit,customerId,Instant.now().toString(),dueDate)
-        execute("INSERT INTO sales(id,tenant_id,total_minor,cash_minor,credit_minor,customer_id,created_at,due_date) VALUES(?,?,?,?,?,?,?,?)",sale.id,tenantId,total,cashMinor,credit,customerId,sale.createdAt,dueDate)
+        val sale=Sale(operationId ?: id(),tenantId,normalized,total,cashMinor,credit,customerId,Instant.now().toString(),dueDate,basketDiscount)
+        execute("INSERT INTO sales(id,tenant_id,total_minor,cash_minor,credit_minor,customer_id,created_at,due_date,basket_discount_kind,basket_discount_value,basket_discount_reason) VALUES(?,?,?,?,?,?,?,?,?,?,?)",sale.id,tenantId,total,cashMinor,credit,customerId,sale.createdAt,dueDate,basketDiscount?.kind,basketDiscount?.value,basketDiscount?.reason)
         normalized.forEach { l ->
-            execute("INSERT INTO sale_lines(sale_id,tenant_id,product_id,name,unit,price_minor,quantity,selling_unit_id,selling_unit,unit_price_minor,base_units_per_unit,discount_per_unit_minor,discount_reason,quantity_precision,base_precision) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",sale.id,tenantId,l.product.id,l.product.name,l.product.unit,l.product.priceMinor,l.quantity,l.sellingUnitId,l.sellingUnit,l.unitPriceMinor,l.baseUnitsPerUnit,l.discountPerUnitMinor,l.discountReason,l.quantityPrecision,l.product.quantityPrecision)
+            execute("INSERT INTO sale_lines(sale_id,tenant_id,product_id,name,unit,price_minor,quantity,selling_unit_id,selling_unit,unit_price_minor,base_units_per_unit,discount_per_unit_minor,discount_reason,quantity_precision,base_precision,basket_discount_minor) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",sale.id,tenantId,l.product.id,l.product.name,l.product.unit,l.product.priceMinor,l.quantity,l.sellingUnitId,l.sellingUnit,l.unitPriceMinor,l.baseUnitsPerUnit,l.discountPerUnitMinor,l.discountReason,l.quantityPrecision,l.product.quantityPrecision,l.basketDiscountMinor)
         }
         stockUpdates.forEach { (productId,stock) -> saveScaledStock(tenantId,productId,stock) }
         if (newDebt!=null) execute("UPDATE customers SET balance_minor=? WHERE tenant_id=? AND id=?",newDebt,tenantId,customerId)
@@ -612,7 +616,7 @@ class PosRepository(path: String = File(System.getProperty("user.home"), ".niger
     }
     private fun sellingUnit(r:ResultSet)=SellingUnit(r.getString("id"),r.getString("tenant_id"),r.getString("product_id"),r.getString("name"),r.getString("base_unit"),r.getInt("base_units_per_unit"),r.getLong("price_minor"),r.getString("barcode"),r.getInt("archived")==1,r.getString("created_at"))
     private fun requireSellingUnit(tenantId:String,unitId:String)=query("SELECT * FROM selling_units WHERE tenant_id=? AND id=?",tenantId,unitId,map=::sellingUnit).singleOrNull() ?: throw IllegalArgumentException("Selling unit not found in this shop.")
-    private fun lineDetails(line:CartLine)=listOf(line.key,line.product.id,line.sellingUnitId,line.quantity,line.product.name,line.product.unit,line.product.priceMinor,line.sellingUnit,line.unitPriceMinor,line.baseUnitsPerUnit,line.discountPerUnitMinor,line.discountReason,line.quantityPrecision,line.product.quantityPrecision)
+    private fun lineDetails(line:CartLine)=listOf(line.key,line.product.id,line.sellingUnitId,line.quantity,line.product.name,line.product.unit,line.product.priceMinor,line.sellingUnit,line.unitPriceMinor,line.baseUnitsPerUnit,line.discountPerUnitMinor,line.discountReason,line.quantityPrecision,line.product.quantityPrecision,line.basketDiscountMinor)
     private data class StockUpdate(val stock:Double,val scaled:Long?)
     private fun exactProjection(scaled:Long, precision:Int):Boolean =
         java.math.BigDecimal.valueOf(projectedQuantity(scaled,precision)).movePointRight(precision).compareTo(java.math.BigDecimal.valueOf(scaled))==0
@@ -827,8 +831,8 @@ class PosRepository(path: String = File(System.getProperty("user.home"), ".niger
         val lines=quantities.entries.sortedBy { it.key }.map { (productId,quantity) ->
             val original=sale.lines.single { it.key==productId }
             val already=original.quantity-requireNotNull(remaining[productId])
-            val previousAmount=Quantity(already.toLong(),original.quantityPrecision).lineTotalMinor(original.netUnitPriceMinor)
-            val cumulative=Quantity(Math.addExact(already,quantity).toLong(),original.quantityPrecision).lineTotalMinor(original.netUnitPriceMinor)
+            val previousAmount=original.cumulativeRefundMinor(already)
+            val cumulative=original.cumulativeRefundMinor(Math.addExact(already,quantity))
             ReturnLine(original.product.id,original.product.name,original.sellingUnit,quantity,original.netUnitPriceMinor,original.sellingUnitId,original.baseUnitsPerUnit,original.product.unit,original.quantityPrecision,original.product.quantityPrecision,cumulative-previousAmount)
         }
         val refund=lines.fold(0L) { total,line -> Math.addExact(total,line.totalMinor) }
@@ -883,10 +887,11 @@ class PosRepository(path: String = File(System.getProperty("user.home"), ".niger
     }
     private fun sale(r:ResultSet):Sale {
         val tenantId=r.getString("tenant_id"); val saleId=r.getString("id")
+        require(listOf(r.getString("basket_discount_kind"),r.getString("basket_discount_value"),r.getString("basket_discount_reason")).let { fields -> fields.all {it==null} || fields.all {it!=null} }) { "Saved basket discount metadata is incomplete." }
         val lines=query("SELECT * FROM sale_lines WHERE tenant_id=? AND sale_id=? ORDER BY id",tenantId,saleId) { line ->
-            CartLine(Product(line.getString("product_id"),tenantId,line.getString("name"),line.getString("unit"),line.getLong("price_minor"),0.0,quantityPrecision=line.getInt("base_precision")),line.getInt("quantity"),line.getString("selling_unit_id"),line.getString("selling_unit") ?: line.getString("unit"),(line.getObject("unit_price_minor") as? Number)?.toLong() ?: line.getLong("price_minor"),line.getInt("base_units_per_unit"),line.getLong("discount_per_unit_minor"),line.getString("discount_reason"),line.getInt("quantity_precision"))
+            CartLine(Product(line.getString("product_id"),tenantId,line.getString("name"),line.getString("unit"),line.getLong("price_minor"),0.0,quantityPrecision=line.getInt("base_precision")),line.getInt("quantity"),line.getString("selling_unit_id"),line.getString("selling_unit") ?: line.getString("unit"),(line.getObject("unit_price_minor") as? Number)?.toLong() ?: line.getLong("price_minor"),line.getInt("base_units_per_unit"),line.getLong("discount_per_unit_minor"),line.getString("discount_reason"),line.getInt("quantity_precision"),line.getLong("basket_discount_minor"))
         }
-        return Sale(saleId,tenantId,lines,r.getLong("total_minor"),r.getLong("cash_minor"),r.getLong("credit_minor"),r.getString("customer_id"),r.getString("created_at"),r.getString("due_date"))
+        return Sale(saleId,tenantId,lines,r.getLong("total_minor"),r.getLong("cash_minor"),r.getLong("credit_minor"),r.getString("customer_id"),r.getString("created_at"),r.getString("due_date"),r.getString("basket_discount_kind")?.let {BasketDiscount(it,r.getLong("basket_discount_value"),requireNotNull(r.getString("basket_discount_reason")))})
     }
     private fun requireSale(tenantId:String,saleId:String):Sale {
         requireTenant(tenantId)
@@ -904,7 +909,7 @@ class PosRepository(path: String = File(System.getProperty("user.home"), ".niger
     }
     private fun supplierPayment(r:ResultSet)=SupplierPayment(r.getString("id"),r.getString("tenant_id"),r.getString("receipt_id"),r.getString("supplier_name"),r.getLong("amount_minor"),r.getString("created_at"))
 
-    private val snapshotTableOrder get() = listOf("products","product_metadata_changes","selling_units","stock_settings_changes","purchase_units","customers","customer_changes","cash_shifts","sales","sale_lines","repayments","repayment_allocations","allocation_reversals","stock_receipts","expenses","sale_returns","return_lines","supplier_payments","cash_entries","catalogue_changes","stock_adjustments","outbox","activity_audit")
+    private val snapshotTableOrder get() = listOf("products","product_metadata_changes","selling_units","stock_settings_changes","purchase_units","customers","customer_changes","cash_shifts","sales","sale_lines","repayments","repayment_allocations","allocation_reversals","stock_receipts","expenses","sale_returns","return_lines","supplier_payments","cash_entries","catalogue_changes","stock_adjustments","outbox","activity_audit") + supplierProfileSnapshotTables
     @Synchronized fun exportTenantSnapshot(tenantId:String):TenantSnapshot = transaction {
         requirePermission(tenantId, StaffPermission.BACKUP)
         requireTenant(tenantId)
@@ -932,7 +937,7 @@ class PosRepository(path: String = File(System.getProperty("user.home"), ".niger
                 schema.values.forEach { (name,type,required) ->
                     val value=row[name]
                     val generatedId=(table=="sale_lines" || table=="return_lines") && name=="id"
-                    require(!required || value!=null || generatedId || (name in setOf("quantity_precision","base_precision") && name !in row) || (table=="cash_shifts" && name=="closing_blind" && name !in row) || (table=="products" && name in setOf("archived","aliases","favourite") && name !in row) || (table in setOf("stock_receipts","sale_lines","return_lines") && name=="base_units_per_unit" && name !in row) || (table=="sale_lines" && name=="discount_per_unit_minor" && name !in row)) { "Backup is missing a required value in $table." }
+                    require(!required || value!=null || generatedId || (name in setOf("quantity_precision","base_precision") && name !in row) || (table=="cash_shifts" && name=="closing_blind" && name !in row) || (table=="products" && name in setOf("archived","aliases","favourite") && name !in row) || (table in setOf("stock_receipts","sale_lines","return_lines") && name=="base_units_per_unit" && name !in row) || (table=="sale_lines" && name in setOf("discount_per_unit_minor","basket_discount_minor") && name !in row)) { "Backup is missing a required value in $table." }
                     if(value!=null && type=="INTEGER") require(value.toLongOrNull()!=null) { "Backup has invalid integer data in $table." }
                     if(value!=null && name=="quantity" && table in setOf("sale_lines","stock_receipts","return_lines")) {
                         val quantity=value.toLongOrNull()
@@ -1059,7 +1064,7 @@ class PosRepository(path: String = File(System.getProperty("user.home"), ".niger
                 val returned=saleReturns(tenant.id,sale.id).flatMap {it.lines}.filter {it.key==original.key}
                 val quantity=returned.fold(0L) {sum,line -> Math.addExact(sum,line.quantity.toLong())}
                 val refund=returned.fold(0L) {sum,line -> Math.addExact(sum,line.totalMinor)}
-                require(refund==Quantity(quantity,original.quantityPrecision).lineTotalMinor(original.netUnitPriceMinor)) { "Backup refunds do not reconcile with returned quantities and the original saved price." }
+                require(refund==original.cumulativeRefundMinor(Math.toIntExact(quantity))) { "Backup refunds do not reconcile with returned quantities and the original saved price." }
             }
         }
         sales(tenant.id).forEach { sale -> require(returnableQuantities(tenant.id,sale.id).values.all { it>=0 }) { "Backup returns exceed original quantities." } }
@@ -1075,6 +1080,7 @@ class PosRepository(path: String = File(System.getProperty("user.home"), ".niger
             }.singleOrNull()
             require(linked == Triple(event.kind,event.entityId,event.createdAt)) { "Backup activity does not match its original saved event." }
         }
+        validateSupplierProfileSnapshot(tenant.id)
         provisionOwner(tenant)
         tenant
     }
