@@ -64,7 +64,7 @@ Desktop distributions are built for the host operating system. Build and test th
 
 ## Important boundaries
 
-- Local tenant isolation and owner passwords are implemented. Online identity, staff roles/memberships, server authorization, remote tenant administration, and encrypted local storage are not yet implemented. This is not ready for untrusted shared-computer or multi-user SaaS production deployment.
+- Local tenant isolation, owner/staff passwords and local role permissions are implemented. Online identity/memberships, server authorization, remote tenant administration, and encrypted local storage are not yet implemented. This is not ready for untrusted shared-computer or multi-user SaaS production deployment.
 - No cloud sync transport, Heroku backend, bank/card verification, or external messages are connected. Native print submission is implemented; real printer output remains unverified. Manual encrypted backups are local files, not cloud backups. The status bar explicitly says so.
 - Current stock uses one base stock unit per product and integer checkout quantities in either the base unit or a configured selling pack. Receiving supports merchant-defined whole-unit cartons/packs with conversion snapshots. Fractional checkout, credit-sale returns/exchanges, full supplier accounting, and other advanced modules remain future work. Later cash supplier payments are allocated to individual stock receipts; supplier master profiles, credits and statements remain pending.
 - Backups exclude unfinished baskets, owner credentials and device settings. Restore creates a separate shop and preserves historical cash counts; verify physical cash before trading. Backup encryption does not encrypt the working database.
@@ -104,3 +104,7 @@ Negotiated unit prices are available through Sell → Change price. Enter the lo
 Credit review now shows current unpaid balances by days late, including a separate undated group, and exports all customer ageing to CSV. Exact bands remain unavailable while repayments are unassigned; assign payments to receipts under Customers first.
 
 Payment assignments can be corrected under Customers → View history → Assign payments to receipts → Undo assignment. Enter a reason; the original assignment stays in history. Its amount becomes available to assign again. This changes receipt coverage only; customer debt, cash and stock stay unchanged.
+
+The remaining whole-product work is tracked in [IMPLEMENTATION_TODO.md](IMPLEMENTATION_TODO.md). Checkboxes represent verified subtasks, and the full feature specification remains authoritative.
+
+Local staff access uses owner, manager and cashier roles. Owners manage staff under More → Staff & permissions. Staff use full passwords on this computer; PINs, remote accounts and actor attribution are separate unfinished items. Cashiers can make cash sales and view receipts; managers can perform operational work; owner-only staff management and backup actions are enforced through the active application session.

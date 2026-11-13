@@ -5,11 +5,23 @@
 ## Verified
 
 - Shared and desktop compilation with Kotlin 2.2.20, Compose 1.9.1 and JDK 17.
-- **204 automated tests pass**, with zero failures or errors. The negotiated-price checkpoint added 13 tests to the previous 170-test checkpoint; six ageing-band tests brought the total to 189. Fifteen correction/domain/export tests bring the total to 204.
+- **220 automated tests pass**, with zero failures or errors. The negotiated-price checkpoint added 13 tests to the previous 170-test checkpoint; six ageing-band tests brought the total to 189. Fifteen correction/domain/export tests bring the total to 204.
 - Coverage includes cross-tenant rejection, exact kobo amounts, retry deduplication, return limits/restocking, supplier overpayment, atomic import rejection, WAT date boundaries, spreadsheet formula protection, encrypted tenant-only backup, wrong passwords, corrupted input, repeated restore and cash/debt-history consistency.
 - Linux desktop distribution rebuilt successfully using `gradle :desktopApp:createDistributable` at `desktopApp/build/compose/binaries/main/app/RetailPOS`.
 - Native isolated previews rendered for Reports, Sales, Suppliers, Backup and Import. Reports filled the 1920 × 1080 display; Sales and Suppliers were also inspected in the compositor-provided narrower window. See [Reports](artifacts/desktop-reports.png), [Sales](artifacts/desktop-sales.png), and [Suppliers](artifacts/desktop-suppliers.png), [Backup](artifacts/desktop-backup.png), and [Import](artifacts/desktop-import.png).
 - Previous fullscreen verification remains recorded in [the fullscreen render](artifacts/desktop-fullscreen.png). Startup requests true fullscreen with F11 and visible window controls. Window-manager behavior still needs Windows and multi-monitor verification.
+
+## Local staff identities and permissions — 13 November 2026
+
+- A complete remaining-feature checklist is now kept in IMPLEMENTATION_TODO.md. Only verified subtasks are checked; the long-term product remains unfinished.
+- Owner-managed local staff accounts use separate salted PBKDF2 password credentials. Owners add cashier/manager accounts, rename/change roles, disable/enable and reset passwords. Staff accounts and credentials are excluded from business backups.
+- Cashiers can make cash sales and view/print/export individual receipts. Managers have operational stock/customer/credit/discount/refund/money/report/supplier access. Staff management and encrypted shop backups are owner-only.
+- The app installs a genuine-session validator on repository mutations, including successful-operation replays. Credit and discounted checkout require additional permissions. Credential/role/active changes invalidate staff sessions across instances through version checks; the shell rechecks sessions every 15 seconds and on navigation.
+- Restore from the locked picker uses an explicit trusted recovery connection and still requires backup decryption plus new-owner credential provisioning. It returns to owner sign-in. Working business DB encryption, staff PINs, attempt throttling, idle expiry, actor attribution and approval flows remain pending.
+- Sixteen additional tests cover role policy, denied mutations leaving whole snapshots unchanged, genuine credentials, forged sessions, revocation/reset, cross-instance persistence, safe create retries, backup exclusion and JVM class loading. All 220 integrated tests pass; Linux distributable rebuilt.
+- Native isolated preview: inspected owner staff management, locked the workspace, selected Sample cashier, entered its password and unlocked the restricted Sell/Sales workspace. Evidence: [management](artifacts/desktop-staff-management.png), [sign-in](artifacts/desktop-staff-sign-in.png), [cashier workspace](artifacts/desktop-cashier-workspace.png).
+- A runtime bytecode/class-loading problem in the first screen structure was corrected and is covered by a regression test. Native cashier payment completion, full staff creation/reset dialogs, manager sign-in, restored-backup sign-in and automatic revocation polling were not exercised end-to-end in this visual pass; their service/repository paths have automated coverage.
+- Credentials enforce local application access only. They do not establish server-side membership or protect records from OS/filesystem access.
 
 ## Correcting payment assignments — 13 November 2026
 

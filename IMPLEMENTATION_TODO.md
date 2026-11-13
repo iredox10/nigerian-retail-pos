@@ -1,31 +1,33 @@
 # Complete implementation TODO
 
 Authority: FEATURE_SPECIFICATION.md (all 32 sections). Coverage and evidence: IMPLEMENTATION_STATUS.md and BUILD_STATUS.md.
+Provider decisions: [PROVIDER_DECISIONS.md](PROVIDER_DECISIONS.md). Paystack selected; Telegram first; no existing Heroku app.
+
 Created 13 November 2026. Work through each item with three implementation agents, integrate and verify, then make small commits.
 
 A checked box means that specific item has implementation and recorded verification. It does not mark its whole module production-ready. Keep unfinished subtasks unchecked. External prerequisites are dependencies, not completed features. Do not invent credentials, successful integrations, merchant studies or hardware results.
 
-## Current work: staff identities and permissions
+## Staff identities and permissions — local password/role batch verified
 
-- [ ] Local staff identities and password credentials scoped to a shop.
-- [ ] Owner, manager and cashier permission policies.
-- [ ] Owner staff creation, role changes, disable/enable and password reset.
-- [ ] Staff sign-in, session validation and revocation.
-- [ ] Enforce mutation permissions at the repository boundary and restrict visible routes/actions.
-- [ ] Protect owner backup and staff management operations.
-- [ ] Verify migration, tenant isolation, revocation, denied actions, actual desktop login and packaging.
+- [x] Local staff identities and password credentials scoped to a shop.
+- [x] Owner, manager and cashier permission policies.
+- [x] Owner staff creation, role changes, disable/enable and password reset.
+- [x] Staff sign-in, session validation and revocation.
+- [x] Enforce mutation permissions at the repository boundary and restrict visible routes/actions.
+- [x] Protect owner backup and staff management operations.
+- [x] Verify migration, tenant isolation, revocation, denied actions, actual desktop login and packaging.
 - [ ] Short staff PIN unlock with attempt limits and secure device policy.
 - [ ] Attribute every financial/catalogue/correction event to an actor.
 - [ ] Owner/manager approval requests and auditable overrides.
 - [ ] Session expiry, inactivity lock, credential recovery and staff security review.
 - [ ] Staff commissions and performance reports.
 
-## Quantities and catalogue
+## Next implementation: quantities and catalogue
 
 - [ ] Exact scaled fractional quantities and explicit precision per product.
 - [ ] Fractional checkout, stock receiving, returns, counts and conversion snapshots.
 - [ ] Safe migration of existing quantities and backward-compatible backup/import handling.
-- [ ] Explicit repacking/break-bulk ledger and conversion reconciliation.
+- [ ] Nested package conversion definitions and explicit repacking/break-bulk reconciliation.
 - [ ] SKU, categories, brands, aliases and product search filters.
 - [ ] Product variants and unique variant barcodes.
 - [ ] Product images and offline attachment storage.
