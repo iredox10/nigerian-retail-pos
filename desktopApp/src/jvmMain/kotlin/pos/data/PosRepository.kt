@@ -84,6 +84,7 @@ class PosRepository(path: String = File(System.getProperty("user.home"), ".niger
         }
         // Create after the legacy repayment-key migration so every reference has a scoped parent key.
         db.createStatement().use { it.execute("CREATE TABLE IF NOT EXISTS repayment_allocations(id TEXT NOT NULL,tenant_id TEXT NOT NULL,customer_id TEXT NOT NULL,repayment_id TEXT NOT NULL,sale_id TEXT NOT NULL,amount_minor INTEGER NOT NULL CHECK(amount_minor>0),created_at TEXT NOT NULL,PRIMARY KEY(tenant_id,id),FOREIGN KEY(tenant_id,customer_id) REFERENCES customers(tenant_id,id),FOREIGN KEY(tenant_id,repayment_id) REFERENCES repayments(tenant_id,id),FOREIGN KEY(tenant_id,sale_id) REFERENCES sales(tenant_id,id))") }
+        db.createStatement().use { it.execute("CREATE TABLE IF NOT EXISTS allocation_reversals(id TEXT NOT NULL,tenant_id TEXT NOT NULL,customer_id TEXT NOT NULL,allocation_id TEXT NOT NULL,reason TEXT NOT NULL,created_at TEXT NOT NULL,PRIMARY KEY(tenant_id,id),UNIQUE(tenant_id,allocation_id),FOREIGN KEY(tenant_id,customer_id) REFERENCES customers(tenant_id,id),FOREIGN KEY(tenant_id,allocation_id) REFERENCES repayment_allocations(tenant_id,id))") }
         db.createStatement().use { it.execute("CREATE TABLE IF NOT EXISTS stock_settings_changes(id TEXT NOT NULL,tenant_id TEXT NOT NULL,product_id TEXT NOT NULL,previous_reorder_level INTEGER CHECK(previous_reorder_level>=0),reorder_level INTEGER CHECK(reorder_level>=0),created_at TEXT NOT NULL,PRIMARY KEY(tenant_id,id),FOREIGN KEY(tenant_id,product_id) REFERENCES products(tenant_id,id))") }
         // Legacy cash stays unassigned: a new shift's opening count already includes physical cash.
         transaction {
@@ -245,10 +246,38 @@ class PosRepository(path: String = File(System.getProperty("user.home"), ".niger
             CustomerRepayment(it.getString("id"),tenantId,it.getString("customer_id"),it.getLong("amount_minor"),it.getString("created_at"))
         }
     }
-    @Synchronized fun repaymentAllocations(tenantId:String,customerId:String?=null):List<RepaymentAllocation> {
+    @Synchronized fun repaymentAllocations(tenantId:String,customerId:String?=null,includeReversed:Boolean=false):List<RepaymentAllocation> {
         requireTenant(tenantId)
         if(customerId!=null) requireCustomer(tenantId,customerId)
-        return query("SELECT * FROM repayment_allocations WHERE tenant_id=?"+(if(customerId!=null) " AND customer_id=?" else "")+" ORDER BY created_at,id",*listOfNotNull(tenantId,customerId).toTypedArray(),map=::repaymentAllocation)
+        return query("SELECT a.* FROM repayment_allocations a WHERE a.tenant_id=?"+(if(customerId!=null) " AND a.customer_id=?" else "")+(if(includeReversed) "" else " AND NOT EXISTS(SELECT 1 FROM allocation_reversals r WHERE r.tenant_id=a.tenant_id AND r.allocation_id=a.id)")+" ORDER BY a.created_at,a.id",*listOfNotNull(tenantId,customerId).toTypedArray(),map=::repaymentAllocation)
+    }
+    @Synchronized fun allocationReversals(tenantId:String,customerId:String?=null):List<AllocationReversal> {
+        requireTenant(tenantId)
+        if(customerId!=null) requireCustomer(tenantId,customerId)
+        return query("SELECT * FROM allocation_reversals WHERE tenant_id=?"+(if(customerId!=null) " AND customer_id=?" else "")+" ORDER BY created_at,id",*listOfNotNull(tenantId,customerId).toTypedArray(),map=::allocationReversal)
+    }
+    /** Undo only the assignment, retaining both original history and the already-received payment. */
+    @Synchronized fun reverseRepaymentAllocation(tenantId:String,allocationId:String,reason:String,operationId:String?=null):AllocationReversal = transaction {
+        requireTenant(tenantId)
+        require(operationId==null || operationId.isNotBlank()) { "Operation identifier cannot be blank." }
+        val original=query("SELECT * FROM repayment_allocations WHERE tenant_id=? AND id=?",tenantId,allocationId,map=::repaymentAllocation).singleOrNull()
+            ?: throw IllegalArgumentException("Payment assignment not found in this shop.")
+        val now=Instant.now()
+        val correction=AllocationReversal(operationId?:id(),tenantId,original.customerId,allocationId,reason.trim(),now.toString())
+        if(operationId!=null) {
+            val previous=query("SELECT * FROM allocation_reversals WHERE tenant_id=? AND id=?",tenantId,operationId,map=::allocationReversal).singleOrNull()
+            if(previous!=null) {
+                require(previous.allocationId==allocationId && previous.reason==correction.reason) { "This correction was already saved with different details." }
+                return@transaction previous
+            }
+        }
+        require(query("SELECT id FROM allocation_reversals WHERE tenant_id=? AND allocation_id=?",tenantId,allocationId) { it.getString(1) }.isEmpty()) {
+            "This assignment has already been undone. Refresh its history before continuing."
+        }
+        require(!now.isBefore(Instant.parse(original.createdAt))) { "This computer's clock is earlier than the saved assignment time. Correct the clock before recording this correction." }
+        execute("INSERT INTO allocation_reversals(id,tenant_id,customer_id,allocation_id,reason,created_at) VALUES(?,?,?,?,?,?)",correction.id,tenantId,correction.customerId,allocationId,correction.reason,correction.createdAt)
+        enqueue(tenantId,"repayment.allocation_reversed",correction.id)
+        correction
     }
     /** Amount of this already-recorded payment which the owner has not assigned to a credit sale. */
     @Synchronized fun unallocatedRepayment(tenantId:String,repaymentId:String):Long {
@@ -727,7 +756,7 @@ class PosRepository(path: String = File(System.getProperty("user.home"), ".niger
     }
     private fun supplierPayment(r:ResultSet)=SupplierPayment(r.getString("id"),r.getString("tenant_id"),r.getString("receipt_id"),r.getString("supplier_name"),r.getLong("amount_minor"),r.getString("created_at"))
 
-    private val snapshotTableOrder get() = listOf("products","selling_units","stock_settings_changes","purchase_units","customers","customer_changes","cash_shifts","sales","sale_lines","repayments","repayment_allocations","stock_receipts","expenses","sale_returns","return_lines","supplier_payments","cash_entries","catalogue_changes","stock_adjustments","outbox")
+    private val snapshotTableOrder get() = listOf("products","selling_units","stock_settings_changes","purchase_units","customers","customer_changes","cash_shifts","sales","sale_lines","repayments","repayment_allocations","allocation_reversals","stock_receipts","expenses","sale_returns","return_lines","supplier_payments","cash_entries","catalogue_changes","stock_adjustments","outbox")
     @Synchronized fun exportTenantSnapshot(tenantId:String):TenantSnapshot = transaction {
         requireTenant(tenantId)
         val tenant=tenants().single { it.id==tenantId }
@@ -827,12 +856,19 @@ class PosRepository(path: String = File(System.getProperty("user.home"), ".niger
             val expected=granted.subtract(paid)
             require(expected.signum()>=0 && expected==java.math.BigInteger.valueOf(customer.balanceMinor)) { "Backup customer balance does not match credit sales and repayments." }
         }
-        val restoredAllocations=repaymentAllocations(tenant.id)
+        val restoredAllocations=repaymentAllocations(tenant.id,includeReversed=true)
         restoredAllocations.forEach { allocation ->
             val payment=requireRepayment(tenant.id,allocation.repaymentId)
             val sale=requireSale(tenant.id,allocation.saleId)
             require(allocation.customerId==payment.customerId && allocation.customerId==sale.customerId && sale.creditMinor>0) { "Backup repayment allocation does not belong to the same customer's credit sale." }
+            require(allocation.amountMinor<=payment.amountMinor && allocation.amountMinor<=sale.creditMinor) { "Backup repayment allocation exceeds its source payment or receipt." }
             Instant.parse(allocation.createdAt)
+        }
+        val allocationsById=restoredAllocations.associateBy { it.id }
+        allocationReversals(tenant.id).forEach { correction ->
+            val original=requireNotNull(allocationsById[correction.allocationId]) { "Backup correction refers to an unavailable payment assignment." }
+            require(correction.customerId==original.customerId) { "Backup correction belongs to another customer." }
+            require(!Instant.parse(correction.createdAt).isBefore(Instant.parse(original.createdAt))) { "Backup correction predates its original payment assignment." }
         }
         repayments(tenant.id).forEach { unallocatedRepayment(tenant.id,it.id) }
         sales(tenant.id).forEach { unallocatedCredit(tenant.id,it.id) }
@@ -897,12 +933,13 @@ class PosRepository(path: String = File(System.getProperty("user.home"), ".niger
     }
     private fun customer(r:ResultSet)=Customer(r.getString("id"),r.getString("tenant_id"),r.getString("name"),r.getLong("balance_minor"),r.getString("phone"),r.getString("address"),r.getObject("credit_limit_minor")?.let { (it as Number).toLong() })
     private fun repaymentAllocation(r:ResultSet)=RepaymentAllocation(r.getString("id"),r.getString("tenant_id"),r.getString("customer_id"),r.getString("repayment_id"),r.getString("sale_id"),r.getLong("amount_minor"),r.getString("created_at"))
+    private fun allocationReversal(r:ResultSet)=AllocationReversal(r.getString("id"),r.getString("tenant_id"),r.getString("customer_id"),r.getString("allocation_id"),r.getString("reason"),r.getString("created_at"))
     private fun requireRepayment(tenantId:String,repaymentId:String):CustomerRepayment=query("SELECT * FROM repayments WHERE tenant_id=? AND id=?",tenantId,repaymentId) {
         CustomerRepayment(it.getString("id"),tenantId,it.getString("customer_id"),it.getLong("amount_minor"),it.getString("created_at"))
     }.singleOrNull() ?: throw IllegalArgumentException("Repayment not found in this shop.")
     private fun allocationTotal(tenantId:String,column:String,sourceId:String):java.math.BigInteger {
         require(column=="repayment_id" || column=="sale_id")
-        return query("SELECT amount_minor FROM repayment_allocations WHERE tenant_id=? AND $column=?",tenantId,sourceId) { it.getLong(1) }.fold(java.math.BigInteger.ZERO) { total,amount -> total.add(java.math.BigInteger.valueOf(amount)) }
+        return query("SELECT a.amount_minor FROM repayment_allocations a WHERE a.tenant_id=? AND a.$column=? AND NOT EXISTS(SELECT 1 FROM allocation_reversals r WHERE r.tenant_id=a.tenant_id AND r.allocation_id=a.id)",tenantId,sourceId) { it.getLong(1) }.fold(java.math.BigInteger.ZERO) { total,amount -> total.add(java.math.BigInteger.valueOf(amount)) }
     }
     private fun remainingAllocation(original:Long,allocated:java.math.BigInteger,message:String):Long {
         val remaining=java.math.BigInteger.valueOf(original).subtract(allocated)
