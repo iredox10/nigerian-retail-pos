@@ -11,6 +11,17 @@ import java.util.UUID
 /** Local persistence boundary. All business record access requires an explicit tenant. */
 class PosRepository(path: String = File(System.getProperty("user.home"), ".nigerian-retail-pos/pos.db").path) : AutoCloseable {
     private val db: Connection
+    // A null callback is for trusted local tooling/tests. The desktop installs a genuine-session
+    // validator, including while locked; this adapter is not a server authorization boundary.
+    private var permissionCheck: ((String, StaffPermission) -> Unit)? = null
+
+    @Synchronized fun setPermissionCheck(check: ((String, StaffPermission) -> Unit)?) {
+        permissionCheck = check
+    }
+
+    private fun requirePermission(tenantId: String, permission: StaffPermission) {
+        permissionCheck?.invoke(tenantId, permission)
+    }
     init {
         if (path != ":memory:") File(path).absoluteFile.parentFile?.mkdirs()
         Class.forName("org.sqlite.JDBC")
@@ -110,6 +121,7 @@ class PosRepository(path: String = File(System.getProperty("user.home"), ".niger
         return query("SELECT * FROM customers WHERE tenant_id=? ORDER BY name", tenantId, map=::customer)
     }
     @Synchronized fun addProduct(tenantId: String, name: String, unit: String, priceMinor: Long, stock: Double, barcode:String?=null): Product = transaction {
+        requirePermission(tenantId, StaffPermission.MANAGE_STOCK)
         requireTenant(tenantId)
         require(name.isNotBlank() && unit.isNotBlank()) { "Enter the item name and selling unit." }
         require(priceMinor >= 0 && stock.isFinite() && stock >= 0 && stock <= 9_007_199_254_740_991.0) { "Enter a non-negative price and stock within the supported quantity range." }
@@ -121,6 +133,7 @@ class PosRepository(path: String = File(System.getProperty("user.home"), ".niger
     }
     /** Reminder only: changing a threshold never changes available quantity. */
     @Synchronized fun setReorderLevel(tenantId:String,productId:String,level:Int?,operationId:String?=null):Product = transaction {
+        requirePermission(tenantId, StaffPermission.MANAGE_STOCK)
         requireTenant(tenantId)
         require(level==null || level>=0) { "Enter a whole reorder level from 0, or leave it disabled." }
         require(operationId==null || operationId.isNotBlank()) { "Operation identifier cannot be blank." }
@@ -173,6 +186,7 @@ class PosRepository(path: String = File(System.getProperty("user.home"), ".niger
     }
     /** Editing never rewrites a sale's saved name, unit or price. Selling units stay fixed. */
     @Synchronized fun updateProduct(tenantId:String,productId:String,name:String,unit:String,priceMinor:Long,barcode:String?,operationId:String?=null):Product = transaction {
+        requirePermission(tenantId, StaffPermission.MANAGE_STOCK)
         requireTenant(tenantId)
         require(name.isNotBlank() && unit.isNotBlank() && priceMinor>=0) { "Enter an item name, selling unit and non-negative price." }
         require(operationId==null || operationId.isNotBlank()) { "Operation identifier cannot be blank." }
@@ -193,6 +207,7 @@ class PosRepository(path: String = File(System.getProperty("user.home"), ".niger
         changed
     }
     @Synchronized fun archiveProduct(tenantId:String,productId:String,archived:Boolean,operationId:String?=null) = transaction {
+        requirePermission(tenantId, StaffPermission.MANAGE_STOCK)
         requireTenant(tenantId)
         require(operationId==null || operationId.isNotBlank()) { "Operation identifier cannot be blank." }
         val item=requireProduct(tenantId,productId)
@@ -215,6 +230,7 @@ class PosRepository(path: String = File(System.getProperty("user.home"), ".niger
     }
     /** A physical count creates an immutable correction. Optional expectedStock catches stale count forms. */
     @Synchronized fun adjustStock(tenantId:String,productId:String,countedStock:Int,reason:String,operationId:String?=null,expectedStock:Double?=null):StockAdjustment = transaction {
+        requirePermission(tenantId, StaffPermission.MANAGE_STOCK)
         requireTenant(tenantId)
         require(countedStock>=0 && reason.isNotBlank()) { "Enter a non-negative whole count and the reason for this correction." }
         require(operationId==null || operationId.isNotBlank()) { "Operation identifier cannot be blank." }
@@ -258,6 +274,7 @@ class PosRepository(path: String = File(System.getProperty("user.home"), ".niger
     }
     /** Undo only the assignment, retaining both original history and the already-received payment. */
     @Synchronized fun reverseRepaymentAllocation(tenantId:String,allocationId:String,reason:String,operationId:String?=null):AllocationReversal = transaction {
+        requirePermission(tenantId, StaffPermission.MANAGE_CUSTOMERS)
         requireTenant(tenantId)
         require(operationId==null || operationId.isNotBlank()) { "Operation identifier cannot be blank." }
         val original=query("SELECT * FROM repayment_allocations WHERE tenant_id=? AND id=?",tenantId,allocationId,map=::repaymentAllocation).singleOrNull()
@@ -293,6 +310,7 @@ class PosRepository(path: String = File(System.getProperty("user.home"), ".niger
     }
     /** Allocation changes the assignment only. The payment already reduced debt and recorded cash. */
     @Synchronized fun allocateRepayment(tenantId:String,repaymentId:String,saleId:String,amountMinor:Long,operationId:String?=null):RepaymentAllocation = transaction {
+        requirePermission(tenantId, StaffPermission.MANAGE_CUSTOMERS)
         requireTenant(tenantId)
         require(amountMinor>0) { "Choose an allocation greater than zero." }
         require(operationId==null || operationId.isNotBlank()) { "Operation identifier cannot be blank." }
@@ -314,6 +332,7 @@ class PosRepository(path: String = File(System.getProperty("user.home"), ".niger
         result
     }
     @Synchronized fun addCustomer(tenantId: String, name: String, phone:String?=null, address:String?=null, creditLimitMinor:Long?=null): Customer = transaction {
+        requirePermission(tenantId, StaffPermission.MANAGE_CUSTOMERS)
         requireTenant(tenantId)
         require(name.isNotBlank()) { "Enter the customer's name." }
         Customer(id(),tenantId,name.trim(),0,normalizeNigerianPhone(phone),address?.trim()?.takeIf { it.isNotEmpty() },creditLimitMinor).also {
@@ -322,6 +341,7 @@ class PosRepository(path: String = File(System.getProperty("user.home"), ".niger
         }
     }
     @Synchronized fun updateCustomer(tenantId:String,customerId:String,name:String,phone:String?,address:String?,creditLimitMinor:Long?,operationId:String?=null):Customer = transaction {
+        requirePermission(tenantId, StaffPermission.MANAGE_CUSTOMERS)
         requireTenant(tenantId)
         require(operationId==null || operationId.isNotBlank()) { "Operation identifier cannot be blank." }
         val current=requireCustomer(tenantId,customerId)
@@ -346,6 +366,7 @@ class PosRepository(path: String = File(System.getProperty("user.home"), ".niger
     }
     /** Add-only import. Validate the entire batch before writing; never overwrite existing stock. */
     @Synchronized fun importProducts(tenantId:String, rows:List<ProductImportRow>):List<Product> = transaction {
+        requirePermission(tenantId, StaffPermission.MANAGE_STOCK)
         requireTenant(tenantId)
         require(rows.isNotEmpty() && rows.size <= 10_000) { "Import between 1 and 10,000 items at a time." }
         fun key(name:String,unit:String) = name.trim().lowercase(java.util.Locale.ROOT) to unit.trim().lowercase(java.util.Locale.ROOT)
@@ -362,6 +383,9 @@ class PosRepository(path: String = File(System.getProperty("user.home"), ".niger
     }
     /** cashMinor is applied cash, excluding change. Caller must explicitly choose a customer for credit. */
     @Synchronized fun checkout(tenantId: String, lines: List<CartLine>, cashMinor: Long, customerId: String? = null, operationId: String? = null, dueDate: String? = null): Sale = transaction {
+        requirePermission(tenantId, StaffPermission.SELL)
+        if (lines.any { it.discountPerUnitMinor > 0 }) requirePermission(tenantId, StaffPermission.DISCOUNT)
+        if (cashMinor < cartTotal(lines)) requirePermission(tenantId, StaffPermission.SELL_CREDIT)
         requireTenant(tenantId)
         require(lines.isNotEmpty()) { "Choose an item before taking payment." }
         require(cashMinor >= 0) { "Cash cannot be negative." }
@@ -420,6 +444,7 @@ class PosRepository(path: String = File(System.getProperty("user.home"), ".niger
         sale
     }
     @Synchronized fun recordRepayment(tenantId: String, customerId: String, amountMinor: Long, operationId: String? = null) = transaction {
+        requirePermission(tenantId, StaffPermission.MANAGE_CUSTOMERS)
         requireTenant(tenantId)
         require(amountMinor>0) { "Enter a payment greater than zero." }
         require(operationId==null || operationId.isNotBlank()) { "Operation identifier cannot be blank." }
@@ -441,6 +466,7 @@ class PosRepository(path: String = File(System.getProperty("user.home"), ".niger
     }
     /** Explicit opt-in only: sample records never appear in a merchant's real tenant. */
     @Synchronized fun seedDemoTenants(): List<Tenant> = transaction {
+        require(permissionCheck == null) { "Practice seeding is available only on an isolated trusted preview connection." }
         val existing=tenants().filter { it.id.startsWith("demo-") }
         if(existing.isNotEmpty()) existing else {
             listOf(Tenant("demo-adewale","Adewale Stores · Practice"),Tenant("demo-amina","Amina Provisions · Practice")).onEach { tenant ->
@@ -457,6 +483,7 @@ class PosRepository(path: String = File(System.getProperty("user.home"), ".niger
         return query("SELECT * FROM selling_units WHERE tenant_id=?"+(if(productId!=null) " AND product_id=?" else "")+(if(includeArchived) "" else " AND archived=0")+" ORDER BY name",*listOfNotNull(tenantId,productId).toTypedArray(),map=::sellingUnit)
     }
     @Synchronized fun addSellingUnit(tenantId:String,productId:String,name:String,factor:Int,priceMinor:Long,barcode:String?=null,operationId:String?=null):SellingUnit = transaction {
+        requirePermission(tenantId, StaffPermission.MANAGE_STOCK)
         requireTenant(tenantId)
         require(operationId==null || operationId.isNotBlank())
         val product=requireProduct(tenantId,productId)
@@ -479,6 +506,7 @@ class PosRepository(path: String = File(System.getProperty("user.home"), ".niger
         unit
     }
     @Synchronized fun archiveSellingUnit(tenantId:String,unitId:String,archived:Boolean) = transaction {
+        requirePermission(tenantId, StaffPermission.MANAGE_STOCK)
         requireTenant(tenantId)
         val unit=requireSellingUnit(tenantId,unitId)
         if(unit.archived!=archived) {
@@ -503,6 +531,7 @@ class PosRepository(path: String = File(System.getProperty("user.home"), ".niger
     }
     /** Buying factors are immutable: archive an old definition rather than rewriting received history. */
     @Synchronized fun addPurchaseUnit(tenantId:String,productId:String,name:String,baseUnitsPerUnit:Int,operationId:String?=null):PurchaseUnit = transaction {
+        requirePermission(tenantId, StaffPermission.MANAGE_STOCK)
         requireTenant(tenantId)
         require(operationId==null || operationId.isNotBlank()) { "Operation identifier cannot be blank." }
         val item=requireProduct(tenantId,productId)
@@ -522,6 +551,7 @@ class PosRepository(path: String = File(System.getProperty("user.home"), ".niger
         candidate
     }
     @Synchronized fun archivePurchaseUnit(tenantId:String,unitId:String,archived:Boolean) = transaction {
+        requirePermission(tenantId, StaffPermission.MANAGE_STOCK)
         requireTenant(tenantId)
         val item=requirePurchaseUnit(tenantId,unitId)
         if(item.archived!=archived) {
@@ -534,6 +564,7 @@ class PosRepository(path: String = File(System.getProperty("user.home"), ".niger
         return query("SELECT * FROM stock_receipts WHERE tenant_id=? ORDER BY created_at DESC",tenantId,map=::stockReceipt)
     }
     @Synchronized fun receiveStock(tenantId:String,productId:String,quantity:Int,unitCostMinor:Long,paidCashMinor:Long,supplierName:String,operationId:String?=null,purchaseUnitId:String?=null,expectedBaseUnitsPerUnit:Int?=null):StockReceipt = transaction {
+        requirePermission(tenantId, StaffPermission.MANAGE_STOCK)
         requireTenant(tenantId)
         require(quantity>0 && unitCostMinor>=0) { "Enter a positive quantity and non-negative buying cost." }
         require(operationId==null || operationId.isNotBlank()) { "Operation identifier cannot be blank." }
@@ -573,6 +604,7 @@ class PosRepository(path: String = File(System.getProperty("user.home"), ".niger
         return query("SELECT * FROM expenses WHERE tenant_id=? ORDER BY created_at DESC",tenantId) { expense(it) }
     }
     @Synchronized fun recordExpense(tenantId:String,category:String,description:String,amountMinor:Long,operationId:String?=null):Expense = transaction {
+        requirePermission(tenantId, StaffPermission.MANAGE_MONEY)
         requireTenant(tenantId)
         require(category.isNotBlank() && description.isNotBlank() && amountMinor>0) { "Enter category, description and an amount greater than zero." }
         require(operationId==null || operationId.isNotBlank()) { "Operation identifier cannot be blank." }
@@ -600,6 +632,7 @@ class PosRepository(path: String = File(System.getProperty("user.home"), ".niger
         return query("SELECT * FROM cash_shifts WHERE tenant_id=? AND closed_at IS NULL",tenantId,map=::cashShift).singleOrNull()
     }
     @Synchronized fun openCashShift(tenantId:String,openingMinor:Long):CashShift = transaction {
+        requirePermission(tenantId, StaffPermission.MANAGE_MONEY)
         requireTenant(tenantId)
         require(openingMinor>=0) { "Opening cash cannot be negative." }
         require(activeCashShift(tenantId)==null) { "This shop already has an open cash shift." }
@@ -622,6 +655,7 @@ class PosRepository(path: String = File(System.getProperty("user.home"), ".niger
         return shift.expectedMinor ?: cashEntries(tenantId,shiftId).fold(java.math.BigInteger.valueOf(shift.openingMinor)) { balance,entry -> balance.add(java.math.BigInteger.valueOf(entry.amountMinor)) }.longValueExact().also { require(it>=0) { "Cash balance cannot be negative." } }
     }
     @Synchronized fun recordCashMovement(tenantId:String,amountMinor:Long,description:String,operationId:String?=null):CashEntry = transaction {
+        requirePermission(tenantId, StaffPermission.MANAGE_MONEY)
         requireTenant(tenantId)
         require(amountMinor!=0L && amountMinor!=Long.MIN_VALUE && description.isNotBlank()) { "Enter a nonzero cash amount and reason." }
         require(operationId==null || operationId.isNotBlank()) { "Operation identifier cannot be blank." }
@@ -639,6 +673,7 @@ class PosRepository(path: String = File(System.getProperty("user.home"), ".niger
         result
     }
     @Synchronized fun closeCashShift(tenantId:String,shiftId:String,countedMinor:Long):CashShift = transaction {
+        requirePermission(tenantId, StaffPermission.MANAGE_MONEY)
         requireTenant(tenantId)
         require(countedMinor>=0) { "Counted cash cannot be negative." }
         val shift=query("SELECT * FROM cash_shifts WHERE tenant_id=? AND id=?",tenantId,shiftId,map=::cashShift).singleOrNull()
@@ -666,6 +701,7 @@ class PosRepository(path: String = File(System.getProperty("user.home"), ".niger
         }
     }
     @Synchronized fun returnItems(tenantId:String,saleId:String,quantities:Map<String,Int>,restock:Boolean,reason:String,operationId:String?=null):SaleReturn = transaction {
+        requirePermission(tenantId, StaffPermission.RETURN_SALE)
         requireTenant(tenantId)
         require(reason.isNotBlank() && quantities.isNotEmpty() && quantities.all { it.key.isNotBlank() && it.value>0 }) { "Select returned quantities and enter a reason." }
         require(operationId==null || operationId.isNotBlank()) { "Operation identifier cannot be blank." }
@@ -713,6 +749,7 @@ class PosRepository(path: String = File(System.getProperty("user.home"), ".niger
         return Math.subtractExact(receipt.unpaidMinor,paid).also { require(it>=0) { "Supplier payment history exceeds the receipt balance." } }
     }
     @Synchronized fun paySupplierReceipt(tenantId:String,receiptId:String,amountMinor:Long,operationId:String?=null):SupplierPayment = transaction {
+        requirePermission(tenantId, StaffPermission.MANAGE_SUPPLIERS)
         requireTenant(tenantId)
         require(amountMinor>0) { "Enter a supplier payment greater than zero." }
         require(operationId==null || operationId.isNotBlank()) { "Operation identifier cannot be blank." }
@@ -758,6 +795,7 @@ class PosRepository(path: String = File(System.getProperty("user.home"), ".niger
 
     private val snapshotTableOrder get() = listOf("products","selling_units","stock_settings_changes","purchase_units","customers","customer_changes","cash_shifts","sales","sale_lines","repayments","repayment_allocations","allocation_reversals","stock_receipts","expenses","sale_returns","return_lines","supplier_payments","cash_entries","catalogue_changes","stock_adjustments","outbox")
     @Synchronized fun exportTenantSnapshot(tenantId:String):TenantSnapshot = transaction {
+        requirePermission(tenantId, StaffPermission.BACKUP)
         requireTenant(tenantId)
         val tenant=tenants().single { it.id==tenantId }
         val tables=snapshotTableOrder.associateWith { table ->
@@ -768,6 +806,9 @@ class PosRepository(path: String = File(System.getProperty("user.home"), ".niger
         TenantSnapshot(tenant,tables)
     }
     @Synchronized fun restoreTenantSnapshot(snapshot:TenantSnapshot,newName:String,provisionOwner:(Tenant)->Unit={}):Tenant = transaction {
+        // Login recovery uses its own explicit trusted connection. Never disable the running
+        // workspace's guard just to import another shop.
+        requirePermission(snapshot.tenant.id, StaffPermission.BACKUP)
         require(newName.isNotBlank()) { "Enter a name for the restored shop." }
         require(snapshot.tables.keys.all { it in snapshotTableOrder }) { "Backup contains an unsupported record table." }
         val tenant=Tenant(id(),newName.trim())
