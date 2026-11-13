@@ -44,6 +44,8 @@ fun SellScreen(
     val discounts = remember(encodedDiscounts) { DraftDiscountCodec.decode(encodedDiscounts) }
     var changingPrice by remember { mutableStateOf<String?>(null) }
     var agreedPrice by remember { mutableStateOf("") }
+    var percentageMode by remember { mutableStateOf(false) }
+    var percentageText by remember { mutableStateOf("") }
     var discountReason by remember { mutableStateOf("") }
     var priceError by remember { mutableStateOf<String?>(null) }
     var operationId by rememberSaveable { mutableStateOf(restoredDraft.getOrNull()?.operationId ?: UUID.randomUUID().toString()) }
@@ -244,6 +246,8 @@ fun SellScreen(
                                         }
                                         if (allowDiscounts) TextButton({
                                             changingPrice = line.key
+                                            percentageMode = false
+                                            percentageText = ""
                                             agreedPrice = BigDecimal(line.netUnitPriceMinor).movePointLeft(2).toPlainString()
                                             discountReason = discounts[line.key]?.reason.orEmpty()
                                             priceError = null
@@ -344,18 +348,36 @@ fun SellScreen(
             text = { Column(Modifier.heightIn(max = 440.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text("${line.product.name} · ${line.sellingUnit}", fontWeight = FontWeight.Medium)
                 Text("Catalogue price: ${money(line.unitPriceMinor)} per ${line.sellingUnit}. This change applies to every ${line.sellingUnit} on this line.")
-                OutlinedTextField(agreedPrice, { agreedPrice = it; priceError = null }, label = { Text("Customer pays per ${line.sellingUnit} (₦)") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    FilterChip(!percentageMode, { percentageMode = false; priceError = null }, label = { Text("Agreed price") })
+                    FilterChip(percentageMode, { percentageMode = true; priceError = null }, label = { Text("Percentage off") })
+                }
+                if (percentageMode) {
+                    OutlinedTextField(percentageText, { percentageText = it; priceError = null }, label = { Text("Percentage off (0–100%)") }, supportingText = { Text("Up to two decimal places, for example 12.5") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                    val percentage=parseDiscountPercentage(percentageText)
+                    if (percentage != null) {
+                        val reduction=percentage.amountMinor(line.unitPriceMinor)
+                        Text("Save ${money(reduction)} per ${line.sellingUnit} · Customer pays ${money(line.unitPriceMinor-reduction)} per ${line.sellingUnit}", fontWeight = FontWeight.Medium)
+                    }
+                    Text("The discount is rounded to the nearest kobo for each selling unit; half a kobo rounds up. It replaces any discount already on this line.", style = MaterialTheme.typography.bodySmall)
+                } else OutlinedTextField(agreedPrice, { agreedPrice = it; priceError = null }, label = { Text("Customer pays per ${line.sellingUnit} (₦)") }, singleLine = true, modifier = Modifier.fillMaxWidth())
                 OutlinedTextField(discountReason, { discountReason = it; priceError = null }, label = { Text("Reason for discount") }, placeholder = { Text("For example, agreed market price") }, modifier = Modifier.fillMaxWidth())
                 Text("The catalogue price stays unchanged. The saved receipt keeps the discount and reason. Returns refund the price actually paid.", style = MaterialTheme.typography.bodySmall)
                 priceError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
             } },
             confirmButton = { TextButton({
                 try {
-                    val price = requireNotNull(parseNaira(agreedPrice)) { "Enter a valid price in naira with at most two decimal places." }
-                    require(price in 0..line.unitPriceMinor) { "The agreed price must be between zero and the catalogue price." }
                     val next = discounts.toMutableMap()
-                    if (price == line.unitPriceMinor) next.remove(key)
-                    else next[key] = UnitDiscount(line.unitPriceMinor, line.unitPriceMinor-price, discountReason.trim())
+                    if (percentageMode) {
+                        val percentage=requireNotNull(parseDiscountPercentage(percentageText)) { "Enter a percentage from 0 to 100 with at most two decimal places." }
+                        if (percentage.basisPoints == 0) next.remove(key)
+                        else next[key] = percentage.unitDiscount(line.unitPriceMinor,discountReason.trim())
+                    } else {
+                        val price = requireNotNull(parseNaira(agreedPrice)) { "Enter a valid price in naira with at most two decimal places." }
+                        require(price in 0..line.unitPriceMinor) { "The agreed price must be between zero and the catalogue price." }
+                        if (price == line.unitPriceMinor) next.remove(key)
+                        else next[key] = UnitDiscount(line.unitPriceMinor, line.unitPriceMinor-price, discountReason.trim())
+                    }
                     persistBasket(quantities, next)
                     changingPrice = null
                 } catch(e: Exception) { priceError = e.message ?: "Price change could not be saved." }

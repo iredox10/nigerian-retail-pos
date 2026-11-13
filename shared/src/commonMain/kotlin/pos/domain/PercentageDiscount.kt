@@ -23,9 +23,12 @@ data class DiscountPercentage(val basisPoints: Int) {
     fun unitDiscount(unitPriceMinor: Long, reason: String): UnitDiscount {
         val amount=amountMinor(unitPriceMinor)
         require(amount > 0) { "This percentage saves less than half a kobo per unit. Choose a larger discount." }
-        // Validate the merchant reason independently so a prefix cannot make a blank reason valid.
-        UnitDiscount(unitPriceMinor, amount, reason)
-        return UnitDiscount(unitPriceMinor, amount, "${display()} off: $reason")
+        val prefix="${display()} off: "
+        val maximum=250-prefix.length
+        require(reason == reason.trim() && reason.length in 3..maximum && reason.none { it.isISOControl() }) {
+            "Enter a reason from 3 to $maximum printable characters for this percentage discount."
+        }
+        return UnitDiscount(unitPriceMinor, amount, prefix+reason)
     }
 }
 
