@@ -81,7 +81,7 @@ fun main() = application {
         val active=session ?: return@LaunchedEffect
         while (true) {
             kotlinx.coroutines.delay(15_000)
-            if(runCatching { staffAccess.requireSession(active,StaffPermission.SELL) }.isFailure) {
+            if(runCatching { staffAccess.requireSession(active,StaffPermission.SELL,touch=false) }.isFailure) {
                 staffAccess.logout(active);session=null;tenant=null
                 saleStates.removeState(current.id)
                 return@LaunchedEffect
@@ -92,6 +92,40 @@ fun main() = application {
         session?.let { staffAccess.logout(it) }
         session = null; tenant = null
         saleStates.removeState(current.id)
+    }
+    DisposableEffect(session?.token) {
+        val active = session
+        if (active == null || isolatedPreview) {
+            onDispose { }
+        } else {
+            val lastActivity = java.util.concurrent.atomic.AtomicLong(Long.MIN_VALUE)
+            val listener = java.awt.event.AWTEventListener { event ->
+                val isActivity = event.id == java.awt.event.KeyEvent.KEY_PRESSED ||
+                    event.id == java.awt.event.MouseEvent.MOUSE_PRESSED ||
+                    event.id == java.awt.event.MouseEvent.MOUSE_WHEEL
+                if (isActivity && isRetailWindowEvent(event) && session?.token == active.token) {
+                    val now = System.nanoTime()
+                    val previous = lastActivity.get()
+                    if ((previous == Long.MIN_VALUE || now - previous >= 1_000_000_000L) &&
+                        lastActivity.compareAndSet(previous, now)) {
+                        try {
+                            staffAccess.touchSession(active)
+                        } catch (_: Exception) {
+                            // A genuine user action must not revive expired or revoked access.
+                            if (session?.token == active.token) {
+                                staffAccess.logout(active)
+                                session = null; tenant = null
+                                saleStates.removeState(active.tenantId)
+                            }
+                        }
+                    }
+                }
+            }
+            val toolkit = java.awt.Toolkit.getDefaultToolkit()
+            toolkit.addAWTEventListener(listener,
+                java.awt.AWTEvent.KEY_EVENT_MASK or java.awt.AWTEvent.MOUSE_EVENT_MASK or java.awt.AWTEvent.MOUSE_WHEEL_EVENT_MASK)
+            onDispose { toolkit.removeAWTEventListener(listener) }
+        }
     }
     val products = remember(current.id, revision) { repo.products(current.id) }
     val customers = remember(current.id, revision) { if (allowed(StaffPermission.SELL_CREDIT) || allowed(StaffPermission.MANAGE_CUSTOMERS)) repo.customers(current.id) else emptyList() }
@@ -213,7 +247,7 @@ fun main() = application {
                     val t=repo.createTenant(name.trim()) { access.register(it.id,password) }; tenants=repo.tenants(); onEnter(t,requireNotNull(staffAccess.unlockOwner(t.id,password)))
                 } else {
                     val active = if(staffId==null) staffAccess.unlockOwner(selected!!.id,password) else staffAccess.unlockStaff(selected!!.id,staffId!!,password)
-                    require(active!=null) { "Account or password not recognized for this shop." }
+                    require(active!=null) { "Account or password not recognized, or sign-in is temporarily paused. Wait a minute, then try again." }
                     onEnter(selected!!,active);password=""
                 }
             } catch(e:Exception) {error=e.message ?: "Could not open shop"}},modifier=Modifier.fillMaxWidth().height(52.dp)) { Text(if(selected==null) "Create shop workspace" else "Unlock shop") }
@@ -222,4 +256,21 @@ fun main() = application {
             Text("No online account is created. Use a trusted computer; local database encryption is not yet enabled.",style=MaterialTheme.typography.bodySmall)
         } }
     }
+}
+
+/** Inspect event identity/window ownership only; never read or retain entered keys or text. */
+private fun isRetailWindowEvent(event: java.awt.AWTEvent): Boolean {
+    val component = event.source as? java.awt.Component ?: return false
+    val window = (component as? java.awt.Window) ?: javax.swing.SwingUtilities.getWindowAncestor(component) ?: return false
+    fun isRetailFrame(candidate: java.awt.Window) = candidate is java.awt.Frame && candidate.title.startsWith("Retail POS")
+    var ancestor: java.awt.Window? = window
+    while (ancestor != null) {
+        if (isRetailFrame(ancestor)) return true
+        ancestor = ancestor.owner
+    }
+    // System print/file dialogs opened by Swing with a null parent use its shared owner
+    // frame. They belong to this JVM too, and must count as activity during a long export.
+    return window is java.awt.Dialog && window.isModal &&
+        window.owner?.javaClass?.name == "javax.swing.SwingUtilities\$SharedOwnerFrame" &&
+        java.awt.Window.getWindows().any { it.isDisplayable && isRetailFrame(it) }
 }

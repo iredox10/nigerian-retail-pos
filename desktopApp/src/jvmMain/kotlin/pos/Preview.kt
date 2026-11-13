@@ -47,7 +47,9 @@ fun main() {
         val width = System.getenv("POS_PREVIEW_WIDTH")?.toIntOrNull()?.coerceIn(800,1920) ?: 1440
         val height = System.getenv("POS_PREVIEW_HEIGHT")?.toIntOrNull()?.coerceIn(600,1200) ?: 900
         val placement = if (System.getenv("POS_PREVIEW_WIDTH") != null || System.getenv("POS_PREVIEW_HEIGHT") != null) WindowPlacement.Floating else WindowPlacement.Fullscreen
-        val staffAccess = remember { StaffAccess() }
+        val staffAccess = remember {
+            StaffAccess(idleTimeoutMillis = System.getenv("POS_PREVIEW_IDLE_MS")?.toLongOrNull()?.coerceIn(1_000,900_000) ?: 900_000)
+        }
         val staffSession = remember {
             if (route=="Staff" || System.getenv("POS_PREVIEW_ROLE")!=null) {
                 WorkspaceAccess().register(tenant.id,"Preview-owner-2026")
