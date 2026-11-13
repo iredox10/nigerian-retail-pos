@@ -24,10 +24,10 @@ fun CreditReviewScreen(repo:PosRepository,tenantId:String) {
         var search by remember { mutableStateOf("") }
         var pastDueOnly by remember { mutableStateOf(false) }
         val today=remember(revision) { LocalDate.now(ZoneId.of("Africa/Lagos")) }
-        val loaded=remember(revision) {runCatching {DebtAgeingService.build(tenantId,repo.customers(tenantId),repo.sales(tenantId),repo.repayments(tenantId),today)}}
+        val loaded=remember(revision) {runCatching {DebtAgeingService.build(tenantId,repo.customers(tenantId),repo.sales(tenantId),repo.repayments(tenantId),today,repo.repaymentAllocations(tenantId))}}
         Column(Modifier.fillMaxSize(),verticalArrangement=Arrangement.spacedBy(16.dp)) {
             SectionHeader("Review customer credit","As of $today · West Africa Time · Saved records on this computer")
-            InlineNotice("Review dates alongside repayments","Repayments reduce total customer debt but are not assigned to individual sales. A past-due sale below may have been partly or fully covered by later payments. No unpaid overdue invoice balance is calculated.",NoticeTone.Info)
+            InlineNotice("Receipt balances use assigned payments","Assign existing payments under Customers → View history → Assign payments to receipts. While payments remain unassigned, receipt balances are shown before those payments and an exact overdue total is unavailable.",NoticeTone.Info)
             PosTextField(search,{search=it},"Find a customer",Modifier.fillMaxWidth(),hint="Name or phone")
             Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),horizontalArrangement=Arrangement.spacedBy(16.dp)) {
                 FilterChip(pastDueOnly,{pastDueOnly=!pastDueOnly},label={Text("Customers with past-due sale dates")})
@@ -35,7 +35,7 @@ fun CreditReviewScreen(repo:PosRepository,tenantId:String) {
             }
             loaded.exceptionOrNull()?.let {InlineNotice("Credit review could not be loaded",it.message ?: "Refresh to try again.",NoticeTone.Danger)}
             loaded.getOrNull()?.let { rows ->
-                val visible=rows.filter { (!pastDueOnly || it.pastDueSales.isNotEmpty()) && (it.customer.name.contains(search,true) || it.customer.phone?.contains(search)==true) }
+                val visible=rows.filter { (!pastDueOnly || it.invoiceBalances.any { balance -> balance.remainingMinor>0 && balance.sale.dueDate?.let { due -> LocalDate.parse(due).isBefore(today) }==true }) && (it.customer.name.contains(search,true) || it.customer.phone?.contains(search)==true) }
                 LazyColumn(Modifier.weight(1f),verticalArrangement=Arrangement.spacedBy(16.dp)) {
                     if(visible.isEmpty())item {EmptyState("No matching customer debts","Customers with a current balance appear here. Use Customers to review a profile or record cash received.")}
                     items(visible,key={it.customer.id}) { row ->
@@ -44,23 +44,20 @@ fun CreditReviewScreen(repo:PosRepository,tenantId:String) {
                                 SectionHeader(row.customer.name,row.customer.phone ?: "Phone not recorded")
                                 LabelValueRow("Current customer debt — all dates",money(row.currentDebtMinor),emphasized=true)
                                 LabelValueRow("Later repayments — all dates",money(row.repaymentsTotalMinor))
-                                Text("${row.pastDueSales.size} original sales with past-due dates · ${row.dueTodaySales.size} due today · ${row.futureDueSales.size} future dates · ${row.undatedSales.size} without a due date",style=MaterialTheme.typography.bodySmall)
-                                if(row.pastDueSales.isNotEmpty()) {
-                                    HorizontalDivider()
-                                    Text("Original sales with past-due dates",style=MaterialTheme.typography.titleMedium)
-                                    row.pastDueSales.forEach { sale ->
-                                        LabelValueRow("${sale.dueDate} · Receipt ${sale.id.takeLast(8).uppercase()}","${money(sale.creditMinor)} original credit")
-                                    }
-                                    Text("These original amounts are not the unpaid balances on these receipts. Open Customers → View history to compare the full sales and repayment history.",style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
+                                LabelValueRow("Payments not assigned to receipts",money(row.unallocatedRepaymentsMinor))
+                                if(row.preciseOverdueMinor!=null) LabelValueRow("Overdue debt with recorded due dates",money(row.preciseOverdueMinor!!),emphasized=true)
+                                else InlineNotice("Assign remaining payments first","An exact overdue total is unavailable while ${money(row.unallocatedRepaymentsMinor)} of payments is unassigned. Current customer debt above already includes these payments.",NoticeTone.Warning)
+                                HorizontalDivider()
+                                Text(if(row.unallocatedRepaymentsMinor>0) "Receipt balances before unassigned payments" else "Unpaid credit receipts",style=MaterialTheme.typography.titleMedium)
+                                row.invoiceBalances.filter { it.remainingMinor>0 }.forEach { balance ->
+                                    val sale=balance.sale
+                                    val dueLabel=sale.dueDate?.let { due ->
+                                        when {LocalDate.parse(due).isBefore(today) -> "Past due $due";LocalDate.parse(due)==today -> "Due today";else -> "Due $due"}
+                                    } ?: "No agreed due date"
+                                    LabelValueRow("$dueLabel · ${sale.id.takeLast(8).uppercase()}",money(balance.remainingMinor))
                                 }
-                                if(row.dueTodaySales.isNotEmpty() || row.futureDueSales.isNotEmpty()) {
-                                    HorizontalDivider()
-                                    Text("Original sales due today or later",style=MaterialTheme.typography.titleMedium)
-                                    (row.dueTodaySales+row.futureDueSales).forEach { sale ->
-                                        LabelValueRow("${sale.dueDate} · Receipt ${sale.id.takeLast(8).uppercase()}","${money(sale.creditMinor)} original credit")
-                                    }
-                                }
-                                if(row.undatedSales.isNotEmpty())Text("${row.undatedSales.size} credit sales have no agreed date recorded. They have not been assigned an assumed due date.",style=MaterialTheme.typography.bodySmall)
+                                if(row.undatedSales.isNotEmpty())Text("Credit without an agreed due date is excluded from the dated overdue total. No due date has been assumed.",style=MaterialTheme.typography.bodySmall)
+
                             }
                         }
                     }

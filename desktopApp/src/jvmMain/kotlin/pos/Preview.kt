@@ -27,6 +27,7 @@ fun main() {
                 repo.openCashShift(t.id,1000000)
                 repo.checkout(t.id,listOf(CartLine(malt,3)),50000,customer.id,"sample-credit-sale",java.time.LocalDate.now(java.time.ZoneId.of("Africa/Lagos")).plusDays(7).toString())
                 repo.recordRepayment(t.id,customer.id,25000)
+                repo.allocateRepayment(t.id,repo.repayments(t.id,customer.id).single().id,"sample-credit-sale",25000,"sample-payment-assignment")
                 repo.recordExpense(t.id,"Fuel","Generator fuel",125000,"sample-fuel")
                 repo.recordCashMovement(t.id,250000,"Owner added cash","sample-contribution")
                 repo.receiveStock(t.id,rice.id,2,1000000,200000,"Sample wholesaler","sample-stock")

@@ -113,7 +113,7 @@ fun ReportsScreen(repo: PosRepository, tenantId: String) {
                     Box {
                         NeutralButton("$selectedExport ▾", { exportMenu = true })
                         DropdownMenu(exportMenu, { exportMenu = false }) {
-                            listOf("Sales", "Products", "Customers", "Expenses", "Cash activity", "Stock received").forEach { kind -> DropdownMenuItem(text = { Text(kind) }, onClick = { selectedExport = kind; exportMenu = false }) }
+                            listOf("Sales", "Products", "Customers", "Expenses", "Cash activity", "Stock received", "Payment assignments").forEach { kind -> DropdownMenuItem(text = { Text(kind) }, onClick = { selectedExport = kind; exportMenu = false }) }
                         }
                     }
                     PosButton("Save CSV file", {
@@ -124,6 +124,7 @@ fun ReportsScreen(repo: PosRepository, tenantId: String) {
                                 "Customers" -> CsvService.customers(tenantId, records.customers)
                                 "Expenses" -> CsvService.expenses(tenantId, records.expenses.filter { range.contains(it.createdAt) })
                                 "Cash activity" -> CsvService.cashEntries(tenantId, records.cash.filter { range.contains(it.createdAt) })
+                                "Payment assignments" -> CsvService.repaymentAllocations(tenantId,repo.repaymentAllocations(tenantId).filter { range.contains(it.createdAt) })
                                 else -> CsvService.stockReceipts(tenantId, records.receipts.filter { range.contains(it.createdAt) })
                             }
                             val file = CsvService.save(csv, "retail-pos-${selectedExport.lowercase().replace(' ', '-')}-${if(selectedExport in listOf("Products", "Customers")) "current" else "$start-to-$end"}.csv")

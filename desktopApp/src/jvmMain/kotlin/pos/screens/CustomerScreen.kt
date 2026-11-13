@@ -40,6 +40,7 @@ private fun TenantCustomers(repo: PosRepository, tenantId: String, onChanged: ()
     var adding by remember { mutableStateOf(false) }
     var paying by remember { mutableStateOf<Customer?>(null) }
     var editing by remember { mutableStateOf<Customer?>(null) }
+    var assigning by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf<String?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
     val result = remember(revision) { runCatching { repo.customers(tenantId) } }
@@ -60,7 +61,7 @@ private fun TenantCustomers(repo: PosRepository, tenantId: String, onChanged: ()
             }
         } else {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                TextButton({ selectedId = null; error = null; message = null }) { Text("Back to customers") }
+                TextButton({ if (assigning) assigning = false else selectedId = null; error = null; message = null }) { Text(if (assigning) "Back to customer history" else "Back to customers") }
                 Spacer(Modifier.weight(1f))
                 NeutralButton("Refresh", { revision++; error = null; message = null })
             }
@@ -93,17 +94,21 @@ private fun TenantCustomers(repo: PosRepository, tenantId: String, onChanged: ()
             }
         }
         selected?.let { customer ->
-            val statement = remember(customer, revision) { runCatching {
-                CustomerStatementService.build(tenantId, customer, repo.sales(tenantId), repo.repayments(tenantId))
-            } }
-            statement.exceptionOrNull()?.let { InlineNotice("History could not be loaded", it.message ?: "Refresh to try again.", NoticeTone.Danger) }
-            statement.getOrNull()?.let { history ->
-                CustomerHistory(history, { paying = customer; message = null }, { editing = customer; message = null }, {
-                    try {
-                        val file = CsvService.save(CustomerStatementService.csv(history), "retail-pos-customer-${customer.id.take(8)}-statement.csv")
-                        if (file != null) { message = "Customer statement saved to ${file.absolutePath}"; error = null }
-                    } catch (e: Exception) { error = e.message ?: "Statement could not be saved. No records changed." }
-                })
+            if (assigning) {
+                CustomerAllocationPanel(repo, tenantId, customer) { changed() }
+            } else {
+                val statement = remember(customer, revision) { runCatching {
+                    CustomerStatementService.build(tenantId, customer, repo.sales(tenantId), repo.repayments(tenantId))
+                } }
+                statement.exceptionOrNull()?.let { InlineNotice("History could not be loaded", it.message ?: "Refresh to try again.", NoticeTone.Danger) }
+                statement.getOrNull()?.let { history ->
+                    CustomerHistory(history, { paying = customer; message = null }, { editing = customer; message = null }, { assigning = true; message = null; error = null }, {
+                        try {
+                            val file = CsvService.save(CustomerStatementService.csv(history), "retail-pos-customer-${customer.id.take(8)}-statement.csv")
+                            if (file != null) { message = "Customer statement saved to ${file.absolutePath}"; error = null }
+                        } catch (e: Exception) { error = e.message ?: "Statement could not be saved. No records changed." }
+                    })
+                }
             }
         }
     }
@@ -125,7 +130,7 @@ private fun TenantCustomers(repo: PosRepository, tenantId: String, onChanged: ()
 }
 
 @Composable
-private fun ColumnScope.CustomerHistory(statement: CustomerStatement, pay: () -> Unit, edit: () -> Unit, export: () -> Unit) {
+private fun ColumnScope.CustomerHistory(statement: CustomerStatement, pay: () -> Unit, edit: () -> Unit, assign: () -> Unit, export: () -> Unit) {
     val customer = statement.customer
     LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         item {
@@ -147,10 +152,11 @@ private fun ColumnScope.CustomerHistory(statement: CustomerStatement, pay: () ->
                     LabelValueRow("Cash debt repayments received later", money(statement.repaidMinor))
                     Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         if (customer.balanceMinor > 0) PosButton("Record payment", pay)
+                        NeutralButton("Assign payments to receipts", assign)
                         NeutralButton("Edit details & credit limit", edit)
                         NeutralButton("Save CSV statement", export)
                     }
-                    Text("Repayments reduce the customer's total debt; they are not allocated to individual receipts yet. Cash-sale refunds are recorded under Sales and do not change these original sale amounts.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text("Repayments reduce the customer's total debt. Use Assign payments to receipts to specify which credit sales they cover. Unassigned payments are never automatically applied to a receipt. Cash-sale refunds stay under Sales.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
         }
