@@ -18,18 +18,22 @@ Started 13 November 2026. This plan orders execution; the complete scope remains
 
 - [x] Audit percentage item discounts, catalogue metadata/filtering, and dated statements against source.
 - [x] Run the pre-change integrated suite: 287 tests, no failures, errors, or skips.
-- [ ] Complete exact per-product fractional quantities through stock, checkout, receiving, returns, and counts.
-- [ ] Preserve historical precision, retry identity, saved baskets, exports, and encrypted backup compatibility.
-- [ ] Verify legacy migrations and cumulative partial-refund rounding.
-- [ ] Render and exercise changed desktop journeys; document exact checks and limitations.
-- [ ] Commit the finished current batch in coherent micro commits.
+- [x] Complete exact per-product fractional quantities through stock, checkout, receiving, returns, and counts.
+- [x] Preserve historical precision, retry identity, saved baskets, exports, and encrypted backup compatibility.
+- [x] Verify legacy migrations and cumulative partial-refund rounding.
+- [x] Render and exercise selected changed desktop journeys; document exact checks and limitations in BUILD_STATUS.md. Full merchant, hardware and accessibility acceptance remains pending.
+- [x] Commit the current implementation batch in coherent micro commits.
 
 ## Phase 2: complete independent local journeys
 
-- [ ] Cash denomination sheets: exact totals, atomic opening/closing snapshots, optional blind entry, history and backup.
-- [ ] Offline help: contextual task guidance and safe entry into an isolated practice workspace.
-- [ ] Staff convenience PINs: full-password bootstrap, bounded authorization, persistent attempt limits, reset/revocation and UI.
-- [ ] Reconcile feature status and rerun integrated tests after each batch.
+- [x] Cash denomination sheets: exact totals, atomic opening/closing snapshots, expected-cash hiding within the form, history and backup. This does not conceal previously viewed dashboard amounts.
+- [x] Offline help: contextual task guidance and safe entry into an isolated practice workspace.
+- [x] Staff convenience PINs: full-password bootstrap, bounded authorization, persistent attempt limits, reset/revocation and UI.
+- [x] Reconcile feature status and rerun integrated tests: 324 passing tests and a rebuilt Linux application image.
+
+Five agents completed the assigned audit, quantity, backlog, cash and help tasks in
+waves; the audit agent subsequently implemented PINs. Phases 3–5 below remain
+outstanding implementation, not completed work. External integrations are unavailable.
 
 ## Phase 3: trading and financial completeness
 

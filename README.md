@@ -36,7 +36,7 @@ Desktop distributions are built for the host operating system. Build and test th
 - Local shop creation and password-gated workspace selection.
 - Tenant-scoped SQLite products, customers, sales, repayments, and outbox entries.
 - Product creation, name/unit/barcode search, price/name/barcode edits, archive/restore and preserved price history.
-- Whole-unit stock counts with previous/count/difference history, reason and stale-count rejection.
+- Single-item stock counts with the item's configured precision, previous/count/difference history, reason and stale-count rejection.
 - Source-linked stock history for opening counts, purchases in converted base units, sales, restocked returns and count corrections. Older goods without saved opening counts remain explicitly unknown.
 - Optional per-item reorder levels and a Low stock filter; archived goods are excluded. Product/low-stock snapshots and dated stock movements can be exported as CSV.
 - Cash checkout, exact amount/change, and explicit named-customer partial credit.
@@ -51,7 +51,7 @@ Desktop distributions are built for the host operating system. Build and test th
 - Receipt text export and operating-system print dialog with pagination.
 - Supplier receipt balances, later cash payments, and payment history.
 - WAT date-range reports and spreadsheet-safe CSV exports.
-- Product CSV template, preview and atomic add-only import (up to 10,000 whole-unit products, 5 MB).
+- Product CSV template, preview and atomic add-only import (up to 10,000 products, 5 MB). An optional `quantity_precision` column explicitly enables measured opening quantities.
 - Password-encrypted, tenant-only backup files; restore into a new password-gated shop with validated history.
 - Stock receiving with buying cost, cash paid, and the unpaid amount at the time of receipt.
 - Configurable selling packs: independent prices/barcodes, mixed carton/loose baskets, shared stock deduction and historical-unit cash returns. Define these under Stock → Manage → Selling units.
@@ -60,13 +60,19 @@ Desktop distributions are built for the host operating system. Build and test th
 - Automatic drawer activity for new cash sales and repayments while a shift is open; older cash remains explicitly unassigned.
 - Retry protection for checkout, repayments, stock receiving, expenses, and manual cash movements.
 - Shared exact-naira input parsing across checkout, stock, repayments, and cash management.
+- Per-product quantity precision from zero to six decimal places, chosen when creating an item. Exact scaled stock supports measured checkout, receiving, counts and cash returns; whole selling/buying packs retain explicit conversions. Enter a quantity and choose Apply quantity before payment.
+- Physical note/coin count sheets saved with opening/closing cash, retained in encrypted backups. Closing can hide expected cash in the form; the dashboard may already have shown it. Handover and per-register drawers remain pending.
+- SKU, category, brand, alternative search names, favourites and category filters with preserved metadata history.
+- Percentage item discounts with exact saved prices/refunds; whole-basket discounts remain pending.
+- Dated customer and receipt-name supplier CSV statements with reconciled opening/closing debt.
+- Searchable bundled help under More → Help & practice. Practice opens a separate process with sample goods, an in-memory database and temporary drafts, without opening shop records.
 - Shared semantic theme, offline IBM Plex Sans fonts, and reusable Compose components.
 
 ## Important boundaries
 
 - Local tenant isolation, owner/staff passwords and local role permissions are implemented. Online identity/memberships, server authorization, remote tenant administration, and encrypted local storage are not yet implemented. This is not ready for untrusted shared-computer or multi-user SaaS production deployment.
 - No cloud sync transport, Heroku backend, bank/card verification, or external messages are connected. Native print submission is implemented; real printer output remains unverified. Manual encrypted backups are local files, not cloud backups. The status bar explicitly says so.
-- Current stock uses one base stock unit per product and integer checkout quantities in either the base unit or a configured selling pack. Receiving supports merchant-defined whole-unit cartons/packs with conversion snapshots. Fractional checkout, credit-sale returns/exchanges, full supplier accounting, and other advanced modules remain future work. Later cash supplier payments are allocated to individual stock receipts; supplier master profiles, credits and statements remain pending.
+- Stock uses one fixed base unit and precision per product. Measured transaction quantities use at most 2,147,483,647 scaled increments (for example, 2,147.483647 at six decimal places); stored stock also enforces exact supported bounds. Buying/selling pack counts remain whole. Historical transactions preserve their precision and conversion. Nested conversions/repacking, credit-sale returns/exchanges and full supplier accounting remain pending. Supplier statements currently group exact recorded names and receipt balances; supplier master profiles and credits are not implemented.
 - Backups exclude unfinished baskets, owner credentials and device settings. Restore creates a separate shop and preserves historical cash counts; verify physical cash before trading. Backup encryption does not encrypt the working database.
 - Only one cash shift per shop is supported in this build. Open Money → Today's cash and enter the cash physically counted. Cash paid out for expenses or stock requires that open drawer and sufficient recorded cash. Sales/repayments made without an open drawer remain unassigned and are not automatically added to a later shift's opening count.
 - Active and held baskets retain item IDs/quantities and payment-entry text/customer/method, without a frozen price snapshot. Holding reserves no stock. Checkout revalidates current price and stock. Review restored goods before payment. A held basket is not an order, a completed sale or a payment record.
@@ -107,7 +113,7 @@ Payment assignments can be corrected under Customers → View history → Assign
 
 The remaining whole-product work is tracked in [IMPLEMENTATION_TODO.md](IMPLEMENTATION_TODO.md). Checkboxes represent verified subtasks, and the full feature specification remains authoritative.
 
-Local staff access uses owner, manager and cashier roles. Owners manage staff under More → Staff & permissions. Staff use full passwords on this computer; PINs, remote accounts and actor attribution are separate unfinished items. Cashiers can make cash sales and view receipts; managers can perform operational work; owner-only staff management and backup actions are enforced through the active application session.
+Local staff access uses owner, manager and cashier roles. Owners manage staff under More → Staff & permissions. Staff can set or remove a six-digit convenience PIN from sign-in using their full password. PIN access lasts up to 12 hours after full-password sign-in; PIN use does not renew it. PIN/password attempts share a persistent cooldown, and account changes/password resets remove PIN access. The owner continues using the owner password. Remote accounts remain pending. Cashiers can make cash sales, view receipts and read help; managers can perform operational work; owner-only staff management and backup actions are enforced through the active application session.
 
 Local sign-in pauses for 60 seconds after five unsuccessful attempts per shop/account. Sessions lock after 15 minutes of inactivity; ordinary app input keeps a valid session active. Restarting the app does not clear failed-login cooldowns.
 
