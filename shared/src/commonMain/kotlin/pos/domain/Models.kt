@@ -68,10 +68,12 @@ data class CartLine(
     val discountPerUnitMinor: Long = 0,
     val discountReason: String? = null,
     val quantityPrecision: Int = if (sellingUnitId == null) product.quantityPrecision else 0,
+    val basketDiscountMinor: Long = 0,
 ) {
     init {
         require(quantityPrecision in 0..6 && quantityPrecision == (if(sellingUnitId==null) product.quantityPrecision else 0))
         require(quantity > 0) { "Choose a quantity greater than zero." }
+        require(basketDiscountMinor>=0 && basketDiscountMinor<=beforeBasketMinor) { "Basket allocation exceeds this line amount." }
         require(discountPerUnitMinor >= 0 && discountPerUnitMinor <= unitPriceMinor) { "Discount must be between zero and the selling price." }
         require((discountPerUnitMinor == 0L) == (discountReason == null)) { "A discount needs a reason; remove the reason when removing a discount." }
         if (discountPerUnitMinor > 0) UnitDiscount(unitPriceMinor, discountPerUnitMinor, requireNotNull(discountReason))
@@ -85,7 +87,12 @@ data class CartLine(
     val netUnitPriceMinor: Long get() = unitPriceMinor - discountPerUnitMinor
     val grossTotalMinor: Long get() = Quantity(quantity.toLong(), quantityPrecision).lineTotalMinor(unitPriceMinor)
     val discountTotalMinor: Long get() = grossTotalMinor - totalMinor
-    val totalMinor: Long get() = Quantity(quantity.toLong(), quantityPrecision).lineTotalMinor(netUnitPriceMinor)
+    val beforeBasketMinor: Long get() = Quantity(quantity.toLong(), quantityPrecision).lineTotalMinor(netUnitPriceMinor)
+    val totalMinor: Long get() = beforeBasketMinor-basketDiscountMinor
+    fun cumulativeRefundMinor(returnedQuantity:Int):Long {
+        require(returnedQuantity in 0..quantity)
+        return if(basketDiscountMinor==0L) Quantity(returnedQuantity.toLong(),quantityPrecision).lineTotalMinor(netUnitPriceMinor) else proportionalRounded(totalMinor,returnedQuantity.toLong(),quantity.toLong())
+    }
 }
 
 /** Cash means cash applied to this sale, excluding change handed back. */
@@ -99,6 +106,7 @@ data class Sale(
     val customerId: String?,
     val createdAt: String,
     val dueDate: String? = null,
+    val basketDiscount: BasketDiscount? = null,
 ) {
     init {
         require(dueDate == null || (creditMinor > 0 && isValidCreditDueDate(dueDate))) { "A due date must be a valid YYYY-MM-DD date for a credit sale." }
@@ -106,6 +114,7 @@ data class Sale(
         require(lines.isNotEmpty()) { "Add an item before taking payment." }
         require(lines.all { it.product.tenantId == tenantId }) { "Items belong to another shop." }
         require(lines.map { it.key }.distinct().size == lines.size) { "Combine repeated items into one line." }
+        require(if(basketDiscount==null) lines.all {it.basketDiscountMinor==0L} else allocateBasketDiscount(lines,basketDiscount).map {it.basketDiscountMinor}==lines.map {it.basketDiscountMinor}) { "Basket discount allocations do not match the saved rule." }
         require(totalMinor >= 0 && totalMinor == cartTotal(lines)) { "Sale total does not match its items." }
         require(cashMinor >= 0 && creditMinor >= 0 && addMoney(cashMinor, creditMinor) == totalMinor) {
             "Cash and credit must cover the sale exactly."
@@ -134,6 +143,7 @@ fun checkout(
     allowCredit: Boolean = false,
     createdAt: String,
     dueDate: String? = null,
+    basketDiscount: BasketDiscount? = null,
 ): CheckoutResult {
     require(tenantId.isNotBlank())
     require(cashGivenMinor >= 0) { "Enter a non-negative cash amount." }
@@ -152,7 +162,7 @@ fun checkout(
         require(credit == 0L || customer.creditLimitMinor == null || debt <= customer.creditLimitMinor) { "This sale would exceed the customer's credit limit." }
     }
     return CheckoutResult(
-        Sale(id, tenantId, lines.toList(), total, appliedCash, credit, customer?.id, createdAt, dueDate),
+        Sale(id, tenantId, lines.toList(), total, appliedCash, credit, customer?.id, createdAt, dueDate,basketDiscount),
         cashGivenMinor - appliedCash,
     )
 }
