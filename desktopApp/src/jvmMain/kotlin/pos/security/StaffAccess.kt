@@ -17,15 +17,17 @@ import javax.crypto.spec.PBEKeySpec
 class StaffAccess(
     directory:Path = Path.of(System.getProperty("pos.dataDir",System.getProperty("user.home")+"/.nigerian-retail-pos")),
     private val clockMillis:()->Long = { System.currentTimeMillis() },
-    private val idleTimeoutMillis:Long = 15 * 60 * 1000L
+    private val idleTimeoutMillis:Long = 15 * 60 * 1000L,
+    private val pinAuthorizationMillis:Long = 12 * 60 * 60 * 1000L
 ):AutoCloseable {
     private val owners=WorkspaceAccess(directory)
     private val random=SecureRandom()
     private val db:java.sql.Connection
-    private data class Issued(val session:StaffSession,val version:Long?,var lastActivityMillis:Long)
+    private data class Issued(val session:StaffSession,val version:Long?,var lastActivityMillis:Long,val pinAuthorizationId:String?=null,val absoluteExpiryMillis:Long?=null)
     private val sessions=mutableMapOf<String,Issued>()
 
     init {
+        require(pinAuthorizationMillis > 0) { "PIN authorization duration must be greater than zero." }
         require(idleTimeoutMillis > 0) { "Session timeout must be greater than zero." }
         Files.createDirectories(directory)
         Class.forName("org.sqlite.JDBC")
@@ -36,6 +38,7 @@ class StaffAccess(
             it.execute("PRAGMA synchronous=FULL")
             it.execute("CREATE TABLE IF NOT EXISTS login_attempts(tenant_id TEXT NOT NULL,subject TEXT NOT NULL,failures INTEGER NOT NULL CHECK(failures BETWEEN 0 AND 5),last_attempt_ms INTEGER NOT NULL CHECK(last_attempt_ms>=0),locked_until_ms INTEGER NOT NULL CHECK(locked_until_ms>=0),PRIMARY KEY(tenant_id,subject))")
             it.execute("CREATE TABLE IF NOT EXISTS local_staff(id TEXT NOT NULL,tenant_id TEXT NOT NULL,name TEXT NOT NULL,role TEXT NOT NULL CHECK(role IN('MANAGER','CASHIER')),active INTEGER NOT NULL CHECK(active IN(0,1)),created_at TEXT NOT NULL,salt TEXT NOT NULL,password_hash TEXT NOT NULL,version INTEGER NOT NULL CHECK(version>0),creation_fingerprint TEXT NOT NULL,creation_salt TEXT NOT NULL,PRIMARY KEY(tenant_id,id))")
+            it.execute("CREATE TABLE IF NOT EXISTS staff_pins(tenant_id TEXT NOT NULL,staff_id TEXT NOT NULL,salt TEXT NOT NULL,pin_hash TEXT NOT NULL,staff_version INTEGER NOT NULL CHECK(staff_version>0),authorization_id TEXT NOT NULL,authorized_at_ms INTEGER NOT NULL CHECK(authorized_at_ms>=0),expires_at_ms INTEGER NOT NULL CHECK(expires_at_ms>=0),last_used_ms INTEGER NOT NULL CHECK(last_used_ms>=0),PRIMARY KEY(tenant_id,staff_id))")
             it.execute("CREATE TABLE IF NOT EXISTS staff_audit(id TEXT NOT NULL,tenant_id TEXT NOT NULL,kind TEXT NOT NULL,entity_id TEXT NOT NULL,created_at TEXT NOT NULL,actor_id TEXT,actor_name TEXT NOT NULL,actor_role TEXT NOT NULL CHECK(actor_role IN('OWNER','MANAGER','CASHIER')),description TEXT CHECK(description IS NULL OR length(description)<=1000),PRIMARY KEY(tenant_id,id))")
             it.execute("CREATE TRIGGER IF NOT EXISTS staff_audit_no_update BEFORE UPDATE ON staff_audit BEGIN SELECT RAISE(ABORT,'Staff audit history cannot be edited'); END")
             it.execute("CREATE TRIGGER IF NOT EXISTS staff_audit_no_delete BEFORE DELETE ON staff_audit BEGIN SELECT RAISE(ABORT,'Staff audit history cannot be removed'); END")
@@ -56,24 +59,86 @@ class StaffAccess(
     }
     @Synchronized fun unlockStaff(tenantId:String,staffId:String,password:String):StaffSession? {
         if(!validTenant(tenantId) || staffId.isBlank() || staffId.length>256) return null
-        return attemptLogin(tenantId,"staff:$staffId") {
-            if(password.length !in 8..1024) null else {
-                val record=rows("SELECT * FROM local_staff WHERE tenant_id=? AND id=?",tenantId,staffId).singleOrNull()
-                if(record==null || record["active"]!="1") null else {
-                    val salt=Base64.getDecoder().decode(record.getValue("salt"))
-                    val expected=Base64.getDecoder().decode(record.getValue("password_hash"))
+        return attemptLogin(tenantId,"staff:$staffId") { now ->
+            authenticateStaff(tenantId,staffId,password)?.also { refreshPinAuthorization(tenantId,staffId,now) }
+        }
+    }
+
+    private fun authenticateStaff(tenantId:String,staffId:String,password:String):LoginIdentity? {
+        if(password.length !in 8..1024) return null
+        val record=rows("SELECT * FROM local_staff WHERE tenant_id=? AND id=?",tenantId,staffId).singleOrNull() ?: return null
+        if(record["active"]!="1") return null
+        val salt=Base64.getDecoder().decode(record.getValue("salt"))
+        val expected=Base64.getDecoder().decode(record.getValue("password_hash"))
+        if(salt.size!=24 || expected.size!=32) return null
+        val actual=derive(tenantId,staffId,password,salt)
+        val matches=try {MessageDigest.isEqual(actual,expected)} finally {actual.fill(0);expected.fill(0);salt.fill(0)}
+        if(!matches) return null
+        val person=member(record)
+        return LoginIdentity(staffId,person.name,person.role,record.getValue("version").toLong())
+    }
+
+    /** Six-digit convenience unlock never renews the fixed full-password authorization. */
+    @Synchronized fun unlockStaffPin(tenantId:String,staffId:String,pin:String):StaffSession? {
+        if(!validTenant(tenantId) || staffId.isBlank() || staffId.length>256) return null
+        return attemptLogin(tenantId,"staff:$staffId") { now ->
+            if(!validPin(pin)) null else {
+                val person=rows("SELECT * FROM local_staff WHERE tenant_id=? AND id=?",tenantId,staffId).singleOrNull()
+                val saved=rows("SELECT * FROM staff_pins WHERE tenant_id=? AND staff_id=?",tenantId,staffId).singleOrNull()
+                if(person==null || saved==null || person["active"]!="1" || person["version"]!=saved["staff_version"] ||
+                    now<saved.getValue("last_used_ms").toLong() || now>=saved.getValue("expires_at_ms").toLong()) null
+                else {
+                    val salt=Base64.getDecoder().decode(saved.getValue("salt"))
+                    val expected=Base64.getDecoder().decode(saved.getValue("pin_hash"))
                     if(salt.size!=24 || expected.size!=32) null else {
-                        val actual=derive(tenantId,staffId,password,salt)
+                        val actual=derive(tenantId,"pin:$staffId",pin,salt)
                         val matches=try {MessageDigest.isEqual(actual,expected)} finally {actual.fill(0);expected.fill(0);salt.fill(0)}
                         if(!matches) null else {
-                            val person=member(record)
-                            LoginIdentity(staffId,person.name,person.role,record.getValue("version").toLong())
+                            execute("UPDATE staff_pins SET last_used_ms=? WHERE tenant_id=? AND staff_id=?",now,tenantId,staffId)
+                            val member=member(person)
+                            LoginIdentity(staffId,member.name,member.role,person.getValue("version").toLong(),saved.getValue("authorization_id"),saved.getValue("expires_at_ms").toLong())
                         }
                     }
                 }
             }
         }
     }
+
+    /** Setup/removal always proves the account's full password, sharing the login cooldown. */
+    @Synchronized fun configureStaffPin(tenantId:String,staffId:String,password:String,pin:String?):Boolean {
+        require(pin==null || validPin(pin)) { "Use exactly six digits from 0 to 9 for the staff PIN." }
+        val verified=unlockStaff(tenantId,staffId,password) ?: return false
+        try {
+            transaction {
+                val now=clockMillis()
+                validSession(verified,now)
+                val previous=rows("SELECT * FROM staff_pins WHERE tenant_id=? AND staff_id=?",tenantId,staffId).singleOrNull()
+                require(previous==null || now>=previous.getValue("last_used_ms").toLong()) { "The computer clock moved backwards. Correct the clock before setting a PIN." }
+                if(pin==null) execute("DELETE FROM staff_pins WHERE tenant_id=? AND staff_id=?",tenantId,staffId)
+                else {
+                    require(now<=Long.MAX_VALUE-pinAuthorizationMillis) { "The computer clock cannot authorize a PIN." }
+                    val salt=ByteArray(24).also(random::nextBytes)
+                    val hash=derive(tenantId,"pin:$staffId",pin,salt)
+                    try {
+                        execute("INSERT INTO staff_pins VALUES(?,?,?,?,?,?,?,?,?) ON CONFLICT(tenant_id,staff_id) DO UPDATE SET salt=excluded.salt,pin_hash=excluded.pin_hash,staff_version=excluded.staff_version,authorization_id=excluded.authorization_id,authorized_at_ms=excluded.authorized_at_ms,expires_at_ms=excluded.expires_at_ms,last_used_ms=excluded.last_used_ms",
+                            tenantId,staffId,encode(salt),encode(hash),requireNotNull(sessions[verified.token]?.version),UUID.randomUUID().toString(),now,now+pinAuthorizationMillis,now)
+                    } finally {salt.fill(0);hash.fill(0)}
+                }
+                appendStaffAudit(verified,if(pin==null) "staff.pin_removed" else "staff.pin_configured",staffId,if(pin==null) "Removed convenience PIN" else "Configured six-digit convenience PIN on this computer")
+            }
+            return true
+        } finally { logout(verified) }
+    }
+
+    private fun refreshPinAuthorization(tenantId:String,staffId:String,now:Long) {
+        // A clock rollback cannot reauthorize a persisted PIN. Full-password access remains available.
+        val saved=rows("SELECT * FROM staff_pins WHERE tenant_id=? AND staff_id=?",tenantId,staffId).singleOrNull() ?: return
+        if(now<saved.getValue("last_used_ms").toLong() || now>Long.MAX_VALUE-pinAuthorizationMillis) return
+        execute("UPDATE staff_pins SET authorization_id=?,authorized_at_ms=?,expires_at_ms=?,last_used_ms=? WHERE tenant_id=? AND staff_id=?",
+            UUID.randomUUID().toString(),now,now+pinAuthorizationMillis,now,tenantId,staffId)
+    }
+
+    private fun validPin(pin:String)=pin.length==6 && pin.all {it in '0'..'9'}
 
     @Synchronized fun requireSession(session:StaffSession,permission:StaffPermission,touch:Boolean=true) {
         val now=clockMillis()
@@ -91,7 +156,8 @@ class StaffAccess(
     private fun validSession(session:StaffSession,now:Long):Issued {
         val issued=sessions[session.token]
         require(issued!=null && issued.session==session) { "This session is no longer valid. Lock the shop and sign in again." }
-        if(now<issued.lastActivityMillis || now-issued.lastActivityMillis>=idleTimeoutMillis) {
+        if(now<issued.lastActivityMillis || now-issued.lastActivityMillis>=idleTimeoutMillis ||
+            (issued.absoluteExpiryMillis!=null && now>=issued.absoluteExpiryMillis)) {
             sessions.remove(session.token)
             throw IllegalArgumentException("This session expired. Sign in again.")
         }
@@ -103,13 +169,21 @@ class StaffAccess(
                 throw IllegalArgumentException("This staff account changed or was disabled. Sign in again.")
             }
         } else require(session.role==StaffRole.OWNER)
+        if(issued.pinAuthorizationId!=null) {
+            val changed=execute("UPDATE staff_pins SET last_used_ms=? WHERE tenant_id=? AND staff_id=? AND authorization_id=? AND staff_version=? AND last_used_ms<=? AND expires_at_ms>?",
+                now,session.tenantId,session.staffId,issued.pinAuthorizationId,issued.version,now,now)
+            if(changed!=1) {
+                sessions.remove(session.token)
+                throw IllegalArgumentException("PIN access expired or changed. Sign in with your full password.")
+            }
+        }
         return issued
     }
 
-    private data class LoginIdentity(val staffId:String?,val name:String,val role:StaffRole,val version:Long?)
+    private data class LoginIdentity(val staffId:String?,val name:String,val role:StaffRole,val version:Long?,val pinAuthorizationId:String?=null,val absoluteExpiryMillis:Long?=null)
 
     /** Failed attempts survive restart; cooldown is per shop and sign-in identity. */
-    private fun attemptLogin(tenantId:String,subject:String,authenticate:()->LoginIdentity?):StaffSession? {
+    private fun attemptLogin(tenantId:String,subject:String,authenticate:(Long)->LoginIdentity?):StaffSession? {
         val now=clockMillis()
         if(now<0) return null
         val identity=transaction {
@@ -124,7 +198,7 @@ class StaffAccess(
                 execute("UPDATE login_attempts SET last_attempt_ms=? WHERE tenant_id=? AND subject=?",now,tenantId,subject)
                 return@transaction null
             }
-            val person=try { authenticate() } catch(_:Exception) { null }
+            val person=try { authenticate(now) } catch(_:Exception) { null }
             if(person!=null) {
                 execute("DELETE FROM login_attempts WHERE tenant_id=? AND subject=?",tenantId,subject)
                 person
@@ -136,7 +210,7 @@ class StaffAccess(
                 null
             }
         }
-        return identity?.let { issue(tenantId,it.staffId,it.name,it.role,it.version) }
+        return identity?.let { issue(tenantId,it.staffId,it.name,it.role,it.version,now,it.pinAuthorizationId,it.absoluteExpiryMillis) }
     }
     @Synchronized fun logout(session:StaffSession) { sessions.remove(session.token) }
 
@@ -182,6 +256,7 @@ class StaffAccess(
         requireUniqueName(changed.tenantId,changed.name,id)
         if(changed!=old) {
             execute("UPDATE local_staff SET name=?,role=?,active=?,version=version+1 WHERE tenant_id=? AND id=?",changed.name,role.name,if(active)1 else 0,changed.tenantId,id)
+            execute("DELETE FROM staff_pins WHERE tenant_id=? AND staff_id=?",changed.tenantId,id)
             invalidate(changed.tenantId,id)
             appendStaffAudit(ownerSession,"staff.updated",id,"Staff before: name=${old.name}; role=${old.role.name}; active=${old.active}. Staff after: name=${changed.name}; role=${changed.role.name}; active=${changed.active}.")
         }
@@ -196,6 +271,7 @@ class StaffAccess(
         try {
             // The creation fingerprint is deliberately retained for duplicate create retries.
             execute("UPDATE local_staff SET salt=?,password_hash=?,version=version+1 WHERE tenant_id=? AND id=?",encode(salt),encode(hash),ownerSession.tenantId,id)
+            execute("DELETE FROM staff_pins WHERE tenant_id=? AND staff_id=?",ownerSession.tenantId,id)
             invalidate(ownerSession.tenantId,id)
             appendStaffAudit(ownerSession,"staff.password_reset",id,"Password reset for staff: name=${person.name}")
         } finally {hash.fill(0);salt.fill(0)}
@@ -207,10 +283,10 @@ class StaffAccess(
             UUID.randomUUID().toString(),session.tenantId,kind,entityId,Instant.now().toString(),session.staffId,session.name,session.role.name,description)
     }
 
-    private fun issue(tenantId:String,staffId:String?,name:String,role:StaffRole,version:Long?):StaffSession {
+    private fun issue(tenantId:String,staffId:String?,name:String,role:StaffRole,version:Long?,issuedAt:Long,pinAuthorizationId:String?=null,absoluteExpiryMillis:Long?=null):StaffSession {
         val token=encode(ByteArray(32).also(random::nextBytes))
         val session=StaffSession(token,tenantId,staffId,name,role)
-        sessions[token]=Issued(session,version,clockMillis())
+        sessions[token]=Issued(session,version,issuedAt,pinAuthorizationId,absoluteExpiryMillis)
         return session
     }
     private fun invalidate(tenantId:String,id:String) {sessions.entries.removeIf {it.value.session.tenantId==tenantId && it.value.session.staffId==id}}
