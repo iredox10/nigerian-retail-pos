@@ -77,19 +77,22 @@ object DebtAgeingService {
     const val ALLOCATION_NOTICE = "Payments not allocated to receipts remain explicitly unassigned. Assign them before calculating an exact overdue invoice balance. Current customer debt includes all saved dates."
 
     /** Export every customer in the supplied review, with blanks when ageing is unknown. */
-    fun csv(tenantId: String, rows: List<CreditReviewRow>, asOf: LocalDate): String {
+    fun csv(tenantId: String, rows: List<CreditReviewRow>, asOf: LocalDate): String =
+        csvWithBasis(tenantId,rows,asOf,"Current saved balances; not a historical balance","Current debt NGN")
+
+    internal fun csvWithBasis(tenantId: String, rows: List<CreditReviewRow>, asOf: LocalDate, balanceBasis: String, debtColumn: String): String {
         require(rows.all { it.customer.tenantId == tenantId }) { "Credit export includes another shop." }
         require(rows.map { it.customer.id }.distinct().size == rows.size) { "Credit export has duplicate customers." }
         fun amount(value: Long) = CsvCell.Number(java.math.BigDecimal.valueOf(value, 2).toPlainString())
         return CsvService.encode(
-            listOf("Customer ID", "Customer", "Due-date classification WAT", "Balance basis", "Current debt NGN", "Unassigned repayments NGN", "Exact ageing available") + DebtAgeBand.entries.map { it.label + " NGN" },
+            listOf("Customer ID", "Customer", "Due-date classification WAT", "Balance basis", debtColumn, "Unassigned repayments NGN", "Exact ageing available") + DebtAgeBand.entries.map { it.label + " NGN" },
             rows.map { row ->
                 // Prevent a caller from relabeling a review with another classification date.
                 val expected = if (row.unallocatedRepaymentsMinor == 0L) DebtAgeBand.entries.associateWith { band ->
                     exactTotal(row.invoiceBalances.filter { DebtAgeBand.classify(it.sale.dueDate, asOf) == band }.map { it.remainingMinor })
                 } else null
                 require(row.ageing?.amounts == expected) { "Refresh credit ageing for the export date." }
-                listOf(CsvCell.Text(row.customer.id), CsvCell.Text(row.customer.name), CsvCell.Text(asOf.toString()), CsvCell.Text("Current saved balances; not a historical balance"), amount(row.currentDebtMinor), amount(row.unallocatedRepaymentsMinor), CsvCell.Text((row.ageing != null).toString())) +
+                listOf(CsvCell.Text(row.customer.id), CsvCell.Text(row.customer.name), CsvCell.Text(asOf.toString()), CsvCell.Text(balanceBasis), amount(row.currentDebtMinor), amount(row.unallocatedRepaymentsMinor), CsvCell.Text((row.ageing != null).toString())) +
                     DebtAgeBand.entries.map { band -> row.ageing?.amounts?.get(band)?.let(::amount) ?: CsvCell.Text("") }
             },
         )
