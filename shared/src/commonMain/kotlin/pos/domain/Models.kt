@@ -50,16 +50,24 @@ data class CartLine(
     val sellingUnit: String = product.unit,
     val unitPriceMinor: Long = product.priceMinor,
     val baseUnitsPerUnit: Int = 1,
+    val discountPerUnitMinor: Long = 0,
+    val discountReason: String? = null,
 ) {
     init {
         require(quantity > 0) { "Choose a quantity greater than zero." }
+        require(discountPerUnitMinor >= 0 && discountPerUnitMinor <= unitPriceMinor) { "Discount must be between zero and the selling price." }
+        require((discountPerUnitMinor == 0L) == (discountReason == null)) { "A discount needs a reason; remove the reason when removing a discount." }
+        if (discountPerUnitMinor > 0) UnitDiscount(unitPriceMinor, discountPerUnitMinor, requireNotNull(discountReason))
         require(sellingUnitId == null || sellingUnitId.isNotBlank())
         require(sellingUnit.isNotBlank() && unitPriceMinor >= 0 && baseUnitsPerUnit > 0)
         require(sellingUnitId != null || (sellingUnit == product.unit && unitPriceMinor == product.priceMinor && baseUnitsPerUnit == 1)) { "Base selling units must match the item." }
     }
     val key: String get() = sellingUnitId?.let { product.id + "~" + it } ?: product.id
     val baseQuantity: Long get() = quantity.toLong() * baseUnitsPerUnit
-    val totalMinor: Long get() = multiplyMoney(unitPriceMinor, quantity)
+    val netUnitPriceMinor: Long get() = unitPriceMinor - discountPerUnitMinor
+    val grossTotalMinor: Long get() = multiplyMoney(unitPriceMinor, quantity)
+    val discountTotalMinor: Long get() = multiplyMoney(discountPerUnitMinor, quantity)
+    val totalMinor: Long get() = multiplyMoney(netUnitPriceMinor, quantity)
 }
 
 /** Cash means cash applied to this sale, excluding change handed back. */
@@ -91,7 +99,12 @@ data class Sale(
 
 data class CheckoutResult(val sale: Sale, val changeMinor: Long)
 
-fun cartTotal(lines: List<CartLine>): Long = lines.fold(0L) { sum, line -> addMoney(sum, line.totalMinor) }
+fun cartSubtotal(lines: List<CartLine>): Long = lines.fold(0L) { sum, line -> addMoney(sum, line.grossTotalMinor) }
+fun cartDiscountTotal(lines: List<CartLine>): Long = lines.fold(0L) { sum, line -> addMoney(sum, line.discountTotalMinor) }
+fun cartTotal(lines: List<CartLine>): Long {
+    cartSubtotal(lines) // Keep the receipt's original-price breakdown representable.
+    return lines.fold(0L) { sum, line -> addMoney(sum, line.totalMinor) }
+}
 
 /** Pure checkout validation; persistence must re-read current tenant stock in a transaction. */
 fun checkout(
