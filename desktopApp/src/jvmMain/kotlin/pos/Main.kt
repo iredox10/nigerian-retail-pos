@@ -83,7 +83,7 @@ fun main() = application {
                 notice?.let { Text(it, Modifier.padding(16.dp), color = MaterialTheme.colorScheme.error) }
                 Box(Modifier.weight(1f).padding(24.dp)) {
                     when (route) {
-                        "Sell" -> saleStates.SaveableStateProvider(current.id) { SellScreen(current.id, products, customers) { lines, cash, customer, operationId, dueDate ->
+                        "Sell" -> saleStates.SaveableStateProvider(current.id) { SellScreen(current.id, products, customers, remember(current.id, revision) { repo.sellingUnits(current.id) }) { lines, cash, customer, operationId, dueDate ->
                             try { repo.checkout(current.id, lines, cash, customer, operationId,dueDate); revision++; null } catch (e: Exception) { e.message ?: "Sale not saved" }
                         } }
                         "Stock" -> StockScreen(repo, current.id, onChanged={ revision++ }, onImport={ route="Import" })

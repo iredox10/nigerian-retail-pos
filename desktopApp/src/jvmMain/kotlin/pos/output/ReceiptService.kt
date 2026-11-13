@@ -36,7 +36,8 @@ object ReceiptService {
             appendLine("----------------------------------------")
             sale.lines.forEach { line ->
                 appendLine(line.product.name)
-                appendLine("  ${line.quantity} ${line.product.unit} x ${money(line.product.priceMinor)}")
+                appendLine("  ${line.quantity} ${line.sellingUnit} x ${money(line.unitPriceMinor)}")
+                if (line.baseUnitsPerUnit > 1) appendLine("  Contains ${line.baseQuantity} ${line.product.unit}")
                 appendLine("  ${money(line.totalMinor)}")
             }
             appendLine("----------------------------------------")

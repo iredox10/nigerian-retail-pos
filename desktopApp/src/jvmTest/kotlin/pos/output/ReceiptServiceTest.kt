@@ -20,6 +20,16 @@ class ReceiptServiceTest {
         if (credit) "customer-1" else null, "2026-11-11T10:00:00Z",
     )
 
+    @Test fun mixedPackAndLooseReceiptUsesSoldUnitPricesAndConversion() {
+        val lines = listOf(CartLine(product, 1, "carton-id", "carton", 1100000, 24), CartLine(product, 3))
+        val mixed = Sale("mixed", tenant.id, lines, 1250000, 1250000, 0, null, "2026-11-13T10:00:00Z")
+        val text = ReceiptService.format(tenant, mixed)
+        assertContains(text, "1 carton x ₦11,000.00")
+        assertContains(text, "Contains 24 bottle")
+        assertContains(text, "3 bottle x ₦500.00")
+        assertContains(text, "Original sale total: ₦12,500.00")
+    }
+
     @Test fun cashReceiptShowsActualShopAndAmountsInWATWithoutInventingChange() {
         val text = ReceiptService.format(tenant, sale())
         assertContains(text, "Adewale Stores")

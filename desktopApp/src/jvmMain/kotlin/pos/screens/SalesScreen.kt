@@ -80,7 +80,7 @@ private fun TenantSalesScreen(repo: PosRepository, tenantId: String, onChanged: 
                                             Text(money(sale.totalMinor), fontWeight = FontWeight.SemiBold)
                                         }
                                         Text(receiptDate(sale.createdAt), style = MaterialTheme.typography.bodySmall, color = PosPalette.Secondary)
-                                        Text(sale.lines.joinToString { "${it.quantity} ${it.product.unit} ${it.product.name}" },
+                                        Text(sale.lines.joinToString { "${it.quantity} ${it.sellingUnit} ${it.product.name}" },
                                             maxLines = 2, style = MaterialTheme.typography.bodySmall, color = PosPalette.Secondary)
                                         StatusPill(if (sale.creditMinor > 0) "Part paid / pay later at sale" else "Paid in cash",
                                             if (sale.creditMinor > 0) NoticeTone.Warning else NoticeTone.Neutral)
@@ -170,19 +170,19 @@ private fun ReturnItemsDialog(
     val operation = remember(sale.id) { UUID.randomUUID().toString() }
     val preview = runCatching {
         sale.lines.fold(0L) { sum, line ->
-            val input = quantities[line.product.id].orEmpty()
+            val input = quantities[line.key].orEmpty()
             val count = if (input.isBlank()) 0 else input.toIntOrNull() ?: error("Invalid quantity")
-            require(count in 0..(returnable[line.product.id] ?: 0))
-            Math.addExact(sum, Math.multiplyExact(count.toLong(), line.product.priceMinor))
+            require(count in 0..(returnable[line.key] ?: 0))
+            Math.addExact(sum, Math.multiplyExact(count.toLong(), line.unitPriceMinor))
         }
     }.getOrNull()
     AlertDialog(onDismissRequest = { if (!saving) dismiss() }, title = { Text("Return items · ${sale.id.take(8)}") },
         text = {
             Column(Modifier.heightIn(max = 460.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text("Enter only the goods being returned. Blank quantities mean no return for that item.", color = PosPalette.Secondary)
-                sale.lines.filter { (returnable[it.product.id] ?: 0) > 0 }.forEach { line ->
-                    PosTextField(quantities[line.product.id].orEmpty(), { quantities[line.product.id] = it },
-                        "${line.product.name} (${line.product.unit})", hint = "Up to ${returnable[line.product.id]} ${line.product.unit}")
+                sale.lines.filter { (returnable[it.key] ?: 0) > 0 }.forEach { line ->
+                    PosTextField(quantities[line.key].orEmpty(), { quantities[line.key] = it },
+                        "${line.product.name} (${line.sellingUnit})", hint = "Up to ${returnable[line.key]} ${line.sellingUnit}")
                 }
                 PosTextField(reason, { reason = it }, "Why are the goods being returned?", singleLine = false)
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -201,11 +201,11 @@ private fun ReturnItemsDialog(
                 saving = true
                 try {
                     val entries = sale.lines.associate { line ->
-                        val input = quantities[line.product.id].orEmpty().trim()
+                        val input = quantities[line.key].orEmpty().trim()
                         val quantity = if (input.isBlank()) 0 else input.toIntOrNull()
                             ?: throw IllegalArgumentException("Enter return quantities as whole numbers.")
-                        require(quantity in 0..(returnable[line.product.id] ?: 0)) { "Return quantity exceeds the items still available to return." }
-                        line.product.id to quantity
+                        require(quantity in 0..(returnable[line.key] ?: 0)) { "Return quantity exceeds the items still available to return." }
+                        line.key to quantity
                     }.filterValues { it > 0 }
                     require(entries.isNotEmpty()) { "Enter at least one item to return." }
                     require(reason.isNotBlank()) { "Enter why the goods are being returned." }

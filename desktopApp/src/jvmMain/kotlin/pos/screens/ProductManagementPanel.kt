@@ -48,7 +48,7 @@ internal fun ProductManagementPanel(
             SectionHeader(product.name, "Selling unit: ${product.unit} · ${quantityText(product.stock)} available")
             if (product.archived) InlineNotice("Archived item", "Saved sales and history are kept. Restore this item before selling, receiving or counting it.", NoticeTone.Warning)
             Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                listOf("Details", "Buying units", "Count stock", "History").forEach { label ->
+                listOf("Details", "Selling units", "Buying units", "Count stock", "History").forEach { label ->
                     FilterChip(selected = tab == label, onClick = { tab = label; error = null }, label = { Text(label) })
                 }
             }
@@ -58,7 +58,7 @@ internal fun ProductManagementPanel(
                     Column(Modifier.fillMaxWidth().padding(24.dp), verticalArrangement = Arrangement.spacedBy(20.dp)) {
                         Column(Modifier.widthIn(max = 620.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                             PosTextField(name, { name = it; error = null }, "Item name", enabled = !product.archived)
-                            Text("Selling unit: ${product.unit}. Buying units can convert cartons or packs into this stock unit. Selling in another unit is not available yet.", style = MaterialTheme.typography.bodySmall, color = PosPalette.Secondary)
+                            Text("Base stock unit: ${product.unit}. Use Selling units to set a carton or pack price and barcode. Use Buying units for packaging received from suppliers. Both use this same stock.", style = MaterialTheme.typography.bodySmall, color = PosPalette.Secondary)
                             PosTextField(price, { price = it; error = null }, "Selling price per ${product.unit} (₦)", enabled = !product.archived)
                             PosTextField(barcode, { barcode = it; error = null }, "Barcode (optional)", hint = "Scan or type the code; leave empty to remove it", enabled = !product.archived)
                             Text("A price change applies to future sales. Saved receipts keep the price used at the time of sale.", style = MaterialTheme.typography.bodySmall, color = PosPalette.Secondary)
@@ -82,6 +82,7 @@ internal fun ProductManagementPanel(
                             else "Archive goods you no longer sell. They leave the active catalogue; their recorded stock and history stay saved.", style = MaterialTheme.typography.bodySmall, color = PosPalette.Secondary)
                     }
                 }
+                "Selling units" -> SellingUnitsPanel(repo, tenantId, product)
                 "Buying units" -> BuyingUnitsPanel(repo, tenantId, product)
                 "Count stock" -> Surface(shape = MaterialTheme.shapes.medium, color = PosPalette.Surface) {
                     Column(Modifier.fillMaxWidth().padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -178,7 +179,7 @@ private fun BuyingUnitsPanel(repo: PosRepository, tenantId: String, product: Pro
     val result = remember(tenantId, product.id, revision) { runCatching { repo.purchaseUnits(tenantId, product.id, includeArchived = true) } }
     Column(verticalArrangement = Arrangement.spacedBy(20.dp)) {
         SectionHeader("Buying units", "Receive cartons or packs; keep selling and counting in ${product.unit}")
-        Text("Define what one buying unit contains. For example, 1 carton = 24 bottle. This does not change existing stock or the selling price, and it does not enable carton sales at checkout.", style = MaterialTheme.typography.bodyMedium)
+        Text("Define what one buying unit contains. For example, 1 carton = 24 bottle. This does not change existing stock or the selling price. To sell cartons at checkout, configure them separately under Selling units.", style = MaterialTheme.typography.bodyMedium)
         result.exceptionOrNull()?.let { InlineNotice("Buying units could not be loaded", it.message ?: "Refresh to try again.", NoticeTone.Danger) }
         error?.let { InlineNotice("Buying unit not saved", it, NoticeTone.Danger) }
         message?.let { InlineNotice(it, tone = NoticeTone.Success) }

@@ -17,6 +17,7 @@ fun main() {
             repo.createTenant("Practice shop · Sample data").also { t ->
                 val malt=repo.addProduct(t.id,"Malt drink · 330 ml","bottle",50000,240.0,"6150000000010")
                 repo.addPurchaseUnit(t.id,malt.id,"carton",24,"sample-carton-definition")
+                repo.addSellingUnit(t.id,malt.id,"carton",24,1100000,"6150000000027")
                 val rice=repo.addProduct(t.id,"Premium rice · 5 kg","bag",1250000,32.0)
                 repo.addProduct(t.id,"Vegetable oil · 1 litre","bottle",380000,48.0)
                 repo.addProduct(t.id,"Laundry soap · 200 g","piece",45000,96.0)
