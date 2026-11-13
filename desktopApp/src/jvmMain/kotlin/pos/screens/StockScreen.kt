@@ -41,6 +41,8 @@ private fun TenantStockScreen(repo: PosRepository, tenantId: String, onChanged: 
     var search by remember { mutableStateOf("") }
     var history by remember { mutableStateOf(false) }
     var archived by remember { mutableStateOf(false) }
+    var lowStock by remember { mutableStateOf(false) }
+    val lowStockCount = products.count { item -> item.reorderLevel?.let { item.stock <= it } == true }
     var editor by remember { mutableStateOf<String?>(null) }
     var selectedProductId by remember { mutableStateOf<String?>(null) }
     var savedMessage by remember { mutableStateOf<String?>(null) }
@@ -84,9 +86,10 @@ private fun TenantStockScreen(repo: PosRepository, tenantId: String, onChanged: 
             else -> {
                 savedMessage?.let { InlineNotice(it, tone = NoticeTone.Success, modifier = Modifier.fillMaxWidth()) }
                 Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    FilterChip(selected = !history && !archived, onClick = { history = false; archived = false }, label = { Text("Items in stock") })
-                    FilterChip(selected = !history && archived, onClick = { history = false; archived = true }, label = { Text("Archived items") })
-                    FilterChip(selected = history, onClick = { history = true }, label = { Text("Stock received (${receipts.size})") })
+                    FilterChip(selected = !history && !archived && !lowStock, onClick = { history = false; archived = false; lowStock = false }, label = { Text("Items in stock") })
+                    FilterChip(selected = !history && !archived && lowStock, onClick = { history = false; archived = false; lowStock = true }, label = { Text("Low stock ($lowStockCount)") })
+                    FilterChip(selected = !history && archived, onClick = { history = false; archived = true; lowStock = false }, label = { Text("Archived items") })
+                    FilterChip(selected = history, onClick = { history = true; lowStock = false }, label = { Text("Stock received (${receipts.size})") })
                 }
                 PosTextField(search, { search = it }, if (history) "Search stock received" else "Search for an item",
                     Modifier.fillMaxWidth(), hint = if (history) "Item name or supplier" else "Item name, selling unit or barcode")
@@ -123,12 +126,13 @@ private fun TenantStockScreen(repo: PosRepository, tenantId: String, onChanged: 
                         }
                     }
                 } else {
-                    val visible = allProducts.filter { it.archived == archived }
+                    val visible = allProducts.filter { it.archived == archived && (!lowStock || it.reorderLevel?.let { level -> it.stock <= level } == true) }
                     val matching = visible.filter { it.name.contains(search, true) || it.unit.contains(search, true) || it.barcode?.contains(search, true) == true }
+                    if (lowStock) Text("Active items at or below the reorder level set for them. Set or change a level under Manage → Details.", style = MaterialTheme.typography.bodySmall, color = PosPalette.Secondary)
                     if (archived) Text("Archived items stay in saved sales and stock history. Restore an item to sell or receive it again.", style = MaterialTheme.typography.bodySmall, color = PosPalette.Secondary)
                     if (matching.isEmpty()) {
-                        EmptyState(if (visible.isEmpty()) (if(archived) "No archived items" else "Add your first item") else "No matching items",
-                            if (visible.isEmpty()) (if(archived) "Items you archive will appear here." else "Give it a name, selling unit, selling price and a counted opening quantity.")
+                        EmptyState(if (visible.isEmpty()) (if(archived) "No archived items" else if(lowStock) "No low-stock items" else "Add your first item") else "No matching items",
+                            if (visible.isEmpty()) (if(archived) "Items you archive will appear here." else if(lowStock) "No active items are at or below a saved reorder level. Items without a level are not included." else "Give it a name, selling unit, selling price and a counted opening quantity.")
                             else "Try another name, selling unit or barcode, or clear the search.")
                     } else BoxWithConstraints(Modifier.weight(1f)) {
                         val compact = maxWidth < 900.dp
@@ -147,6 +151,8 @@ private fun TenantStockScreen(repo: PosRepository, tenantId: String, onChanged: 
                                                 Column(Modifier.weight(1f)) {
                                                     Text(product.name, fontWeight = FontWeight.Medium)
                                                     product.barcode?.let { Text("Barcode $it", style = MaterialTheme.typography.bodySmall, color = PosPalette.Secondary) }
+                                                    if (!product.archived && product.reorderLevel?.let { product.stock <= it } == true)
+                                                        Text("Low stock · Reorder level ${product.reorderLevel} ${product.unit}", style = MaterialTheme.typography.bodySmall, color = PosPalette.Warning)
                                                 }
                                                 if (!compact) {
                                                     Text("${stockQuantity(product.stock)} ${product.unit}", Modifier.width(130.dp))

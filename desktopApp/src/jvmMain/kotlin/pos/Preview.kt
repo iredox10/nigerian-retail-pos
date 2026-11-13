@@ -21,6 +21,8 @@ fun main() {
                 repo.addProduct(t.id,"Vegetable oil · 1 litre","bottle",380000,48.0)
                 repo.addProduct(t.id,"Laundry soap · 200 g","piece",45000,96.0)
                 repo.addProduct(t.id,"Tomato paste · 70 g","sachet",25000,120.0)
+                repo.setReorderLevel(t.id,malt.id,240,"sample-malt-reorder")
+                repo.setReorderLevel(t.id,rice.id,34,"sample-rice-reorder")
                 val customer = repo.addCustomer(t.id,"Amina · Sample customer",phone="08012345678",address="Sample market, Lagos",creditLimitMinor=2000000)
                 val firstShift = repo.openCashShift(t.id,500000)
                 repo.closeCashShift(t.id,firstShift.id,490000)

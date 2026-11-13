@@ -72,6 +72,8 @@ internal fun ProductManagementPanel(
                             }, enabled = !product.archived && (name.trim() != product.name || parseNaira(price) != product.priceMinor || barcode.trim().ifBlank { null } != product.barcode))
                         }
                         HorizontalDivider(color = PosPalette.Border)
+                        ReorderSettingsPanel(repo, tenantId, product, onChanged)
+                        HorizontalDivider(color = PosPalette.Border)
                         Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                             if (!product.archived) NeutralButton("Add stock", onReceiveStock)
                             NeutralButton(if (product.archived) "Restore item" else "Archive item", { confirmArchive = true; error = null })
@@ -109,10 +111,11 @@ internal fun ProductManagementPanel(
                     }
                 }
                 else -> {
+                    InventoryMovementHistory(repo, tenantId, product)
                     val history = remember(tenantId, product.id) { runCatching { repo.stockAdjustments(tenantId, product.id) to repo.priceHistory(tenantId, product.id) } }
                     history.exceptionOrNull()?.let { InlineNotice("History could not be loaded", it.message ?: "Return to stock and try again.", NoticeTone.Danger) }
                     history.getOrNull()?.let { (counts, prices) ->
-                        SectionHeader("Stock corrections", "Counted changes only. Purchases are listed under Stock received; sales and returns remain on their receipts.")
+                        SectionHeader("Stock count details", "Recorded quantities and reasons behind counted corrections")
                         if (counts.isEmpty()) Text("No stock corrections recorded for this item.", color = PosPalette.Secondary)
                         counts.forEach { adjustment ->
                             Surface(color = PosPalette.Surface) {
