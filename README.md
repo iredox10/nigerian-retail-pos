@@ -43,7 +43,8 @@ Desktop distributions are built for the host operating system. Build and test th
 - Keyboard barcode entry with Enter adds one item; physical scanner testing remains outstanding.
 - Searchable sales and receipt details, customer repayments/history, reconciled CSV statements, and clearly scoped money summaries.
 - Customer phone/address and credit limits, with live transaction checks against new debt. Blank limit means unlimited; zero prevents new credit. Profile edits preserve change history.
-- Optional agreed repayment due dates on credit sales, retained in active/held baskets, receipts and exports. More → Review customer credit separates original due dates from repayments and current debt.
+- Explicit repayment assignment to credit receipts, with immutable history, over-assignment protection and CSV export; assignment does not collect cash or reduce debt again.
+- Optional agreed repayment due dates on credit sales, retained in active/held baskets, receipts and exports. More → Review customer credit shows receipt balances and recorded-date overdue totals after explicit payment assignments. Unassigned payments keep overdue totals unavailable.
 - Linked cash-sale returns with explicit restocking choice and duplicate-refund protection.
 - Receipt text export and operating-system print dialog with pagination.
 - Supplier receipt balances, later cash payments, and payment history.

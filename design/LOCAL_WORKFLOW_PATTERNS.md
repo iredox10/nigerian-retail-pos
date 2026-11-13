@@ -53,3 +53,16 @@ This extends the existing Customer contextual-detail pattern and the checkout gu
 - Due-date review shows original dated credit sales, later repayments and current total customer debt separately. Repayment allocation to invoices is still unavailable; no exact unpaid overdue invoice balance is inferred.
 - Phone normalization accepts local Nigerian format and +234 format; it establishes formatting only, not ownership or reachability.
 - Contact/profile changes keep local history and enqueue local events. They do not send messages or create online accounts.
+
+## Assigning repayments to credit receipts
+
+This extends the customer detail pattern from the locked Refero/Carbon direction: choose a customer first, then use a labeled, contextual payment → receipt → amount flow. No new primary navigation or tokens.
+
+- Recording cash received remains the financial action that reduces customer debt. Assignment links that existing payment to credit receipts and never records cash again.
+- A payment may cover several receipts and a receipt may receive several payments, within the exact remaining amounts of both sources.
+- Existing payments remain unassigned until explicitly selected. No historical FIFO allocation is inferred.
+- Before saving, show payment funds available, original receipt credit, already assigned amount, the proposed assignment and what remains.
+- Assignment history is immutable in this release. Reassignment/reversal is not offered until a linked correction workflow exists.
+- With unassigned payments, label receipt amounts as balances before those payments. Exact recorded-date overdue totals become available only once that customer's payments are fully assigned. Undated receipts remain separate.
+- Archived products and changed customer credit limits do not prevent assignment to completed receipts; those original sales are historical records.
+- Backup recovery validates both source records, same-customer links and cumulative limits before creating a recovered shop. Older backups carry no invented assignments.
