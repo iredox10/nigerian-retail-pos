@@ -15,6 +15,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import pos.domain.*
+import pos.data.DraftDiscountCodec
 import pos.data.DraftStore
 import pos.data.SaleDraft
 import pos.data.HeldSale
@@ -37,6 +38,12 @@ fun SellScreen(
     var search by rememberSaveable { mutableStateOf("") }
     // Only IDs and integer quantities are retained by the UI. Prices come from the scoped catalogue.
     var encodedCart by rememberSaveable { mutableStateOf(restoredDraft.getOrNull()?.cart ?: "") }
+    var encodedDiscounts by rememberSaveable { mutableStateOf(DraftDiscountCodec.encode(restoredDraft.getOrNull()?.discounts.orEmpty())) }
+    val discounts = remember(encodedDiscounts) { DraftDiscountCodec.decode(encodedDiscounts) }
+    var changingPrice by remember { mutableStateOf<String?>(null) }
+    var agreedPrice by remember { mutableStateOf("") }
+    var discountReason by remember { mutableStateOf("") }
+    var priceError by remember { mutableStateOf<String?>(null) }
     var operationId by rememberSaveable { mutableStateOf(restoredDraft.getOrNull()?.operationId ?: UUID.randomUUID().toString()) }
     var stage by rememberSaveable { mutableStateOf("items") }
     var method by rememberSaveable { mutableStateOf(restoredDraft.getOrNull()?.method ?: "cash") }
@@ -57,15 +64,15 @@ fun SellScreen(
     var heldError by remember { mutableStateOf<String?>(heldResult.exceptionOrNull()?.message) }
     var discard by remember { mutableStateOf<HeldSale?>(null) }
     var reviewNotice by remember { mutableStateOf<String?>(null) }
-    fun currentDraft() = SaleDraft(encodedCart,operationId,cashText,selectedCustomer,method,dueDateText)
+    fun currentDraft() = SaleDraft(encodedCart,operationId,cashText,selectedCustomer,method,dueDateText,discounts)
     fun persistPayment(cash:String=cashText,customerId:String?=selectedCustomer,paymentMethod:String=method,due:String=dueDateText) {
         try {
             require(draftStore!=null && restoredDraft.isSuccess) { "Draft storage is unavailable." }
-            draftStore.save(SaleDraft(encodedCart,operationId,cash,customerId,paymentMethod,due))
+            draftStore.save(SaleDraft(encodedCart,operationId,cash,customerId,paymentMethod,due,discounts))
             cashText=cash;selectedCustomer=customerId;method=paymentMethod;dueDateText=due;error=null
         } catch(e:Exception) { error="Payment details not saved: ${e.message}" }
     }
-    fun resetCurrent() { encodedCart="";operationId=UUID.randomUUID().toString();stage="items";cashText="";selectedCustomer=null;method="cash";dueDateText="";search="";showSaleOnly=false;error=null;reviewNotice=null }
+    fun resetCurrent() { encodedCart="";encodedDiscounts="";changingPrice=null;operationId=UUID.randomUUID().toString();stage="items";cashText="";selectedCustomer=null;method="cash";dueDateText="";search="";showSaleOnly=false;error=null;reviewNotice=null }
     val quantities = remember(encodedCart) {
         encodedCart.split(';').mapNotNull { item ->
             val index = item.lastIndexOf(':')
@@ -78,7 +85,13 @@ fun SellScreen(
         }
     }.associateBy { it.key }
     val selectedUnits = remember(tenantId) { mutableStateMapOf<String, String>() }
-    val lines = quantities.mapNotNull { (key, quantity) -> options[key]?.takeIf { quantity > 0 }?.copy(quantity = quantity) }
+    val staleDiscounts = discounts.any { (key, discount) -> options[key]?.unitPriceMinor != discount.cataloguePriceMinor }
+    val lines = quantities.mapNotNull { (key, quantity) ->
+        options[key]?.takeIf { quantity > 0 }?.let { option ->
+            val discount = discounts[key]?.takeIf { it.cataloguePriceMinor == option.unitPriceMinor }
+            option.copy(quantity = quantity, discountPerUnitMinor = discount?.amountMinor ?: 0L, discountReason = discount?.reason)
+        }
+    }
     fun fitsStock(line: CartLine, quantity: Int): Boolean = runCatching {
         if (quantity < 0) return@runCatching false
         val other = lines.filter { it.product.id == line.product.id && it.key != line.key }.fold(0L) { sum, item -> Math.addExact(sum, item.baseQuantity) }
@@ -87,20 +100,21 @@ fun SellScreen(
     val totalResult = runCatching { cartTotal(lines) }
     val total = totalResult.getOrDefault(0L)
     val unavailableDraftItems = quantities.keys.any { it !in options }
+    fun persistBasket(next: Map<String,Int>, nextDiscounts: Map<String,UnitDiscount>) {
+        val updated = next.entries.joinToString(";") { "${it.key}:${it.value}" }
+        require(draftStore != null && restoredDraft.isSuccess) { "Draft storage is unavailable. Resolve the saved-draft error first." }
+        draftStore.save(SaleDraft(updated, operationId,cashText,selectedCustomer,method,dueDateText,nextDiscounts))
+        encodedCart = updated
+        encodedDiscounts = DraftDiscountCodec.encode(nextDiscounts)
+        error = null
+    }
     fun update(line: CartLine, quantity: Int) {
         val next = quantities.toMutableMap()
         if (quantity <= 0) next.remove(line.key) else next[line.key] = quantity
-        val updated = next.entries.joinToString(";") { "${it.key}:${it.value}" }
-        if (draftStore == null || restoredDraft.isFailure) {
-            error = "Draft storage is unavailable. Resolve the saved-draft error before editing this sale."
-            return
-        }
-        try {
-            draftStore.save(SaleDraft(updated, operationId,cashText,selectedCustomer,method,dueDateText))
-            encodedCart = updated
-            error = null
-        } catch(e: Exception) { error = "Item change not saved: ${e.message}" }
+        try { persistBasket(next, discounts.filterKeys { it in next }) }
+        catch(e: Exception) { error = "Item change not saved: ${e.message}" }
     }
+
     val cashGiven = parseNaira(cashText)
     val appliedCash = minOf(cashGiven ?: 0, total)
     val credit = if (method == "credit") total - appliedCash else 0
@@ -221,6 +235,16 @@ fun SellScreen(
                                             Text("${line.quantity} ${line.sellingUnit}", Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
                                             Text(money(line.totalMinor), fontWeight = FontWeight.Medium)
                                         }
+                                        if (line.discountPerUnitMinor > 0) {
+                                            Text("Was ${money(line.unitPriceMinor)} · Now ${money(line.netUnitPriceMinor)} / ${line.sellingUnit}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
+                                            Text("Reason: ${line.discountReason}", style = MaterialTheme.typography.bodySmall)
+                                        }
+                                        TextButton({
+                                            changingPrice = line.key
+                                            agreedPrice = BigDecimal(line.netUnitPriceMinor).movePointLeft(2).toPlainString()
+                                            discountReason = discounts[line.key]?.reason.orEmpty()
+                                            priceError = null
+                                        }) { Text(if (discounts.containsKey(line.key)) "Review discount" else "Change price") }
                                         if (line.baseUnitsPerUnit > 1) Text("${line.baseQuantity} ${line.product.unit} from stock", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                                             OutlinedButton(shape = MaterialTheme.shapes.small, onClick = { update(line, line.quantity - 1) }, contentPadding = PaddingValues(horizontal = 12.dp)) { Text(if (line.quantity == 1) "Remove" else "−") }
@@ -259,12 +283,13 @@ fun SellScreen(
                                     Text(if (cashGiven!! >= total) "Change to give ${money(cashGiven!! - total)}" else "Still to pay ${money(total - cashGiven!!)}", fontWeight = FontWeight.SemiBold)
                                 }
                             }
+                            if (staleDiscounts) Text("A discounted item's catalogue price changed. Review its discount before payment, or remove the item.", color = MaterialTheme.colorScheme.error)
                             if (unavailableDraftItems) {
                                 Text("Some saved items are archived or unavailable. Restore them under Stock or remove them before payment.",color=MaterialTheme.colorScheme.error)
                                 TextButton({
                                     try {
-                                        val updated=quantities.filterKeys { it in options }.entries.joinToString(";") { "${it.key}:${it.value}" }
-                                        requireNotNull(draftStore).save(currentDraft().copy(cart=updated));encodedCart=updated;error=null
+                                        val available = quantities.filterKeys { it in options }
+                                        persistBasket(available, discounts.filterKeys { it in available })
                                     }catch(e:Exception) {error="The sale could not be changed: ${e.message}"}
                                 }) {Text("Remove unavailable items from this sale")}
                             }
@@ -273,6 +298,10 @@ fun SellScreen(
                             HorizontalDivider()
                             Spacer(Modifier.height(16.dp))
                             Text("Total", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            if (discounts.isNotEmpty() && totalResult.isSuccess) {
+                                Row(Modifier.fillMaxWidth()) { Text("Before discount", Modifier.weight(1f)); Text(money(cartSubtotal(lines))) }
+                                Row(Modifier.fillMaxWidth()) { Text("Discount", Modifier.weight(1f)); Text("−${money(cartDiscountTotal(lines))}") }
+                            }
                             Text(money(total), fontSize = 40.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(bottom = 16.dp))
                             Button(shape = MaterialTheme.shapes.small, onClick = {
                                 if (stage == "items") { stage = "payment"; return@Button }
@@ -292,7 +321,7 @@ fun SellScreen(
                                         } else error = result
                                     }
                                 }
-                            }, modifier = Modifier.fillMaxWidth().height(56.dp), enabled = lines.isNotEmpty() && !committing && totalResult.isSuccess && !unavailableDraftItems && draftStore != null && restoredDraft.isSuccess) {
+                            }, modifier = Modifier.fillMaxWidth().height(56.dp), enabled = lines.isNotEmpty() && !committing && totalResult.isSuccess && !unavailableDraftItems && !staleDiscounts && draftStore != null && restoredDraft.isSuccess) {
                                 Text(if (committing) "Saving…" else if (stage == "items") "Take payment" else if (method == "credit" && credit > 0) "Save with ${money(credit)} owed" else "Finish sale")
                             }
                             if (stage == "items" && lines.isEmpty()) Text("Add an item to take payment", Modifier.padding(top = 8.dp), style = MaterialTheme.typography.bodySmall)
@@ -302,6 +331,39 @@ fun SellScreen(
                 }
             }
         }
+    }
+    changingPrice?.let { key ->
+        val line = lines.find { it.key == key }
+        if (line != null) AlertDialog(
+            onDismissRequest = { changingPrice = null },
+            title = { Text("Change price for this sale") },
+            text = { Column(Modifier.heightIn(max = 440.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text("${line.product.name} · ${line.sellingUnit}", fontWeight = FontWeight.Medium)
+                Text("Catalogue price: ${money(line.unitPriceMinor)} per ${line.sellingUnit}. This change applies to every ${line.sellingUnit} on this line.")
+                OutlinedTextField(agreedPrice, { agreedPrice = it; priceError = null }, label = { Text("Customer pays per ${line.sellingUnit} (₦)") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                OutlinedTextField(discountReason, { discountReason = it; priceError = null }, label = { Text("Reason for discount") }, placeholder = { Text("For example, agreed market price") }, modifier = Modifier.fillMaxWidth())
+                Text("The catalogue price stays unchanged. The saved receipt keeps the discount and reason. Returns refund the price actually paid.", style = MaterialTheme.typography.bodySmall)
+                priceError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+            } },
+            confirmButton = { TextButton({
+                try {
+                    val price = requireNotNull(parseNaira(agreedPrice)) { "Enter a valid price in naira with at most two decimal places." }
+                    require(price in 0..line.unitPriceMinor) { "The agreed price must be between zero and the catalogue price." }
+                    val next = discounts.toMutableMap()
+                    if (price == line.unitPriceMinor) next.remove(key)
+                    else next[key] = UnitDiscount(line.unitPriceMinor, line.unitPriceMinor-price, discountReason.trim())
+                    persistBasket(quantities, next)
+                    changingPrice = null
+                } catch(e: Exception) { priceError = e.message ?: "Price change could not be saved." }
+            }) { Text("Save price") } },
+            dismissButton = { Row {
+                if (discounts.containsKey(key)) TextButton({
+                    try { persistBasket(quantities, discounts-key); changingPrice=null }
+                    catch(e: Exception) { priceError=e.message }
+                }) { Text("Remove discount") }
+                TextButton({ changingPrice=null }) { Text("Cancel") }
+            } },
+        )
     }
     if(holding) AlertDialog(onDismissRequest={holding=false},title={Text("Put sale aside")},text={Column(verticalArrangement=Arrangement.spacedBy(12.dp)) {
         Text("Save this unfinished sale on this computer. Stock is not reserved. Prices and availability will be checked when you return.")
@@ -323,7 +385,7 @@ fun SellScreen(
                     TextButton({
                         try {
                             val resumed=requireNotNull(draftStore).resume(held.id)
-                            encodedCart=resumed.cart;operationId=resumed.operationId;cashText=resumed.cashText;selectedCustomer=resumed.customerId;method=resumed.method;dueDateText=resumed.dueDateText;stage="items";error=null;heldSales=draftStore.heldSales();showHeld=false;showSaleOnly=true
+                            encodedCart=resumed.cart;encodedDiscounts=DraftDiscountCodec.encode(resumed.discounts);operationId=resumed.operationId;cashText=resumed.cashText;selectedCustomer=resumed.customerId;method=resumed.method;dueDateText=resumed.dueDateText;stage="items";error=null;heldSales=draftStore.heldSales();showHeld=false;showSaleOnly=true
                             reviewNotice="Resumed sale: check current prices, quantities and payment before finishing."
                         }catch(e:Exception) {heldError=e.message ?: "Sale could not be resumed."}
                     },enabled=encodedCart.isEmpty()) {Text("Resume sale")}

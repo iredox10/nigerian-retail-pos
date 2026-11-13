@@ -4,6 +4,8 @@ import pos.domain.Sale
 import pos.domain.SaleReturn
 import pos.domain.Tenant
 import pos.domain.money
+import pos.domain.cartSubtotal
+import pos.domain.cartDiscountTotal
 import java.awt.Font
 import java.awt.Graphics2D
 import java.awt.print.Printable
@@ -37,10 +39,19 @@ object ReceiptService {
             sale.lines.forEach { line ->
                 appendLine(line.product.name)
                 appendLine("  ${line.quantity} ${line.sellingUnit} x ${money(line.unitPriceMinor)}")
+                if (line.discountPerUnitMinor > 0) {
+                    appendLine("  Discount: ${money(line.discountPerUnitMinor)} per ${line.sellingUnit}")
+                    appendLine("  Reason: ${line.discountReason}")
+                    appendLine("  Price paid: ${money(line.netUnitPriceMinor)} per ${line.sellingUnit}")
+                }
                 if (line.baseUnitsPerUnit > 1) appendLine("  Contains ${line.baseQuantity} ${line.product.unit}")
                 appendLine("  ${money(line.totalMinor)}")
             }
             appendLine("----------------------------------------")
+            if (sale.lines.any { it.discountPerUnitMinor > 0 }) {
+                appendLine("Before discounts: ${money(cartSubtotal(sale.lines))}")
+                appendLine("Total discount: ${money(cartDiscountTotal(sale.lines))}")
+            }
             appendLine("Original sale total: ${money(sale.totalMinor)}")
             appendLine("Cash applied at sale: ${money(sale.cashMinor)}")
             if (sale.creditMinor > 0) {
