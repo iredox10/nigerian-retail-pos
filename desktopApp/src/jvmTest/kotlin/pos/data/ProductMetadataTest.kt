@@ -73,6 +73,7 @@ class ProductMetadataTest {
         val dir=Files.createTempDirectory("metadata")
         try {
             val file=dir.resolve("pos.db").toString()
+            Class.forName("org.sqlite.JDBC")
             DriverManager.getConnection("jdbc:sqlite:$file").use {db -> db.createStatement().use {
                 it.execute("CREATE TABLE tenants(id TEXT PRIMARY KEY,name TEXT NOT NULL)")
                 it.execute("CREATE TABLE products(id TEXT NOT NULL,tenant_id TEXT NOT NULL,name TEXT NOT NULL,unit TEXT NOT NULL,price_minor INTEGER NOT NULL,stock REAL NOT NULL,PRIMARY KEY(tenant_id,id))")

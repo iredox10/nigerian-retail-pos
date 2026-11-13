@@ -81,7 +81,7 @@ class PosRepository(path: String = File(System.getProperty("user.home"), ".niger
             if("opening_stock" !in productColumns) db.createStatement().use { it.execute("ALTER TABLE products ADD COLUMN opening_stock REAL CHECK(opening_stock>=0)") }
             if("created_at" !in productColumns) db.createStatement().use { it.execute("ALTER TABLE products ADD COLUMN created_at TEXT") }
             listOf("sku TEXT", "category TEXT", "brand TEXT", "aliases TEXT NOT NULL DEFAULT ''", "favourite INTEGER NOT NULL DEFAULT 0 CHECK(favourite IN(0,1))").forEach { definition ->
-                if(definition.substringBefore(" ") !in productColumns) execute("ALTER TABLE products ADD COLUMN $definition")
+                if(definition.substringBefore(" ") !in productColumns) db.createStatement().use { it.execute("ALTER TABLE products ADD COLUMN $definition") }
             }
             execute("CREATE UNIQUE INDEX IF NOT EXISTS product_sku_per_tenant ON products(tenant_id,sku COLLATE NOCASE) WHERE sku IS NOT NULL")
             val receiptColumns=query("PRAGMA table_info(stock_receipts)") { it.getString("name") }
