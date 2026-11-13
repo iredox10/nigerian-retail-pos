@@ -31,13 +31,23 @@ import pos.screens.RestoreBackupDialog
 import pos.screens.ProductImportScreen
 import pos.screens.CustomerWorkspace
 import pos.screens.CreditReviewScreen
+import pos.screens.HelpScreen
+import pos.screens.PinSetupPanel
+import pos.help.PracticeLauncher
 import pos.ui.theme.PosTheme
 
 private fun localDatabasePath() = System.getProperty("pos.dataDir", System.getProperty("user.home") + "/.nigerian-retail-pos") + "/pos.db"
 
-fun main() = application {
-    val repository = remember { PosRepository(localDatabasePath()) }
-    DesktopWindow(title = "Retail POS", onClose = ::exitApplication) { App(repository) }
+fun main(args: Array<String>) {
+    if (args.contentEquals(arrayOf("--practice"))) {
+        runPracticeApplication()
+        return
+    }
+    application {
+        val repository = remember { PosRepository(localDatabasePath()) }
+        DisposableEffect(repository) { onDispose { repository.close() } }
+        DesktopWindow(title = "Retail POS", onClose = ::exitApplication) { App(repository) }
+    }
 }
 
 @Composable internal fun App(repo: PosRepository, initialTenant: Tenant? = null, initialRoute: String = "Sell", initialSession: StaffSession? = null, initialStaffAccess: StaffAccess? = null) {
@@ -45,6 +55,10 @@ fun main() = application {
     val access = remember { WorkspaceAccess() }
     val staffAccess = remember { initialStaffAccess ?: StaffAccess() }
     DisposableEffect(staffAccess) { onDispose { staffAccess.close() } }
+    val practiceLauncher = remember { PracticeLauncher() }
+    DisposableEffect(practiceLauncher) {
+        onDispose { Thread({ practiceLauncher.close() }, "practice-cleanup").apply { isDaemon = true; start() } }
+    }
     var session by remember { mutableStateOf<StaffSession?>(initialSession) }
     // Only the isolated preview may run without a credential-issued session.
     val isolatedPreview = initialTenant != null && initialSession == null
@@ -72,7 +86,6 @@ fun main() = application {
         return
     }
     val current = tenant!!
-    val activeRole = session?.role ?: if(isolatedPreview) StaffRole.OWNER else StaffRole.CASHIER
     fun allowed(permission: StaffPermission) = isolatedPreview || session?.role?.allows(permission)==true
     fun routeAllowed(destination: String): Boolean = when(destination) {
         "Sell" -> allowed(StaffPermission.SELL)
@@ -146,8 +159,8 @@ fun main() = application {
                 Text(current.name, style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(vertical = 16.dp))
                 Text(session?.let { "${it.name} · ${it.role.name.lowercase().replaceFirstChar { c -> c.uppercaseChar() }}" } ?: "Isolated owner preview", style = MaterialTheme.typography.labelMedium)
                 Spacer(Modifier.height(20.dp))
-                listOf("Sell", "Sales", "Stock", "Customers", "Money", "More").filter { routeAllowed(it) && (it != "More" || activeRole != StaffRole.CASHIER) }.forEach { item ->
-                    val selected = route == item || (item == "More" && route in setOf("Reports","Suppliers","Backup","Import","Credit review","Staff","Audit"))
+                listOf("Sell", "Sales", "Stock", "Customers", "Money", "More").filter { routeAllowed(it) }.forEach { item ->
+                    val selected = route == item || (item == "More" && route in setOf("Reports","Suppliers","Backup","Import","Credit review","Staff","Audit","Help"))
                     Surface(onClick = {
                         try {
                             session?.let { staffAccess.requireSession(it,StaffPermission.SELL) }
@@ -164,7 +177,7 @@ fun main() = application {
             Column(Modifier.weight(1f).fillMaxHeight()) {
                 Row(Modifier.fillMaxWidth().height(64.dp).padding(horizontal = 24.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text(if(route=="Audit") "Activity history" else route, style = MaterialTheme.typography.headlineSmall)
-                    if (route in setOf("Reports","Suppliers","Backup","Import","Credit review","Staff","Audit")) TextButton({ route = if(route=="Import") "Stock" else "More" }) { Text(if(route=="Import") "Back to stock" else "Back to shop tools") }
+                    if (route in setOf("Reports","Suppliers","Backup","Import","Credit review","Staff","Audit","Help")) TextButton({ route = if(route=="Import") "Stock" else "More" }) { Text(if(route=="Import") "Back to stock" else "Back to shop tools") }
                     Spacer(Modifier.weight(1f))
                     if (route == "Sell" && allowed(StaffPermission.MANAGE_MONEY)) {
                         val activeShift = remember(current.id, revision) { repo.activeCashShift(current.id) }
@@ -193,16 +206,18 @@ fun main() = application {
                         "Staff" -> session?.let { StaffScreen(staffAccess,it) { revision++ } } ?: Text("Staff management requires an owner sign-in.")
                         "Import" -> ProductImportScreen(repo, current.id) { revision++ }
                         "Money" -> MoneyScreen(repo, current.id) { revision++ }
+                        "Help" -> HelpScreen(practiceLauncher, isPractice = isolatedPreview || System.getenv("POS_PRACTICE_CHILD") == "1")
                         else -> Column(verticalArrangement = Arrangement.spacedBy(20.dp)) {
                             Text("Your shop tools", style = MaterialTheme.typography.headlineSmall)
                             Text("Choose the work you need to do.")
+                            pos.ui.components.NeutralButton("Help & practice", { route = "Help" })
                             if(allowed(StaffPermission.MANAGE_SUPPLIERS)) pos.ui.components.NeutralButton("Suppliers & payments", { route = "Suppliers" })
                             if(allowed(StaffPermission.MANAGE_CUSTOMERS)) pos.ui.components.NeutralButton("Review customer credit", { route="Credit review" })
                             if(allowed(StaffPermission.VIEW_REPORTS)) pos.ui.components.NeutralButton("Reports & CSV exports", { route = "Reports" })
                             if(allowed(StaffPermission.VIEW_REPORTS)) pos.ui.components.NeutralButton("Activity history", { route="Audit" })
                             if(allowed(StaffPermission.BACKUP)) pos.ui.components.NeutralButton("Encrypted shop backup", { route = "Backup" })
                             if(allowed(StaffPermission.MANAGE_STOCK)) pos.ui.components.NeutralButton("Import new items from CSV", { route = "Import" })
-                            Text("Saved work: ${repo.pendingSyncCount(current.id)} local changes are waiting for online setup. No online backup has been created.", Modifier.widthIn(max=680.dp))
+                            if(allowed(StaffPermission.VIEW_REPORTS)) Text("Saved work: ${repo.pendingSyncCount(current.id)} local changes are waiting for online setup. No online backup has been created.", Modifier.widthIn(max=680.dp))
                             if(allowed(StaffPermission.MANAGE_STAFF)) pos.ui.components.NeutralButton("Staff & permissions", { route="Staff" })
                             Text("Online accounts, staff approval requests and external payment services remain under development.", Modifier.widthIn(max=680.dp))
                         }
@@ -226,7 +241,17 @@ fun main() = application {
     var error by remember { mutableStateOf<String?>(null) }
     var restoring by remember { mutableStateOf(false) }
     var staffId by remember { mutableStateOf<String?>(null) }
+    var usePin by remember { mutableStateOf(false) }
+    var configuringPin by remember { mutableStateOf(false) }
+    var pinNotice by remember { mutableStateOf<String?>(null) }
     val signInMembers = remember(selected?.id) { selected?.let { runCatching { staffAccess.signInMembers(it.id) }.getOrDefault(emptyList()) }.orEmpty() }
+    LaunchedEffect(selected?.id, staffId) { usePin = false; configuringPin = false; password = ""; pinNotice = null }
+    if (configuringPin && selected != null && staffId != null) {
+        PinSetupPanel(staffAccess, selected!!.id, staffId!!, onDismiss = { configuringPin = false }, onSaved = {
+            configuringPin = false; password = ""
+            error = null; pinNotice = "PIN updated on this computer. Use your PIN or full password to sign in."
+        })
+    }
     if(restoring) {
         // Backup password plus new-owner provisioning authorizes this recovery-only connection.
         // The active application connection remains locked; recovery never bypasses its session check.
@@ -251,15 +276,24 @@ fun main() = application {
                 FilterChip(staffId==null,{staffId=null;password="";error=null},label={Text("Owner")})
                 signInMembers.forEach { member -> FilterChip(staffId==member.id,{staffId=member.id;password="";error=null},label={Text(member.name)}) }
             }
-            OutlinedTextField(password,{password=it},label={Text(if(staffId==null) "Owner password" else "Staff password")},visualTransformation=PasswordVisualTransformation(),singleLine=true,modifier=Modifier.fillMaxWidth())
+            if (staffId != null) {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    FilterChip(!usePin, { usePin = false; password = ""; error = null }, label = { Text("Password") })
+                    FilterChip(usePin, { usePin = true; password = ""; error = null }, label = { Text("PIN") })
+                }
+                if (usePin) Text("PIN works on this computer for up to 12 hours after full-password sign-in. Use your password if PIN access has expired.", style = MaterialTheme.typography.bodySmall)
+            }
+            OutlinedTextField(password,{password=it},label={Text(if(staffId==null) "Owner password" else if(usePin) "Staff PIN" else "Staff password")},visualTransformation=PasswordVisualTransformation(),singleLine=true,modifier=Modifier.fillMaxWidth())
+            if (staffId != null) TextButton({ configuringPin = true }) { Text("Set up / remove staff PIN") }
+            pinNotice?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
             error?.let { Text(it,color=MaterialTheme.colorScheme.error) }
             Button(shape=MaterialTheme.shapes.small,onClick={ try {
                 if(selected==null) {
                     require(name.isNotBlank()) { "Enter your shop name" }; require(password.length>=8) { "Use at least 8 characters" }
                     val t=repo.createTenant(name.trim()) { access.register(it.id,password) }; tenants=repo.tenants(); onEnter(t,requireNotNull(staffAccess.unlockOwner(t.id,password)))
                 } else {
-                    val active = if(staffId==null) staffAccess.unlockOwner(selected!!.id,password) else staffAccess.unlockStaff(selected!!.id,staffId!!,password)
-                    require(active!=null) { "Account or password not recognized, or sign-in is temporarily paused. Wait a minute, then try again." }
+                    val active = if(staffId==null) staffAccess.unlockOwner(selected!!.id,password) else if(usePin) staffAccess.unlockStaffPin(selected!!.id,staffId!!,password) else staffAccess.unlockStaff(selected!!.id,staffId!!,password)
+                    require(active!=null) { "Account or credential not recognized, or sign-in is paused after five failed attempts. Wait 60 seconds, then try again. Use your full password if PIN access has expired." }
                     onEnter(selected!!,active);password=""
                 }
             } catch(e:Exception) {error=e.message ?: "Could not open shop"}},modifier=Modifier.fillMaxWidth().height(52.dp)) { Text(if(selected==null) "Create shop workspace" else "Unlock shop") }

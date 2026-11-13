@@ -1,6 +1,9 @@
 package pos
 
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.*
 import pos.data.*
@@ -12,16 +15,27 @@ import pos.ui.theme.PosTheme
 import java.nio.file.Files
 
 /** Isolated visual-review fixture. Never opens the normal database or a real payment service. */
-fun main() {
-    System.setProperty("pos.dataDir", Files.createTempDirectory("retail-pos-preview-").toString())
+fun main() = runPracticeApplication()
+
+/** This entry runs only in a separate preview/practice process. */
+internal fun runPracticeApplication() {
+    val practiceDirectory = Files.createTempDirectory("retail-pos-preview-")
+    System.setProperty("pos.dataDir", practiceDirectory.toString())
+    Runtime.getRuntime().addShutdownHook(Thread({
+        runCatching {
+            Files.walk(practiceDirectory).use { paths -> paths.sorted(Comparator.reverseOrder()).forEach(Files::deleteIfExists) }
+        }
+    }, "practice-record-cleanup"))
     application {
         val repo = remember { PosRepository(":memory:") }
+        DisposableEffect(repo) { onDispose { repo.close() } }
         val tenant = remember {
             repo.createTenant("Practice shop · Sample data").also { t ->
                 val malt=repo.addProduct(t.id,"Malt drink · 330 ml","bottle",50000,240.0,"6150000000010")
                 repo.addPurchaseUnit(t.id,malt.id,"carton",24,"sample-carton-definition")
                 repo.addSellingUnit(t.id,malt.id,"carton",24,1100000,"6150000000027")
                 val rice=repo.addProduct(t.id,"Premium rice · 5 kg","bag",1250000,32.0)
+                repo.addProduct(t.id,"Loose rice · Sample measure","kg",100000,10.0,quantityPrecision=3)
                 repo.addProduct(t.id,"Vegetable oil · 1 litre","bottle",380000,48.0)
                 repo.addProduct(t.id,"Laundry soap · 200 g","piece",45000,96.0)
                 repo.addProduct(t.id,"Tomato paste · 70 g","sachet",25000,120.0)
@@ -43,7 +57,7 @@ fun main() {
                 DraftStore(t.id).save(SaleDraft("${malt.id}:3;${rice.id}:1",java.util.UUID.randomUUID().toString()))
             }
         }
-        val route = System.getenv("POS_PREVIEW_SCREEN")?.takeIf { it in setOf("Sell","Stock","Money","Sales","Customers","Reports","Suppliers","Backup","Import","Credit review","Staff","Audit") } ?: "Sell"
+        val route = System.getenv("POS_PREVIEW_SCREEN")?.takeIf { it in setOf("Sell","Stock","Money","Sales","Customers","Reports","Suppliers","Backup","Import","Credit review","Staff","Audit","Help") } ?: "Sell"
         val width = System.getenv("POS_PREVIEW_WIDTH")?.toIntOrNull()?.coerceIn(800,1920) ?: 1440
         val height = System.getenv("POS_PREVIEW_HEIGHT")?.toIntOrNull()?.coerceIn(600,1200) ?: 900
         val placement = if (System.getenv("POS_PREVIEW_WIDTH") != null || System.getenv("POS_PREVIEW_HEIGHT") != null) WindowPlacement.Floating else WindowPlacement.Fullscreen
@@ -69,8 +83,15 @@ fun main() {
                 repo.setReorderLevel(tenant.id,repo.products(tenant.id).first {it.name.startsWith("Malt")}.id,250,"preview-attributed-change")
             }
         }
-        DesktopWindow(title="Retail POS · Isolated preview · $route",onClose=::exitApplication,initialPlacement=placement,width=width,height=height) {
+        DesktopWindow(title="Retail POS · Sample data · $route",onClose=::exitApplication,initialPlacement=placement,width=width,height=height) {
             App(repo,tenant,route,staffSession,staffAccess)
+            LaunchedEffect(Unit) {
+                // A launched process alone is not proof that its window became usable.
+                withFrameNanos { }
+                System.getenv("POS_PRACTICE_READY_FILE")?.let { path ->
+                    runCatching { Files.writeString(java.nio.file.Path.of(path), "ready", java.nio.file.StandardOpenOption.CREATE_NEW) }
+                }
+            }
         }
     }
 }
