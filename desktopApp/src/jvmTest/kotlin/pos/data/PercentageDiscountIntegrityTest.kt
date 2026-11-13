@@ -11,6 +11,7 @@ class PercentageDiscountIntegrityTest {
         try {
             PosRepository(":memory:").use { repo ->
                 val shop=repo.createTenant("Shop")
+                repo.openCashShift(shop.id,0)
                 val item=repo.addProduct(shop.id,"Soap","piece",101,5.0)
                 val reduction=requireNotNull(parseDiscountPercentage("12.5")).unitDiscount(item.priceMinor,"Agreed price")
                 val draft=SaleDraft("${item.id}:3","percentage-sale",discounts=mapOf(item.id to reduction))
@@ -40,6 +41,7 @@ class PercentageDiscountIntegrityTest {
     @Test fun fullyDiscountedPercentageCreatesNoDebtAndCannotInventARefund() {
         PosRepository(":memory:").use { repo ->
             val shop=repo.createTenant("Shop")
+                repo.openCashShift(shop.id,0)
             val item=repo.addProduct(shop.id,"Sample","piece",123,1.0)
             val reduction=DiscountPercentage(10000).unitDiscount(123,"Owner sample")
             val sale=repo.checkout(shop.id,listOf(CartLine(item,1,discountPerUnitMinor=reduction.amountMinor,discountReason=reduction.reason)),0,operationId="free")
