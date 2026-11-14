@@ -12,8 +12,10 @@ class PriceListTest {
         assertEquals(small,list.tierFor(CartLine(item,1500)))
         assertEquals(large,list.tierFor(CartLine(item,2000)))
         val quote=PriceListQuote("list","Wholesale",2,PriceListKind.WHOLESALE,null,"rice",2000,large,1000)
-        assertEquals(100,quote.discount()?.amountMinor)
-        assertContains(quote.sourceReason,"from 2")
+        assertEquals(100L,quote.discount()?.amountMinor)
+        assertEquals(PriceListSource("list",2,2000,2000),PriceListSource.decode(quote.sourceReason))
+        assertTrue(quote.sourceReason.length<=250)
+        assertFails {PriceListSource.decode("@price-list/1/list/02/2000/2000")}
     }
     @Test fun invalidScopesDuplicateAndIncreasingBreaksAreRejected() {
         val tier=PriceListTier("soap",null,1,0,100)

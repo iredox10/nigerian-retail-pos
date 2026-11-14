@@ -41,10 +41,24 @@ data class PriceListChange(val id:String,val tenantId:String,val listId:String,v
 /** Explicit review result. It neither changes a basket nor creates a sale by itself. */
 data class PriceListQuote(val listId:String,val listName:String,val listVersion:Long,val kind:PriceListKind,val customerId:String?,val lineKey:String,val quantity:Int,val tier:PriceListTier,val catalogueUnitPriceMinor:Long) {
     init {
-        require(listOf(listId,listName,lineKey).all {it.isNotBlank()} && listVersion>0 && quantity>=tier.minimumQuantity && catalogueUnitPriceMinor>=tier.unitPriceMinor)
+        require(listId.matches(Regex("[A-Za-z0-9_-]{1,100}")) && listOf(listName,lineKey).all {it.isNotBlank()} && listVersion>0 && quantity>=tier.minimumQuantity && catalogueUnitPriceMinor>=tier.unitPriceMinor)
         require((kind==PriceListKind.CUSTOMER)==(customerId!=null))
     }
     val unitPriceMinor:Long get()=tier.unitPriceMinor
-    val sourceReason:String get()="Price list ${listName.take(100)} v$listVersion; from ${tier.minimumLabel}"
+    val sourceReason:String get()=PriceListSource(listId,listVersion,tier.minimumQuantity,quantity).encode()
     fun discount():UnitDiscount?=if(unitPriceMinor==catalogueUnitPriceMinor) null else UnitDiscount(catalogueUnitPriceMinor,catalogueUnitPriceMinor-unitPriceMinor,sourceReason)
+}
+
+/** Reserved, bounded provenance stored in the existing immutable line discount snapshot. */
+data class PriceListSource(val listId:String,val version:Long,val minimumQuantity:Int,val quantity:Int) {
+    init {require(listId.matches(Regex("[A-Za-z0-9_-]{1,100}")) && version>0 && minimumQuantity>0 && quantity>=minimumQuantity)}
+    fun encode():String="@price-list/1/$listId/$version/$minimumQuantity/$quantity"
+    companion object {
+        fun decode(reason:String):PriceListSource? {
+            if(!reason.startsWith("@price-list/")) return null
+            val fields=reason.split('/')
+            require(fields.size==6 && fields[0]=="@price-list" && fields[1]=="1") {"Price-list source is unsupported. Review this line price."}
+            return PriceListSource(fields[2],fields[3].toLong(),fields[4].toInt(),fields[5].toInt()).also {require(it.encode()==reason) {"Price-list source is invalid."}}
+        }
+    }
 }
