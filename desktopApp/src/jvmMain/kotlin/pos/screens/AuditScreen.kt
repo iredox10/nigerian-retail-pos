@@ -91,6 +91,14 @@ private fun AuditEventRow(event: AuditEvent) {
 }
 
 private fun activityLabel(kind: String): String = when (kind) {
+    "supplier.created" -> "Supplier added"
+    "supplier.updated" -> "Supplier details changed"
+    "supplier.receipt_linked" -> "Purchase linked to supplier"
+    "stock_count.started" -> "Stock count started"
+    "stock_count.draft_saved" -> "Unfinished stock count saved"
+    "stock_count.posted" -> "Stock counts posted"
+    "stock_count.cancelled" -> "Stock count cancelled"
+    "shop.receipt_settings_changed" -> "Receipt details changed"
     "staff.pin_configured" -> "Staff PIN configured"
     "staff.pin_removed" -> "Staff PIN removed"
     "product.created" -> "Item added"

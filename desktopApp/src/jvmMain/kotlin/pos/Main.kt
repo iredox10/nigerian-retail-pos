@@ -22,6 +22,8 @@ import pos.screens.StaffScreen
 import pos.screens.AuditScreen
 import pos.screens.SellScreen
 import pos.screens.StockScreen
+import pos.screens.ShopSettingsScreen
+import pos.screens.StockCountSessionsScreen
 import pos.screens.MoneyScreen
 import pos.screens.SalesScreen
 import pos.screens.ReportsScreen
@@ -90,13 +92,14 @@ fun main(args: Array<String>) {
     fun routeAllowed(destination: String): Boolean = when(destination) {
         "Sell" -> allowed(StaffPermission.SELL)
         "Sales" -> allowed(StaffPermission.VIEW_SALES)
-        "Stock","Import" -> allowed(StaffPermission.MANAGE_STOCK)
+        "Stock","Import","Stock counts" -> allowed(StaffPermission.MANAGE_STOCK)
         "Customers","Credit review" -> allowed(StaffPermission.MANAGE_CUSTOMERS)
         "Money" -> allowed(StaffPermission.MANAGE_MONEY)
         "Reports","Audit" -> allowed(StaffPermission.VIEW_REPORTS)
         "Suppliers" -> allowed(StaffPermission.MANAGE_SUPPLIERS)
         "Backup" -> allowed(StaffPermission.BACKUP)
         "Staff" -> allowed(StaffPermission.MANAGE_STAFF)
+        "Shop settings" -> allowed(StaffPermission.MANAGE_SETTINGS)
         else -> true
     }
     LaunchedEffect(session?.token) {
@@ -160,7 +163,7 @@ fun main(args: Array<String>) {
                 Text(session?.let { "${it.name} · ${it.role.name.lowercase().replaceFirstChar { c -> c.uppercaseChar() }}" } ?: "Isolated owner preview", style = MaterialTheme.typography.labelMedium)
                 Spacer(Modifier.height(20.dp))
                 listOf("Sell", "Sales", "Stock", "Customers", "Money", "More").filter { routeAllowed(it) }.forEach { item ->
-                    val selected = route == item || (item == "More" && route in setOf("Reports","Suppliers","Backup","Import","Credit review","Staff","Audit","Help"))
+                    val selected = route == item || (item == "Stock" && route == "Stock counts") || (item == "More" && route in setOf("Reports","Suppliers","Backup","Import","Credit review","Staff","Audit","Help","Shop settings"))
                     Surface(onClick = {
                         try {
                             session?.let { staffAccess.requireSession(it,StaffPermission.SELL) }
@@ -177,7 +180,8 @@ fun main(args: Array<String>) {
             Column(Modifier.weight(1f).fillMaxHeight()) {
                 Row(Modifier.fillMaxWidth().height(64.dp).padding(horizontal = 24.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text(if(route=="Audit") "Activity history" else route, style = MaterialTheme.typography.headlineSmall)
-                    if (route in setOf("Reports","Suppliers","Backup","Import","Credit review","Staff","Audit","Help")) TextButton({ route = if(route=="Import") "Stock" else "More" }) { Text(if(route=="Import") "Back to stock" else "Back to shop tools") }
+                    if(route=="Stock counts") TextButton({route="Stock"}) {Text("Back to stock")}
+                    else if (route in setOf("Reports","Suppliers","Backup","Import","Credit review","Staff","Audit","Help","Shop settings")) TextButton({ route = if(route=="Import") "Stock" else "More" }) { Text(if(route=="Import") "Back to stock" else "Back to shop tools") }
                     Spacer(Modifier.weight(1f))
                     if (route == "Sell" && allowed(StaffPermission.MANAGE_MONEY)) {
                         val activeShift = remember(current.id, revision) { repo.activeCashShift(current.id) }
@@ -195,7 +199,8 @@ fun main(args: Array<String>) {
                         "Sell" -> saleStates.SaveableStateProvider(current.id) { SellScreen(current.id, products, customers, remember(current.id, revision) { repo.sellingUnits(current.id) }, allowCredit = allowed(StaffPermission.SELL_CREDIT), allowDiscounts = allowed(StaffPermission.DISCOUNT)) { lines, cash, customer, operationId, dueDate, basketDiscount ->
                             try { repo.checkout(current.id, lines, cash, customer, operationId,dueDate,basketDiscount); revision++; null } catch (e: Exception) { e.message ?: "Sale not saved" }
                         } }
-                        "Stock" -> StockScreen(repo, current.id, onChanged={ revision++ }, onImport={ route="Import" })
+                        "Stock" -> StockScreen(repo, current.id, onChanged={ revision++ }, onImport={ route="Import" }, onCounts={route="Stock counts"})
+                        "Stock counts" -> StockCountSessionsScreen(repo,current.id) {revision++}
                         "Customers" -> CustomerWorkspace(repo,current.id) { revision++ }
                         "Sales" -> SalesScreen(repo, current.id, allowReturns = allowed(StaffPermission.RETURN_SALE)) { revision++ }
                         "Credit review" -> CreditReviewScreen(repo,current.id)
@@ -204,6 +209,7 @@ fun main(args: Array<String>) {
                         "Suppliers" -> SuppliersScreen(repo, current.id) { revision++ }
                         "Backup" -> BackupPanel(repo, current)
                         "Staff" -> session?.let { StaffScreen(staffAccess,it) { revision++ } } ?: Text("Staff management requires an owner sign-in.")
+                        "Shop settings" -> ShopSettingsScreen(repo,current) {revision++}
                         "Import" -> ProductImportScreen(repo, current.id) { revision++ }
                         "Money" -> MoneyScreen(repo, current.id) { revision++ }
                         "Help" -> HelpScreen(practiceLauncher, isPractice = isolatedPreview || System.getenv("POS_PRACTICE_CHILD") == "1")
@@ -211,6 +217,7 @@ fun main(args: Array<String>) {
                             Text("Your shop tools", style = MaterialTheme.typography.headlineSmall)
                             Text("Choose the work you need to do.")
                             pos.ui.components.NeutralButton("Help & practice", { route = "Help" })
+                            if(allowed(StaffPermission.MANAGE_SETTINGS)) pos.ui.components.NeutralButton("Shop & receipt details", {route="Shop settings"})
                             if(allowed(StaffPermission.MANAGE_SUPPLIERS)) pos.ui.components.NeutralButton("Suppliers & payments", { route = "Suppliers" })
                             if(allowed(StaffPermission.MANAGE_CUSTOMERS)) pos.ui.components.NeutralButton("Review customer credit", { route="Credit review" })
                             if(allowed(StaffPermission.VIEW_REPORTS)) pos.ui.components.NeutralButton("Reports & CSV exports", { route = "Reports" })

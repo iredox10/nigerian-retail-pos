@@ -7,6 +7,8 @@ import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.*
 import pos.data.*
+import pos.domain.ShopDetails
+import pos.domain.SupplierDetails
 import pos.domain.CartLine
 import pos.domain.StaffRole
 import pos.security.StaffAccess
@@ -31,6 +33,8 @@ internal fun runPracticeApplication() {
         DisposableEffect(repo) { onDispose { repo.close() } }
         val tenant = remember {
             repo.createTenant("Practice shop · Sample data").also { t ->
+                repo.saveShopProfile(t.id,ShopDetails("Practice shop · Sample data",address="Sample market, Lagos",footer="Sample receipt - practice only",receiptPaper="80mm"),0,"Set up sample receipt details","sample-receipt-details")
+                val sampleSupplier=repo.addSupplierProfile(t.id,SupplierDetails("Sample wholesaler",contactPerson="Sample contact",paymentTerms="Payment agreed within 14 days"),"sample-supplier-profile")
                 val malt=repo.addProduct(t.id,"Malt drink · 330 ml","bottle",50000,240.0,"6150000000010")
                 repo.addPurchaseUnit(t.id,malt.id,"carton",24,"sample-carton-definition")
                 repo.addSellingUnit(t.id,malt.id,"carton",24,1100000,"6150000000027")
@@ -50,14 +54,14 @@ internal fun runPracticeApplication() {
                 repo.allocateRepayment(t.id,repo.repayments(t.id,customer.id).single().id,"sample-credit-sale",25000,"sample-payment-assignment")
                 repo.recordExpense(t.id,"Fuel","Generator fuel",125000,"sample-fuel")
                 repo.recordCashMovement(t.id,250000,"Owner added cash","sample-contribution")
-                repo.receiveStock(t.id,rice.id,2,1000000,200000,"Sample wholesaler","sample-stock")
+                repo.receiveStockForSupplier(t.id,rice.id,2,1000000,200000,sampleSupplier.id,"sample-stock")
                 val held=SaleDraft("${malt.id}:2",java.util.UUID.randomUUID().toString())
                 DraftStore(t.id).save(held)
                 DraftStore(t.id).hold("Sample · collect later",held)
                 DraftStore(t.id).save(SaleDraft("${malt.id}:3;${rice.id}:1",java.util.UUID.randomUUID().toString()))
             }
         }
-        val route = System.getenv("POS_PREVIEW_SCREEN")?.takeIf { it in setOf("Sell","Stock","Money","Sales","Customers","Reports","Suppliers","Backup","Import","Credit review","Staff","Audit","Help") } ?: "Sell"
+        val route = System.getenv("POS_PREVIEW_SCREEN")?.takeIf { it in setOf("Sell","Stock","Stock counts","Money","Sales","Customers","Reports","Suppliers","Backup","Import","Credit review","Staff","Audit","Help","Shop settings") } ?: "Sell"
         val width = System.getenv("POS_PREVIEW_WIDTH")?.toIntOrNull()?.coerceIn(800,1920) ?: 1440
         val height = System.getenv("POS_PREVIEW_HEIGHT")?.toIntOrNull()?.coerceIn(600,1200) ?: 900
         val placement = if (System.getenv("POS_PREVIEW_WIDTH") != null || System.getenv("POS_PREVIEW_HEIGHT") != null) WindowPlacement.Floating else WindowPlacement.Fullscreen

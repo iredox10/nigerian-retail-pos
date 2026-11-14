@@ -18,6 +18,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import pos.data.PosRepository
+import pos.data.receiptProfile
+import pos.output.BrandedReceiptService
+import pos.output.PdfReceiptService
 import pos.domain.Sale
 import pos.domain.money
 import pos.output.ReceiptService
@@ -45,7 +48,14 @@ private fun TenantSalesScreen(repo: PosRepository, tenantId: String, allowReturn
     val scope = rememberCoroutineScope()
     val selected = sales.find { it.id == selectedId }
     val returns = remember(tenantId, selectedId, revision) { selectedId?.let { repo.saleReturns(tenantId, it) } ?: emptyList() }
-    val receipt = selected?.let { ReceiptService.format(tenant, it, returns) }
+    val profileResult = remember(tenantId, selectedId, revision) {
+        runCatching { selectedId?.let { repo.receiptProfile(tenantId, it) } }
+    }
+    val receiptResult = runCatching {
+        val profile = profileResult.getOrThrow()
+        selected?.let { BrandedReceiptService.format(tenant, it, returns, profile) }
+    }
+    val receipt = receiptResult.getOrNull()
     val returnable = remember(tenantId, selectedId, revision) {
         selectedId?.let { repo.returnableQuantities(tenantId, it) } ?: emptyMap()
     }
@@ -56,6 +66,10 @@ private fun TenantSalesScreen(repo: PosRepository, tenantId: String, allowReturn
 
     Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         SectionHeader("Sales", if(allowReturns) "Find a saved sale, print a receipt or record returned items." else "Find a saved sale and print or export its receipt.")
+        receiptResult.exceptionOrNull()?.let {
+            InlineNotice("Receipt could not be loaded", it.message ?: "Reload to try again.", NoticeTone.Danger)
+            NeutralButton("Reload receipt", { revision++ })
+        }
         notice?.let {
             InlineNotice(if (noticeError) "Action not completed" else "Receipt update", it,
                 if (noticeError) NoticeTone.Danger else NoticeTone.Neutral, Modifier.fillMaxWidth())
@@ -128,6 +142,21 @@ private fun TenantSalesScreen(repo: PosRepository, tenantId: String, allowReturn
                                     }
                                 }, Modifier.weight(1f), enabled = !outputBusy)
                             }
+                            NeutralButton("Export PDF", {
+                                outputBusy = true
+                                scope.launch {
+                                    try {
+                                        val file = withContext(Dispatchers.IO) {
+                                            PdfReceiptService.exportReceipt(receipt, profileResult.getOrNull()?.details?.receiptPaper ?: "A4")
+                                        }
+                                        noticeError = false
+                                        notice = file?.let { "Receipt PDF saved to ${it.absolutePath}" } ?: "PDF export cancelled. The sale is unchanged."
+                                    } catch (e: Exception) {
+                                        noticeError = true
+                                        notice = e.message ?: "The receipt PDF could not be saved."
+                                    } finally { outputBusy = false }
+                                }
+                            }, Modifier.fillMaxWidth(), enabled = !outputBusy)
                             if (selected.creditMinor > 0) {
                                 Text("Returns for receipts with customer credit are not available yet. No debt or payment will be changed here.",
                                     style = MaterialTheme.typography.bodySmall, color = PosPalette.Secondary)
