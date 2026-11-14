@@ -11,6 +11,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import pos.data.PosRepository
+import pos.data.creditReturnReductions
+import pos.domain.CreditReturnReduction
 import pos.domain.Customer
 import pos.domain.AllocationReversal
 import pos.domain.CustomerRepayment
@@ -32,6 +34,7 @@ private data class AllocationRecords(
     val allocations: List<RepaymentAllocation>,
     val history: List<RepaymentAllocation>,
     val reversals: List<AllocationReversal>,
+    val creditReturns:List<CreditReturnReduction>,
 ) {
     fun paymentAvailable(id: String): Long {
         val original = payments.single { it.id == id }.amountMinor
@@ -41,7 +44,8 @@ private data class AllocationRecords(
     fun receiptBalance(id: String): Long {
         val original = sales.single { it.id == id }.creditMinor
         val assigned = allocations.filter { it.saleId == id }.fold(0L) { sum, row -> Math.addExact(sum, row.amountMinor) }
-        return Math.subtractExact(original, assigned).also { require(it >= 0) { "Saved assignments exceed a receipt's credit. Refresh before continuing." } }
+        val returned=creditReturns.filter {it.saleId==id}.fold(0L) {sum,row ->Math.addExact(sum,row.amountMinor)}
+        return Math.subtractExact(Math.subtractExact(original, assigned),returned).also { require(it >= 0) { "Saved assignments and returned credit exceed a receipt's credit. Refresh before continuing." } }
     }
     val unassigned: Long get() = payments.fold(0L) { sum, payment -> Math.addExact(sum, paymentAvailable(payment.id)) }
 }
@@ -69,7 +73,7 @@ internal fun ColumnScope.CustomerAllocationPanel(repo: PosRepository, tenantId: 
                 repo.sales(tenantId).filter { it.customerId == customer.id && it.creditMinor > 0 },
                 repo.repaymentAllocations(tenantId, customer.id),
                 repo.repaymentAllocations(tenantId, customer.id, includeReversed = true),
-                repo.allocationReversals(tenantId, customer.id))
+                repo.allocationReversals(tenantId, customer.id),repo.creditReturnReductions(tenantId,customer.id))
             // Validate every displayed available amount before showing an assignment form.
             val totalReceipts = records.sales.fold(0L) { sum, sale -> Math.addExact(sum, records.receiptBalance(sale.id)) }
             require(Math.subtractExact(totalReceipts, records.unassigned) == current.balanceMinor) { "Customer debt does not match receipt and payment history. Refresh before assigning payments." }

@@ -13,6 +13,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import pos.data.PosRepository
+import pos.data.creditReturnReductions
 import pos.domain.Customer
 import pos.domain.money
 import pos.domain.parseNaira
@@ -103,7 +104,7 @@ private fun TenantCustomers(repo: PosRepository, tenantId: String, onChanged: ()
                 CustomerAllocationPanel(repo, tenantId, customer) { changed() }
             } else {
                 val statement = remember(customer, revision) { runCatching {
-                    CustomerStatementService.build(tenantId, customer, repo.sales(tenantId), repo.repayments(tenantId))
+                    CustomerStatementService.build(tenantId, customer, repo.sales(tenantId), repo.repayments(tenantId),repo.creditReturnReductions(tenantId))
                 } }
                 statement.exceptionOrNull()?.let { InlineNotice("History could not be loaded", it.message ?: "Refresh to try again.", NoticeTone.Danger) }
                 statement.getOrNull()?.let { history ->
@@ -198,16 +199,16 @@ private fun ColumnScope.CustomerHistory(statement: CustomerStatement, pay: () ->
                         },enabled=period.isSuccess)
                         exportNotice?.let {Text(it,style=MaterialTheme.typography.bodySmall)}
                     }
-                    Text("Repayments reduce the customer's total debt. Use Assign payments to receipts to specify which credit sales they cover. Unassigned payments are never automatically applied to a receipt. Cash-sale refunds stay under Sales.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text("Repayments reduce the customer's total debt. Use Assign payments to receipts to specify which credit sales they cover. Unassigned payments are never automatically applied to a receipt. Credit-sale returns appear separately below; cash-only sale refunds stay under Sales.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
         }
         item { SectionHeader("Sales and payments", "Oldest first · Times shown in West Africa Time") }
         if (statement.events.isEmpty()) item { EmptyState("No sales or payments yet", "Choose this customer during a sale to start their history.") }
-        items(statement.events, key = { "${if (it.sale != null) "sale" else "repayment"}:${it.id}" }) { event ->
+        items(statement.events, key = { "${if (it.sale != null) "sale" else if(it.repayment!=null) "repayment" else "credit-return"}:${it.id}" }) { event ->
             Surface(shape = MaterialTheme.shapes.small) {
                 Column(Modifier.fillMaxWidth().padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Text(if (event.sale != null) "Original sale · Receipt ${event.id.takeLast(8).uppercase()}" else "Cash debt repayment · ${event.id.takeLast(8).uppercase()}", fontWeight = FontWeight.SemiBold)
+                    Text(if (event.sale != null) "Original sale · Receipt ${event.id.takeLast(8).uppercase()}" else if(event.repayment!=null) "Cash debt repayment · ${event.id.takeLast(8).uppercase()}" else "Credit-sale return · ${event.id.takeLast(8).uppercase()}", fontWeight = FontWeight.SemiBold)
                     Text(customerTime(event.createdAt), style = MaterialTheme.typography.bodySmall)
                     event.sale?.let { sale ->
                         Text(sale.lines.joinToString(" · ") { "${it.quantityLabel} ${it.sellingUnit} ${it.product.name}" }, style = MaterialTheme.typography.bodySmall)
@@ -217,6 +218,12 @@ private fun ColumnScope.CustomerHistory(statement: CustomerStatement, pay: () ->
                         if(sale.creditMinor>0) Text(sale.dueDate?.let { "Agreed repayment due date: $it · WAT" } ?: "No repayment due date recorded",style=MaterialTheme.typography.bodySmall)
                     }
                     event.repayment?.let { LabelValueRow("Cash received against debt", money(it.amountMinor), emphasized = true) }
+                    event.creditReturn?.let {
+                        Text("Original sale ${it.saleId}",style=MaterialTheme.typography.bodySmall)
+                        LabelValueRow("Customer debt reduced",money(it.amountMinor),emphasized=true)
+                        LabelValueRow("Cash refunded",money(it.cashRefundMinor))
+                        Text("Returned goods reduce unpaid credit first. This is not another customer repayment.",style=MaterialTheme.typography.bodySmall)
+                    }
                 }
             }
         }

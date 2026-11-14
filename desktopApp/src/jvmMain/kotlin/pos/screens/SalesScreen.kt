@@ -19,6 +19,8 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import pos.data.PosRepository
 import pos.data.receiptProfile
+import pos.data.creditReturnAllowance
+import pos.data.returnCreditItemsReviewed
 import pos.output.BrandedReceiptService
 import pos.output.PdfReceiptService
 import pos.domain.Sale
@@ -56,12 +58,16 @@ private fun TenantSalesScreen(repo: PosRepository, tenantId: String, allowReturn
         selected?.let { BrandedReceiptService.format(tenant, it, returns, profile) }
     }
     val receipt = receiptResult.getOrNull()
+    val creditAllowance=remember(tenantId,selectedId,revision,allowReturns) {
+        selected?.takeIf {allowReturns && it.creditMinor>0 && it.externalPayments.isEmpty()}?.let {runCatching {repo.creditReturnAllowance(tenantId,it.id)}}
+    }
     val returnable = remember(tenantId, selectedId, revision) {
         selectedId?.let { repo.returnableQuantities(tenantId, it) } ?: emptyMap()
     }
     val filtered = sales.filter { sale ->
         search.isBlank() || sale.id.contains(search, true) || sale.lines.any { it.product.name.contains(search, true) } ||
-            money(sale.totalMinor).contains(search, true) || receiptDate(sale.createdAt).contains(search, true)
+            money(sale.totalMinor).contains(search, true) || receiptDate(sale.createdAt).contains(search, true) ||
+            sale.externalPayments.any {it.reference.contains(search,true) || it.receivingAccount.contains(search,true)}
     }
 
     Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -98,8 +104,8 @@ private fun TenantSalesScreen(repo: PosRepository, tenantId: String, allowReturn
                                         Text(receiptDate(sale.createdAt), style = MaterialTheme.typography.bodySmall, color = PosPalette.Secondary)
                                         Text(sale.lines.joinToString { "${it.quantityLabel} ${it.sellingUnit} ${it.product.name}" },
                                             maxLines = 2, style = MaterialTheme.typography.bodySmall, color = PosPalette.Secondary)
-                                        StatusPill(if (sale.creditMinor > 0) "Part paid / pay later at sale" else "Paid in cash",
-                                            if (sale.creditMinor > 0) NoticeTone.Warning else NoticeTone.Neutral)
+                                        StatusPill(if(sale.externalPayments.isNotEmpty()) "External payment not confirmed" else if (sale.creditMinor > 0) "Part paid / pay later at sale" else "Paid in cash",
+                                            if (sale.creditMinor > 0 || sale.externalPayments.isNotEmpty()) NoticeTone.Warning else NoticeTone.Neutral)
                                     }
                                 }
                             }
@@ -157,11 +163,14 @@ private fun TenantSalesScreen(repo: PosRepository, tenantId: String, allowReturn
                                     } finally { outputBusy = false }
                                 }
                             }, Modifier.fillMaxWidth(), enabled = !outputBusy)
-                            if (selected.creditMinor > 0) {
-                                Text("Returns for receipts with customer credit are not available yet. No debt or payment will be changed here.",
+                            if (selected.externalPayments.isNotEmpty()) {
+                                Text("Returns involving external payment portions are not available until original-method refund reconciliation is implemented.",
                                     style = MaterialTheme.typography.bodySmall, color = PosPalette.Secondary)
                             } else if (!allowReturns) {
                                 Text("A manager or owner must sign in to record returned items or refunds.",style = MaterialTheme.typography.bodySmall,color = PosPalette.Secondary)
+                            } else if(selected.creditMinor>0 && creditAllowance?.isSuccess!=true) {
+                                Text(creditAllowance?.exceptionOrNull()?.message ?: "Credit-return eligibility could not be loaded. Refresh before continuing.",style=MaterialTheme.typography.bodySmall,color=PosPalette.Secondary)
+                                NeutralButton("Refresh return eligibility",{revision++})
                             } else if (returnable.values.any { it > 0 }) {
                                 NeutralButton("Return items", { returning = true }, Modifier.fillMaxWidth(), enabled = !outputBusy)
                                 Text("Cash refunds require an open shift with enough cash.", style = MaterialTheme.typography.bodySmall, color = PosPalette.Secondary)
@@ -177,12 +186,13 @@ private fun TenantSalesScreen(repo: PosRepository, tenantId: String, allowReturn
         }
     }
     if (allowReturns && returning && selected != null) {
-        ReturnItemsDialog(selected, returnable, { returning = false }) { quantities, restock, reason, operation ->
-            repo.returnItems(tenantId, selected.id, quantities, restock, reason, operation)
+        ReturnItemsDialog(selected, returnable, creditAllowance?.getOrNull(), { returning = false }) { quantities, restock, reason, operation ->
+            val saved=if(selected.creditMinor>0) repo.returnCreditItemsReviewed(tenantId,selected.id,quantities,restock,reason,operation,requireNotNull(creditAllowance?.getOrNull()))
+                else repo.returnItems(tenantId, selected.id, quantities, restock, reason, operation)
             returning = false
             revision++
             noticeError = false
-            notice = "Return and cash refund saved. The original sale remains in its history."
+            notice = "Return saved: ${money(saved.creditReductionMinor)} debt reduced · ${money(saved.refundMinor)} cash refunded. Original sale history is preserved."
             onChanged()
         }
     }
@@ -192,6 +202,7 @@ private fun TenantSalesScreen(repo: PosRepository, tenantId: String, allowReturn
 private fun ReturnItemsDialog(
     sale: Sale,
     returnable: Map<String, Int>,
+    allowance:CreditReturnAllowance?,
     dismiss: () -> Unit,
     save: (Map<String, Int>, Boolean, String, String) -> Unit,
 ) {
@@ -224,13 +235,19 @@ private fun ReturnItemsDialog(
                 }
                 Text("Leave unchecked for damaged or unsellable goods. This choice applies to all goods in this return.",
                     style = MaterialTheme.typography.bodySmall, color = PosPalette.Secondary)
-                LabelValueRow("Cash refund", preview?.let(::money) ?: "Check quantities", emphasized = true)
-                Text("Cash leaves the current open shift. A saved return stays linked to the original sale.", style = MaterialTheme.typography.bodySmall, color = PosPalette.Secondary)
+                LabelValueRow("Returned goods value", preview?.let(::money) ?: "Check quantities", emphasized = true)
+                if(sale.creditMinor>0) {
+                    LabelValueRow("Unpaid credit on this receipt",money(requireNotNull(allowance).outstandingCreditMinor))
+                    LabelValueRow("Customer debt reduced",preview?.let {money(minOf(it,allowance.outstandingCreditMinor))} ?: "Check quantities",emphasized=true)
+                    LabelValueRow("Cash refund",preview?.let {money(maxOf(0L,it-allowance.outstandingCreditMinor))} ?: "Check quantities")
+                    Text("Unpaid receipt credit is reduced first; the paid part is refunded in cash. Repayments must be assigned before returning. No customer advance is created.",style=MaterialTheme.typography.bodySmall)
+                } else LabelValueRow("Cash refund", preview?.let(::money) ?: "Check quantities", emphasized = true)
+                Text("Any cash refund leaves the current open shift and requires enough recorded cash. A debt-only return does not need a drawer. The original sale remains unchanged.", style = MaterialTheme.typography.bodySmall, color = PosPalette.Secondary)
                 error?.let { InlineNotice("Return not saved", it, NoticeTone.Danger) }
             }
         },
         confirmButton = {
-            PosButton(if (saving) "Saving return…" else "Save return & cash refund", {
+            PosButton(if (saving) "Saving return…" else if(sale.creditMinor>0) "Save reviewed return" else "Save return & cash refund", {
                 saving = true
                 try {
                     val entries = sale.lines.associate { line ->
