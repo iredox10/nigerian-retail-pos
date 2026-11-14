@@ -42,6 +42,7 @@ fun ShopSettingsScreen(repo:PosRepository,tenant:Tenant,onChanged:()->Unit) {
         }
         message?.let {InlineNotice(it,tone=NoticeTone.Success)}
         if(loaded.isSuccess) {
+            LocalImageEditor(repo,tenant.id,"shop","shop","Shop logo","Appears in the workspace and on new PDF receipts. Completed receipts keep their saved logo.",onChanged={onChanged()})
             Surface(shape=MaterialTheme.shapes.medium) {
                 Column(Modifier.fillMaxWidth().padding(24.dp),verticalArrangement=Arrangement.spacedBy(16.dp)) {
                     SectionHeader("What should appear on your receipts?","The sign-in workspace remains ${tenant.name}. Completed receipts keep their captured details.")

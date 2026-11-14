@@ -52,7 +52,7 @@ internal fun ProductManagementPanel(
             SectionHeader(product.name, "Selling unit: ${product.unit} · ${product.stockLabel} available")
             if (product.archived) InlineNotice("Archived item", "Saved sales and history are kept. Restore this item before selling, receiving or counting it.", NoticeTone.Warning)
             Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                listOf("Details", "Catalogue", "Selling units", "Buying units", "Labels", "Count stock", "History").forEach { label ->
+                listOf("Details", "Photo", "Catalogue", "Selling units", "Buying units", "Labels", "Count stock", "History").forEach { label ->
                     FilterChip(selected = tab == label, onClick = { tab = label; error = null }, label = { Text(label) })
                 }
             }
@@ -86,6 +86,7 @@ internal fun ProductManagementPanel(
                             else "Archive goods you no longer sell. They leave the active catalogue; their recorded stock and history stay saved.", style = MaterialTheme.typography.bodySmall, color = PosPalette.Secondary)
                     }
                 }
+                "Photo" -> LocalImageEditor(repo,tenantId,"product",product.id,"Product photo","Use a clear photo to help identify this item in Stock and Sell.",enabled=!product.archived,onChanged={onChanged("Product photo saved on this computer")})
                 "Catalogue" -> ProductCataloguePanel(repo, tenantId, product, onChanged)
                 "Selling units" -> SellingUnitsPanel(repo, tenantId, product)
                 "Buying units" -> BuyingUnitsPanel(repo, tenantId, product)
