@@ -136,6 +136,8 @@ class PosRepository(path: String = File(System.getProperty("user.home"), ".niger
         db.createStatement().use { it.execute("CREATE TABLE IF NOT EXISTS activity_audit(id TEXT NOT NULL,tenant_id TEXT NOT NULL,kind TEXT NOT NULL,entity_id TEXT NOT NULL,created_at TEXT NOT NULL,actor_id TEXT,actor_name TEXT,actor_role TEXT CHECK(actor_role IN('OWNER','MANAGER','CASHIER')),description TEXT,PRIMARY KEY(tenant_id,id),FOREIGN KEY(tenant_id,id) REFERENCES outbox(tenant_id,id))") }
         createMetadataHistory()
         initializeSupplierProfiles()
+        initializePurchaseOrders()
+        initializeInventoryDispositions()
         initializeStockCountSessions()
         initializeShopProfiles()
         execute("CREATE TRIGGER IF NOT EXISTS activity_audit_no_update BEFORE UPDATE ON activity_audit BEGIN SELECT RAISE(ABORT,'Activity history cannot be edited'); END")
@@ -277,6 +279,7 @@ class PosRepository(path: String = File(System.getProperty("user.home"), ".niger
             InventoryMovement("return:${row.getString("source_id")}",tenantId,productId,"return",projectedQuantity(row.getLong("quantity_scaled"),row.getInt("precision")),row.getString("source_id"),row.getString("created_at"),"Sellable return: ${row.getString("reason")}")
         }.also { movements+=it }
         stockAdjustments(tenantId,productId).forEach { count -> movements+=InventoryMovement("count:${count.id}",tenantId,productId,"count",count.difference,count.id,count.createdAt,"Count ${count.previousStock} → ${count.countedStockLabel}: ${count.reason}") }
+        movements+=inventoryDispositionMovements(tenantId,productId)
         return movements.sortedWith(compareBy<InventoryMovement> { Instant.parse(it.createdAt) }.thenBy { it.id })
     }
     @Synchronized fun productByBarcode(tenantId:String,barcode:String):Product? {
@@ -913,7 +916,7 @@ class PosRepository(path: String = File(System.getProperty("user.home"), ".niger
     }
     private fun supplierPayment(r:ResultSet)=SupplierPayment(r.getString("id"),r.getString("tenant_id"),r.getString("receipt_id"),r.getString("supplier_name"),r.getLong("amount_minor"),r.getString("created_at"))
 
-    private val snapshotTableOrder get() = listOf("products","product_metadata_changes","selling_units","stock_settings_changes","purchase_units","customers","customer_changes","cash_shifts","sales","sale_lines","repayments","repayment_allocations","allocation_reversals","stock_receipts","expenses","sale_returns","return_lines","supplier_payments","cash_entries","catalogue_changes","stock_adjustments","outbox","activity_audit") + supplierProfileSnapshotTables + stockCountSessionSnapshotTables + shopProfileSnapshotTables
+    private val snapshotTableOrder get() = listOf("products","product_metadata_changes","selling_units","stock_settings_changes","purchase_units","customers","customer_changes","cash_shifts","sales","sale_lines","repayments","repayment_allocations","allocation_reversals","stock_receipts","expenses","sale_returns","return_lines","supplier_payments","cash_entries","catalogue_changes","stock_adjustments","outbox","activity_audit") + supplierProfileSnapshotTables + purchaseOrderSnapshotTables + inventoryDispositionSnapshotTables + stockCountSessionSnapshotTables + shopProfileSnapshotTables
     @Synchronized fun exportTenantSnapshot(tenantId:String):TenantSnapshot = transaction {
         requirePermission(tenantId, StaffPermission.BACKUP)
         requireTenant(tenantId)
@@ -1085,6 +1088,8 @@ class PosRepository(path: String = File(System.getProperty("user.home"), ".niger
             require(linked == Triple(event.kind,event.entityId,event.createdAt)) { "Backup activity does not match its original saved event." }
         }
         validateSupplierProfileSnapshot(tenant.id)
+        validatePurchaseOrderSnapshot(tenant.id)
+        validateInventoryDispositions(tenant.id)
         validateStockCountSessions(tenant.id)
         validateShopProfileSnapshot(tenant.id)
         provisionOwner(tenant)

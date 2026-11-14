@@ -92,7 +92,7 @@ fun main(args: Array<String>) {
     fun routeAllowed(destination: String): Boolean = when(destination) {
         "Sell" -> allowed(StaffPermission.SELL)
         "Sales" -> allowed(StaffPermission.VIEW_SALES)
-        "Stock","Import","Stock counts" -> allowed(StaffPermission.MANAGE_STOCK)
+        "Stock","Import","Stock counts","Stock removed" -> allowed(StaffPermission.MANAGE_STOCK)
         "Customers","Credit review" -> allowed(StaffPermission.MANAGE_CUSTOMERS)
         "Money" -> allowed(StaffPermission.MANAGE_MONEY)
         "Reports","Audit" -> allowed(StaffPermission.VIEW_REPORTS)
@@ -163,7 +163,7 @@ fun main(args: Array<String>) {
                 Text(session?.let { "${it.name} · ${it.role.name.lowercase().replaceFirstChar { c -> c.uppercaseChar() }}" } ?: "Isolated owner preview", style = MaterialTheme.typography.labelMedium)
                 Spacer(Modifier.height(20.dp))
                 listOf("Sell", "Sales", "Stock", "Customers", "Money", "More").filter { routeAllowed(it) }.forEach { item ->
-                    val selected = route == item || (item == "Stock" && route == "Stock counts") || (item == "More" && route in setOf("Reports","Suppliers","Backup","Import","Credit review","Staff","Audit","Help","Shop settings"))
+                    val selected = route == item || (item == "Stock" && route in setOf("Stock counts","Stock removed")) || (item == "More" && route in setOf("Reports","Suppliers","Backup","Import","Credit review","Staff","Audit","Help","Shop settings"))
                     Surface(onClick = {
                         try {
                             session?.let { staffAccess.requireSession(it,StaffPermission.SELL) }
@@ -180,7 +180,7 @@ fun main(args: Array<String>) {
             Column(Modifier.weight(1f).fillMaxHeight()) {
                 Row(Modifier.fillMaxWidth().height(64.dp).padding(horizontal = 24.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text(if(route=="Audit") "Activity history" else route, style = MaterialTheme.typography.headlineSmall)
-                    if(route=="Stock counts") TextButton({route="Stock"}) {Text("Back to stock")}
+                    if(route in setOf("Stock counts","Stock removed")) TextButton({route="Stock"}) {Text("Back to stock")}
                     else if (route in setOf("Reports","Suppliers","Backup","Import","Credit review","Staff","Audit","Help","Shop settings")) TextButton({ route = if(route=="Import") "Stock" else "More" }) { Text(if(route=="Import") "Back to stock" else "Back to shop tools") }
                     Spacer(Modifier.weight(1f))
                     if (route == "Sell" && allowed(StaffPermission.MANAGE_MONEY)) {
@@ -199,8 +199,9 @@ fun main(args: Array<String>) {
                         "Sell" -> saleStates.SaveableStateProvider(current.id) { SellScreen(current.id, products, customers, remember(current.id, revision) { repo.sellingUnits(current.id) }, allowCredit = allowed(StaffPermission.SELL_CREDIT), allowDiscounts = allowed(StaffPermission.DISCOUNT)) { lines, cash, customer, operationId, dueDate, basketDiscount ->
                             try { repo.checkout(current.id, lines, cash, customer, operationId,dueDate,basketDiscount); revision++; null } catch (e: Exception) { e.message ?: "Sale not saved" }
                         } }
-                        "Stock" -> StockScreen(repo, current.id, onChanged={ revision++ }, onImport={ route="Import" }, onCounts={route="Stock counts"})
+                        "Stock" -> StockScreen(repo, current.id, onChanged={ revision++ }, onImport={ route="Import" }, onCounts={route="Stock counts"}, onDispositions={route="Stock removed"})
                         "Stock counts" -> StockCountSessionsScreen(repo,current.id) {revision++}
+                        "Stock removed" -> InventoryDispositionsScreen(repo,current.id) {revision++}
                         "Customers" -> CustomerWorkspace(repo,current.id) { revision++ }
                         "Sales" -> SalesScreen(repo, current.id, allowReturns = allowed(StaffPermission.RETURN_SALE)) { revision++ }
                         "Credit review" -> CreditReviewScreen(repo,current.id)

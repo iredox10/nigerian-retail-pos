@@ -31,12 +31,12 @@ import java.util.UUID
 
 /** Every read and write remains scoped to the selected business, including editor state. */
 @Composable
-fun StockScreen(repo: PosRepository, tenantId: String, onChanged: () -> Unit, onImport: (() -> Unit)? = null, onCounts: (() -> Unit)? = null) {
-    key(tenantId) { TenantStockScreen(repo, tenantId, onChanged, onImport, onCounts) }
+fun StockScreen(repo: PosRepository, tenantId: String, onChanged: () -> Unit, onImport: (() -> Unit)? = null, onCounts: (() -> Unit)? = null, onDispositions: (() -> Unit)? = null) {
+    key(tenantId) { TenantStockScreen(repo, tenantId, onChanged, onImport, onCounts, onDispositions) }
 }
 
 @Composable
-private fun TenantStockScreen(repo: PosRepository, tenantId: String, onChanged: () -> Unit, onImport: (() -> Unit)?, onCounts: (() -> Unit)?) {
+private fun TenantStockScreen(repo: PosRepository, tenantId: String, onChanged: () -> Unit, onImport: (() -> Unit)?, onCounts: (() -> Unit)?, onDispositions: (() -> Unit)?) {
     var revision by remember { mutableStateOf(0) }
     val allProducts = remember(tenantId, revision) { repo.products(tenantId, includeArchived = true) }
     val products = allProducts.filterNot { it.archived }
@@ -63,6 +63,7 @@ private fun TenantStockScreen(repo: PosRepository, tenantId: String, onChanged: 
                 Row(if (compact) Modifier.fillMaxWidth().horizontalScroll(toolbarScroll) else Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     if (!compact) SectionHeader("Stock", "Know what is available and record what came in.", Modifier.weight(1f))
                     if (editor == null) {
+                        if(onDispositions!=null) NeutralButton("Stock removed",onDispositions)
                         if(onCounts!=null) NeutralButton("Count several items",onCounts)
                         if(onImport!=null) NeutralButton("Import CSV",onImport)
                         NeutralButton("Add item", { savedMessage = null; editor = "item" })

@@ -32,10 +32,11 @@ fun SuppliersScreen(repo: PosRepository, tenantId: String, onChanged: () -> Unit
         var tab by remember {mutableStateOf("Supplier accounts")}
         Column(Modifier.fillMaxSize(),verticalArrangement=Arrangement.spacedBy(16.dp)) {
             Row(horizontalArrangement=Arrangement.spacedBy(8.dp)) {
-                listOf("Supplier accounts","Receipts & payments").forEach {label -> FilterChip(tab==label,{tab=label},label={Text(label)})}
+                listOf("Supplier accounts","Receipts & payments","Purchase orders").forEach {label -> FilterChip(tab==label,{tab=label},label={Text(label)})}
             }
             Box(Modifier.weight(1f)) {
                 if(tab=="Supplier accounts") SupplierProfilesPanel(repo,tenantId,onChanged)
+                else if(tab=="Purchase orders") PurchaseOrdersScreen(repo,tenantId,onChanged)
                 else TenantSuppliers(repo,tenantId,onChanged)
             }
         }
