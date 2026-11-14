@@ -10,7 +10,7 @@ class LocalBackupPolicyTest {
         assertFails {LocalBackupPolicy("/backups",retainedVersions=1)}
         assertFails {LocalBackupPolicy("/backups",retainedVersions=101)}
     }
-    @Test fun folderIsExplicitAndNoSecretFieldIsPartOfThePolicy() {
+    @Test fun destinationMustBeExplicitPrintableText() {
         assertFails {LocalBackupPolicy(" ")}
         assertFails {LocalBackupPolicy("/backups\nelsewhere")}
         assertEquals("/offline/drive",LocalBackupPolicy("/offline/drive").destinationDirectory)
