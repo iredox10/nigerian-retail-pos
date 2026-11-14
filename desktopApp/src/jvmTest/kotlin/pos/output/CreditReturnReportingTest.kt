@@ -22,7 +22,7 @@ class CreditReturnReportingTest {
         assertEquals(800L,dated.openingMinor);assertEquals(300L,dated.closingMinor)
         assertEquals(listOf(600L,300L),dated.events.map {it.second})
         assertContains(CustomerStatementService.csv(value),"Debt reduced on return NGN")
-        assertContains(DatedCustomerStatementService.csv(dated),"Credit-sale return")
+        assertContains(DatedCustomerStatementService.csv(value,dated.range),"Credit-sale return")
     }
 
     @Test fun ageingAndHistoricalBalancesRespectReturnRecordedDates() {
