@@ -41,6 +41,7 @@ class PosRepository(path: String = File(System.getProperty("user.home"), ".niger
         block()
     }
     internal fun featureExecute(sql:String,vararg args:Any?):Int = execute(sql,*args)
+    internal fun featureSchema(sql:String) { db.createStatement().use { it.execute(sql) } }
     internal fun <T> featureQuery(sql:String,vararg args:Any?,map:(ResultSet)->T):List<T> = query(sql,*args,map=map)
     internal fun featureEvent(tenantId:String,kind:String,entityId:String) = enqueue(tenantId,kind,entityId)
     init {
@@ -135,6 +136,8 @@ class PosRepository(path: String = File(System.getProperty("user.home"), ".niger
         db.createStatement().use { it.execute("CREATE TABLE IF NOT EXISTS activity_audit(id TEXT NOT NULL,tenant_id TEXT NOT NULL,kind TEXT NOT NULL,entity_id TEXT NOT NULL,created_at TEXT NOT NULL,actor_id TEXT,actor_name TEXT,actor_role TEXT CHECK(actor_role IN('OWNER','MANAGER','CASHIER')),description TEXT,PRIMARY KEY(tenant_id,id),FOREIGN KEY(tenant_id,id) REFERENCES outbox(tenant_id,id))") }
         createMetadataHistory()
         initializeSupplierProfiles()
+        initializeStockCountSessions()
+        initializeShopProfiles()
         execute("CREATE TRIGGER IF NOT EXISTS activity_audit_no_update BEFORE UPDATE ON activity_audit BEGIN SELECT RAISE(ABORT,'Activity history cannot be edited'); END")
         execute("CREATE TRIGGER IF NOT EXISTS activity_audit_no_delete BEFORE DELETE ON activity_audit BEGIN SELECT RAISE(ABORT,'Activity history cannot be removed'); END")
     }
@@ -539,6 +542,7 @@ class PosRepository(path: String = File(System.getProperty("user.home"), ".niger
         stockUpdates.forEach { (productId,stock) -> saveScaledStock(tenantId,productId,stock) }
         if (newDebt!=null) execute("UPDATE customers SET balance_minor=? WHERE tenant_id=? AND id=?",newDebt,tenantId,customerId)
         if (cashMinor>0) appendCash(tenantId,activeCashShift(tenantId)?.id,"sale",cashMinor,"Cash sale ${sale.id.take(8)}",sale.id)
+        captureReceiptProfile(tenantId,sale.id)
         enqueue(tenantId,"sale.completed",sale.id)
         sale
     }
@@ -909,7 +913,7 @@ class PosRepository(path: String = File(System.getProperty("user.home"), ".niger
     }
     private fun supplierPayment(r:ResultSet)=SupplierPayment(r.getString("id"),r.getString("tenant_id"),r.getString("receipt_id"),r.getString("supplier_name"),r.getLong("amount_minor"),r.getString("created_at"))
 
-    private val snapshotTableOrder get() = listOf("products","product_metadata_changes","selling_units","stock_settings_changes","purchase_units","customers","customer_changes","cash_shifts","sales","sale_lines","repayments","repayment_allocations","allocation_reversals","stock_receipts","expenses","sale_returns","return_lines","supplier_payments","cash_entries","catalogue_changes","stock_adjustments","outbox","activity_audit") + supplierProfileSnapshotTables
+    private val snapshotTableOrder get() = listOf("products","product_metadata_changes","selling_units","stock_settings_changes","purchase_units","customers","customer_changes","cash_shifts","sales","sale_lines","repayments","repayment_allocations","allocation_reversals","stock_receipts","expenses","sale_returns","return_lines","supplier_payments","cash_entries","catalogue_changes","stock_adjustments","outbox","activity_audit") + supplierProfileSnapshotTables + stockCountSessionSnapshotTables + shopProfileSnapshotTables
     @Synchronized fun exportTenantSnapshot(tenantId:String):TenantSnapshot = transaction {
         requirePermission(tenantId, StaffPermission.BACKUP)
         requireTenant(tenantId)
@@ -937,7 +941,7 @@ class PosRepository(path: String = File(System.getProperty("user.home"), ".niger
                 schema.values.forEach { (name,type,required) ->
                     val value=row[name]
                     val generatedId=(table=="sale_lines" || table=="return_lines") && name=="id"
-                    require(!required || value!=null || generatedId || (name in setOf("quantity_precision","base_precision") && name !in row) || (table=="cash_shifts" && name=="closing_blind" && name !in row) || (table=="products" && name in setOf("archived","aliases","favourite") && name !in row) || (table in setOf("stock_receipts","sale_lines","return_lines") && name=="base_units_per_unit" && name !in row) || (table=="sale_lines" && name in setOf("discount_per_unit_minor","basket_discount_minor") && name !in row)) { "Backup is missing a required value in $table." }
+                    require(!required || value!=null || generatedId || (name in setOf("quantity_precision","base_precision") && name !in row) || (table=="cash_shifts" && name=="closing_blind" && name !in row) || (table=="sales" && name=="receipt_profile_captured" && name !in row) || (table=="products" && name in setOf("archived","aliases","favourite") && name !in row) || (table in setOf("stock_receipts","sale_lines","return_lines") && name=="base_units_per_unit" && name !in row) || (table=="sale_lines" && name in setOf("discount_per_unit_minor","basket_discount_minor") && name !in row)) { "Backup is missing a required value in $table." }
                     if(value!=null && type=="INTEGER") require(value.toLongOrNull()!=null) { "Backup has invalid integer data in $table." }
                     if(value!=null && name=="quantity" && table in setOf("sale_lines","stock_receipts","return_lines")) {
                         val quantity=value.toLongOrNull()
@@ -1081,6 +1085,8 @@ class PosRepository(path: String = File(System.getProperty("user.home"), ".niger
             require(linked == Triple(event.kind,event.entityId,event.createdAt)) { "Backup activity does not match its original saved event." }
         }
         validateSupplierProfileSnapshot(tenant.id)
+        validateStockCountSessions(tenant.id)
+        validateShopProfileSnapshot(tenant.id)
         provisionOwner(tenant)
         tenant
     }
