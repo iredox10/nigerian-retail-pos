@@ -19,6 +19,7 @@ import javax.swing.filechooser.FileNameExtensionFilter
 
 /** Explicit document identity is preserved on every page; file output never changes local records. */
 enum class PdfDocumentKind(val heading:String,val label:String,val referencePrefix:String) {
+    QUOTATION("QUOTATION","quotation","Quotation: "),
     RECEIPT("SALES RECEIPT","sales receipt","Receipt: "),
     CUSTOMER_STATEMENT("CUSTOMER STATEMENT","customer statement","Customer ID: "),
     SUPPLIER_STATEMENT("SUPPLIER STATEMENT","supplier statement","Supplier account ID: "),
@@ -43,7 +44,7 @@ object PdfDocumentService {
                 require(line.none {it.isISOControl() && it!='\t'}) {"Document text contains an unsupported control character."}
                 val clean=line.replace('\t',' ')
                 val isTitle=index==0 || clean==kind.heading
-                val isTotal=clean.startsWith("Original sale total:") || clean.startsWith("Sale value after returns:") || clean.startsWith("Opening debt:") || clean.startsWith("Closing debt:") || clean.startsWith("Opening amount owed:") || clean.startsWith("Closing amount owed:")
+                val isTotal=clean.startsWith("Original sale total:") || clean.startsWith("Sale value after returns:") || clean.startsWith("Opening debt:") || clean.startsWith("Closing debt:") || clean.startsWith("Opening amount owed:") || clean.startsWith("Closing amount owed:") || clean.startsWith("Agreed quotation total:")
                 val size=when {index==0 -> if(thermal) 12f else 16f;isTitle -> if(thermal) 10f else 13f;isTotal -> bodySize+1f;else -> bodySize}
                 val font=if(isTitle || isTotal) bold else regular
                 wrap(clean,font,size,contentWidth,kind).map {Row(it,size,isTitle || isTotal)}
@@ -121,7 +122,7 @@ object PdfDocumentService {
         val points=text.codePoints().toArray().map {String(Character.toChars(it))}
         points.forEach {value ->
             try {font.encode(value)} catch(_:IllegalArgumentException) {
-                throw IllegalArgumentException("A name or message uses a character this PDF font cannot print. ${if(kind==PdfDocumentKind.RECEIPT) "Export a text receipt" else "Export a CSV statement"} instead; no PDF was saved.")
+                throw IllegalArgumentException("A name or message uses a character this PDF font cannot print. ${if(kind==PdfDocumentKind.RECEIPT) "Export a text receipt" else if(kind==PdfDocumentKind.QUOTATION) "Export a text quotation" else "Export a CSV statement"} instead; no PDF was saved.")
             }
         }
         val result=mutableListOf<String>()

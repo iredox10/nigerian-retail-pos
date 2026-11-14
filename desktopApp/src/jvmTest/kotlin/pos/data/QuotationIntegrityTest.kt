@@ -52,7 +52,7 @@ class QuotationIntegrityTest {
             assertEquals(quotationSaleSource(accepted.id,accepted.version),sale.lines.single().discountReason)
             assertEquals(8625L,repo.products(shop.id).single().exactStockScaled)
             assertEquals(13750L,repo.expectedCash(shop.id,repo.cashShifts(shop.id).single().id))
-            assertEquals(sale,repo.convertQuotation(shop.id,accepted.id,accepted.version,review.token,13750,"conversion"))
+            assertEquals(repo.sales(shop.id).single(),repo.convertQuotation(shop.id,accepted.id,accepted.version,review.token,13750,"conversion"))
             assertFails {repo.convertQuotation(shop.id,accepted.id,accepted.version,"wrong",13750,"conversion")}
             assertFails {repo.convertQuotation(shop.id,accepted.id,accepted.version,review.token,13750,"another-sale")}
             assertEquals(1,repo.sales(shop.id).size)
