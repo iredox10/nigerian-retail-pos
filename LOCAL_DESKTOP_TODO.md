@@ -28,7 +28,9 @@ Started 14 November 2026. Scope: the local desktop gaps listed in the conversati
 - [x] Reviewed bulk CSV catalogue update/repricing with row errors, stale checks and atomic application.
 - [x] Retail/wholesale/customer price lists and quantity breaks with historical sale snapshots.
 - [ ] Minimum-price policy and approval; promotions/bundles with exact stock/discount arithmetic.
-- [ ] Variants, unique barcodes, product images and local attachment backup.
+- [x] Shop logo and one product photo with offline database bytes, reasoned replacement/removal history, Stock/Sell thumbnails, captured receipt logos and encrypted backup/restore.
+- [x] On-demand PNG/JPEG preview of current/historical supplier invoice evidence.
+- [ ] Product variants/variant barcodes, image galleries/cropping/EXIF orientation and expense receipt attachments.
 - [ ] Explicit repacking/nested conversions with conserved inventory and history.
 
 ## 4. Cash, customer accounts and accounting
@@ -57,4 +59,4 @@ Started 14 November 2026. Scope: the local desktop gaps listed in the conversati
 
 Four specialists reviewed quotations, external payments, credit returns and bulk CSV updates in waves. Root integrated storage, routes, draft recovery and report semantics. The final serialized run passes **508 tests** (72 shared + 436 desktop); Linux packaging passes. See BUILD_STATUS.md for actual disconnected sample workflows and screenshots.
 
-Scope limits: checkout currently exposes one external portion plus cash and optional named credit; no provider verification, settlement or external refund. Credit returns require repayment assignment before debt/cash allocation. Price lists are explicitly selected reductions, not automatic pricing or markups. Invoice evidence is a recorded local source path, not managed attachment content in backups. Scheduled backups require the running app, authorized session and supplied password; they are local, not cloud backup or a replacement-machine restore drill. Wider keyboard/accessibility, hardware, Windows and merchant checks remain pending.
+Scope limits: checkout currently exposes one external portion plus cash and optional named credit; no provider verification, settlement or external refund. Credit returns require repayment assignment before debt/cash allocation. Price lists are explicitly selected reductions, not automatic pricing or markups. Invoice evidence stores actual bounded PDF/PNG/JPEG bytes and revision history in encrypted backups; the earlier source-path-only description was incorrect. Scheduled backups require the running app, authorized session and supplied password; they are local, not cloud backup or a replacement-machine restore drill. Wider keyboard/accessibility, hardware, Windows and merchant checks remain pending.

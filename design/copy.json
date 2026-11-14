@@ -4,7 +4,13 @@
   "status": "proposed-labels-awaiting-merchant-validation",
   "description": "Canonical front-facing wording. Braced values are runtime placeholders. Domain/database names may remain technical. Keep monetary status semantics separate from these display strings.",
   "navigation": {
-    "primaryOrder": ["sell", "sales", "stock", "customers", "money"],
+    "primaryOrder": [
+      "sell",
+      "sales",
+      "stock",
+      "customers",
+      "money"
+    ],
     "sell": "Sell",
     "sales": "Sales",
     "stock": "Stock",
@@ -113,5 +119,17 @@
     "saveFailed": "Sale not saved",
     "printFailed": "Sale saved · Receipt not printed",
     "details": "Details"
+  },
+  "images": {
+    "productPhoto": "Product photo",
+    "shopLogo": "Shop logo",
+    "choose": "Choose image",
+    "replace": "Choose another image",
+    "remove": "Remove image",
+    "save": "Save image",
+    "saveRemoval": "Save image removal",
+    "history": "View image history",
+    "reason": "Why is this image changing?",
+    "saved": "Image saved on this computer."
   }
 }

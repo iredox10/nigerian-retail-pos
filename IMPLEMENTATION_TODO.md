@@ -74,7 +74,9 @@ Work is ordered by dependencies, not by hiding any part of the full specificatio
 - [x] SKU/category/brand/alias editing, immutable metadata history, CSV snapshots and checkout search/category filters; integrated automated coverage passes.
 - [ ] Complete rendered keyboard/failure acceptance for catalogue metadata/filter workflows.
 - [ ] Product variants and unique variant barcodes.
-- [ ] Product images and offline attachment storage.
+- [x] Product photo and shop logo imports, bounded raster copies in SQLite, replacement/removal history, Stock/Sell/workspace rendering and encrypted backup/restore.
+- [x] Historical receipt logo capture and first-page PDF rendering.
+- [ ] Image galleries/crop/orientation controls, bulk image import and broader media acceptance.
 - [x] Checkout Favourites filter.
 - [ ] Automatic frequently-sold selection.
 - [x] Code128 current-product/selling-pack label PNG output and native print submission, with saved barcode/unit/price snapshots and local decoding tests.
@@ -145,7 +147,8 @@ Work is ordered by dependencies, not by hiding any part of the full specificatio
 - [x] Partial deliveries and explicit outstanding purchase quantities.
 - [ ] Damaged/quarantined delivery workflows and discrepancy resolution.
 - [x] Supplier invoice metadata, normalized duplicate review, immutable reasoned corrections and local evidence-path history.
-- [ ] Managed supplier attachment bytes, portability/backup and broader invoice UI acceptance.
+- [x] Managed supplier PDF/PNG/JPEG attachment bytes and historical versions in encrypted backups, with current/historical image preview and file export.
+- [ ] Broader invoice native/keyboard acceptance.
 - [ ] Landed-cost allocation and purchase-cost history/comparisons.
 - [ ] Purchase returns, supplier credit notes and account adjustments.
 - [x] Dated receipt-name supplier statements and CSV, including paid receipts, opening/closing debt and current debt; integrated automated coverage passes.
@@ -182,7 +185,8 @@ Work is ordered by dependencies, not by hiding any part of the full specificatio
 ## Documents, orders and trade modules
 
 - [x] Versioned shop/contact/footer settings with actor history, optimistic edit checks and backup inclusion; new completed sales capture immutable receipt identity. Legacy receipts explicitly lack captured contacts.
-- [ ] Logos, broader template customization and historical tax/contact requirements beyond the captured receipt profile.
+- [x] Shop logo editor and immutable new-sale logo snapshots for PDF receipts.
+- [ ] Broader templates, branded quotations/statements and historical tax/contact requirements beyond captured receipt identity.
 - [x] Branded offline PDF sales receipts and dated customer/supplier statements with embedded fonts, wrapping, pagination and guarded file replacement.
 - [x] Frozen quotation PDF/text including historical revision output.
 - [ ] Invoices, delivery notes, credit notes and document sharing/delivery.

@@ -2,7 +2,25 @@
 
 14 November 2026 · Local tenders, credit returns, quotations and catalogue updates
 
-## Current integrated checkpoint
+## Current integrated checkpoint — shop and product images
+
+**519 tests pass**: 72 shared + 447 desktop, zero failures/errors/skips. Ran `gradle :shared:jvmTest :desktopApp:jvmTest :desktopApp:createDistributable --offline` with installed Gradle 8.13/JDK 17; successful in 34 seconds. Linux image rebuilt. This supersedes the 508-test checkpoint below.
+
+- Product photo editor under Stock → Manage → Photo; separate shop logo editor under More → Shop & receipt details. PNG/JPEG inputs are decoded, resized with preserved proportions, and re-encoded to PNG, stripping source metadata. Source cap 8 MB/12 million pixels; stored cap 768 pixels/512 KB. Retained image assets have a 16 MB/shop budget, including historical versions. One active image per product and one shop logo are supported.
+- Bytes are stored in tenant-scoped SQLite tables, independent of the original file. Reasoned image replacement/removal has immutable history, actor activity, stale-version checks and stable retries. Archived product edits are denied. Encrypted backups contain image bytes and history; legacy backups without images remain supported. Working SQLite remains unencrypted.
+- Stock/Sell show fixed-size aspect-fit thumbnails with names and prices always available. Workspace shows the current shop logo. New sales capture their logo independently of later logo changes. A capture marker detects missing receipt-image records during restore. Clock rollback cannot capture a future-dated logo into a sale.
+- Receipt PDFs render the captured logo on the first page only, preserving pagination and readable text on A4/58/80 mm. Existing receipts without a logo snapshot never acquire today's logo.
+- Existing supplier invoice attachments already contained managed PDF/PNG/JPEG bytes and historical backup support; previous source-path-only documentation was incorrect. Added on-demand current/historical image preview. Increased the bounded backup field allowance to 2 MB so a supported 1 MB attachment fits after base64 encoding; the whole backup stays bounded at 64 MB.
+
+### Image verification evidence
+
+Seven image-integrity tests cover source-file deletion, normalization and invalid input, reopen, encrypted restore, shop isolation, permission denial, late-actor rollback, stale/replayed changes, removal/history, preserved receipt logos, omitted/corrupt snapshots and legacy backups. Three PDF tests verify first-page-only images, text clearance/pagination on all three papers, invalid-logo rejection before replacement and visual fixtures. One invoice regression exercises encrypted backup/restore of a valid image larger than 768 KB.
+
+Actual native Linux Compose ran in the isolated practice workspace, Xvfb 1440 × 1000 and a network namespace with loopback only/no external route. Chose a clearly labeled SAMPLE SHOP test raster through the native picker, typed reasons and used Tab/Enter to save. Inspected uploaded product image in [Stock](artifacts/desktop-product-image-stock.png) and [Sell](artifacts/desktop-product-image-sell.png), and saved shop logo in [settings/sidebar](artifacts/desktop-shop-logo-saved.png). Test raster use proves import/display paths, not realistic catalogue photography or merchant comprehension.
+
+Rendered actual generated receipt PDFs with Poppler and inspected all widths: [A4](artifacts/pdf-receipt-logo-a4.png), [58 mm](artifacts/pdf-receipt-logo-58mm.png), [80 mm](artifacts/pdf-receipt-logo-80mm.png). No physical printer output was tested. Native invoice preview, full save/remove/cancel/failure journeys, Windows, accessibility and merchant research remain unperformed. EXIF orientation is stripped without automatic rotation; cropping/rotation controls, galleries, expense receipt attachments and cloud media transport remain pending. The already-open trading app must be reopened to load the rebuilt version; its data/process was not interrupted for testing.
+
+## Previous 508-test checkpoint
 
 **508 tests pass**: 72 shared and 436 desktop, zero failures, errors or skips. Ran `gradle :shared:jvmTest :desktopApp:jvmTest :desktopApp:createDistributable --offline` with installed Gradle 8.13 and JDK 17; successful in 38 seconds. Linux image rebuilt at `desktopApp/build/compose/binaries/main/app/RetailPOS`. This supersedes the 424-test checkpoint below. `git diff --check` passes.
 
@@ -14,7 +32,7 @@ Four specialist agents reviewed quotation persistence/output/UI, external-paymen
 - Credit-sale returns reduce unpaid receipt debt first, then refund paid value in cash. Existing repayments must be assigned; reviewed funding changes invalidate the return. Assignment reversal cannot release already-refunded funding. Customer history, dated statements, ageing and product/staff reports distinguish debt reductions, returned goods and actual cash. Original sale/return history remains immutable.
 - Quotations capture goods, pack meanings, exact prices, contacts, notes and expiry in immutable revisions. Issue/accept/cancel do not move goods or money. Reviewed full-cash conversion checks current goods, pack identity, stock, expiry and price bounds and records one linked sale atomically. Credit/electronic/order conversion and reservations remain unavailable.
 - Bulk CSV updates review existing goods, display row errors and before/after values, reject stale versions and apply the full batch atomically with a reason/history. Reviewed SKU/barcode swaps are supported. Stock and completed receipts are unchanged. The earlier add-only new-product importer remains separate.
-- Versioned retail/wholesale/customer quantity price lists require explicit checkout selection; prices may match or reduce normal prices. Supplier invoice metadata includes normalized duplicate checks, reasoned corrections and local evidence-path history. Evidence file content is not managed or included in business backups.
+- Versioned retail/wholesale/customer quantity price lists require explicit checkout selection; prices may match or reduce normal prices. Supplier invoice metadata includes normalized duplicate checks, reasoned corrections and managed bounded PDF/PNG/JPEG evidence and historical attachment backups (corrected by source audit).
 - Opt-in scheduled encrypted local backups retain versions with guarded pruning and bounded session passwords. The app must be running with an authorized session and supplied password. File/password checks do not establish successful recovery on another machine. Working SQLite storage remains unencrypted.
 
 ### Actual rendered disconnected checks — continuation

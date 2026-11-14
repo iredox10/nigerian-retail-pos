@@ -66,3 +66,9 @@ Resolve these with the prototype and [merchant test plan](USABILITY_TEST_PLAN.md
 ## Next implementation target
 
 Build a coherent vertical journey: first item selection → quantity/unit correction → cash or part-credit payment → saved receipt → new sale, including offline and unconfirmed-transfer variants. Use real local persistence when claiming working offline behavior. Visually review at small laptop sizes before expanding the screen catalogue.
+
+## Image workflow — 14 November 2026
+
+The existing reference lock remains: the brief requires useful product pictures without displacing goods, quantities, prices or payment; the guide requires fixed image bounds. Product photos therefore use 48/52 dp aspect-fit thumbnails in Stock/Sell and a 160 dp contextual editor. Shop logo lives in receipt settings, a 64 dp sidebar slot and the first page of new receipt PDFs. Missing thumbnails use a quiet dash with a semantic missing-image label; names and prices remain visible. Labeled choose/preview/save/remove controls and native file pickers follow existing settings forms. Real uploaded raster bytes are used; no catalogue artwork is invented. Supplier invoice image evidence gains an on-demand saved-revision preview. Canonical labels are recorded in copy.json. No palette/token role changes were made.
+
+Selected Linux offline mouse/keyboard checks and actual PDF renders are in BUILD_STATUS.md. Full keyboard-only, assistive-technology and merchant research remain unperformed.
