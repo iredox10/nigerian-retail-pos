@@ -15,6 +15,7 @@ import androidx.compose.ui.unit.dp
 import pos.data.*
 import pos.domain.*
 import pos.output.CsvService
+import pos.output.StatementPdfService
 import pos.output.SupplierAccountStatementService
 import pos.ui.components.*
 import java.time.LocalDate
@@ -197,7 +198,11 @@ private fun SupplierAccountStatementDialog(repo:PosRepository,profile:SupplierPr
             s.events.forEach {event -> Text("${event.createdAt} · ${event.receiptId.takeLast(8)} · ${if(event.laterPaymentMinor>0) "Cash paid ${money(event.laterPaymentMinor)}" else "Purchase ${money(event.purchaseMinor)}"}",style=MaterialTheme.typography.bodySmall)}
         }
         message?.let {InlineNotice(it,tone=NoticeTone.Success)}
-        error?.let {InlineNotice("CSV not saved",it,NoticeTone.Danger)}
+        NeutralButton("Save statement PDF",{try {
+            val file=StatementPdfService.exportSupplier(repo.tenants().single {it.id==profile.tenantId},loaded.getOrThrow())
+            message=if(file==null) "Export cancelled." else "Statement PDF saved to ${file.name}.";error=null
+        } catch(e:Exception) {error=e.message ?: "Statement could not be exported."}},enabled=loaded.isSuccess)
+        error?.let {InlineNotice("Statement not saved",it,NoticeTone.Danger)}
     }},confirmButton={PosButton("Save statement CSV",{try {
         val value=loaded.getOrThrow()
         val file=CsvService.save(SupplierAccountStatementService.csv(value),"supplier-account-${profile.id.takeLast(8)}-$from-to-$through.csv")

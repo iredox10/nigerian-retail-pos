@@ -20,6 +20,9 @@ import pos.output.CustomerStatement
 import pos.output.CustomerStatementService
 import pos.output.DatedCustomerStatementService
 import pos.output.CsvService
+import pos.output.DatedCustomerStatement
+import pos.output.StatementPdfService
+import java.io.File
 import pos.ui.components.*
 import java.time.Instant
 import java.time.LocalDate
@@ -109,7 +112,7 @@ private fun TenantCustomers(repo: PosRepository, tenantId: String, onChanged: ()
                             val file = CsvService.save(CustomerStatementService.csv(history), "retail-pos-customer-${customer.id.take(8)}-statement.csv")
                             if (file != null) { message = "Customer statement saved to ${file.absolutePath}"; error = null }
                         } catch (e: Exception) { error = e.message ?: "Statement could not be saved. No records changed." }
-                    })
+                    }, {view -> StatementPdfService.exportCustomer(repo.tenants().single {it.id==tenantId},view)})
                 }
             }
         }
@@ -132,7 +135,7 @@ private fun TenantCustomers(repo: PosRepository, tenantId: String, onChanged: ()
 }
 
 @Composable
-private fun ColumnScope.CustomerHistory(statement: CustomerStatement, pay: () -> Unit, edit: () -> Unit, assign: () -> Unit, export: () -> Unit) {
+private fun ColumnScope.CustomerHistory(statement: CustomerStatement, pay: () -> Unit, edit: () -> Unit, assign: () -> Unit, export: () -> Unit, exportPdf: (DatedCustomerStatement) -> File?) {
     val customer = statement.customer
     var dated by remember(customer.id) { mutableStateOf(false) }
     val today=remember {LocalDate.now(ZoneId.of("Africa/Lagos"))}
@@ -185,6 +188,12 @@ private fun ColumnScope.CustomerHistory(statement: CustomerStatement, pay: () ->
                                 val text=DatedCustomerStatementService.csv(statement,period.getOrThrow().range)
                                 val file=CsvService.save(text,"customer-${customer.id.take(8)}-$from-to-$through.csv")
                                 exportNotice=if(file==null) "Export cancelled." else "Dated statement saved to ${file.name}."
+                            } catch(e:Exception) {exportNotice="Export failed: ${e.message}"}
+                        },enabled=period.isSuccess)
+                        NeutralButton("Save dated PDF statement",{
+                            try {
+                                val file=exportPdf(period.getOrThrow())
+                                exportNotice=if(file==null) "Export cancelled." else "Dated statement PDF saved to ${file.name}."
                             } catch(e:Exception) {exportNotice="Export failed: ${e.message}"}
                         },enabled=period.isSuccess)
                         exportNotice?.let {Text(it,style=MaterialTheme.typography.bodySmall)}
