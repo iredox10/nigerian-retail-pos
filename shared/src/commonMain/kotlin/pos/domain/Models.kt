@@ -107,7 +107,9 @@ data class Sale(
     val createdAt: String,
     val dueDate: String? = null,
     val basketDiscount: BasketDiscount? = null,
+    val externalPayments: List<ExternalPayment> = emptyList(),
 ) {
+    val externalRecordedMinor:Long get()=externalPaymentTotal(externalPayments)
     init {
         require(dueDate == null || (creditMinor > 0 && isValidCreditDueDate(dueDate))) { "A due date must be a valid YYYY-MM-DD date for a credit sale." }
         require(id.isNotBlank() && tenantId.isNotBlank() && createdAt.isNotBlank())
@@ -116,8 +118,8 @@ data class Sale(
         require(lines.map { it.key }.distinct().size == lines.size) { "Combine repeated items into one line." }
         require(if(basketDiscount==null) lines.all {it.basketDiscountMinor==0L} else allocateBasketDiscount(lines,basketDiscount).map {it.basketDiscountMinor}==lines.map {it.basketDiscountMinor}) { "Basket discount allocations do not match the saved rule." }
         require(totalMinor >= 0 && totalMinor == cartTotal(lines)) { "Sale total does not match its items." }
-        require(cashMinor >= 0 && creditMinor >= 0 && addMoney(cashMinor, creditMinor) == totalMinor) {
-            "Cash and credit must cover the sale exactly."
+        require(cashMinor >= 0 && creditMinor >= 0 && addMoney(addMoney(cashMinor, creditMinor),externalRecordedMinor) == totalMinor) {
+            "Cash, recorded external portions and credit must cover the sale exactly."
         }
         require(customerId == null || customerId.isNotBlank())
         require(creditMinor == 0L || customerId != null) { "Choose a customer for money owed." }

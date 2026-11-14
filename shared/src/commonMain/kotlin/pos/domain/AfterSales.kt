@@ -18,12 +18,14 @@ data class ReturnLine(
 data class SaleReturn(
     val id: String, val tenantId: String, val saleId: String, val lines: List<ReturnLine>,
     val refundMinor: Long, val restock: Boolean, val reason: String, val createdAt: String,
+    val creditReductionMinor: Long = 0,
 ) {
     init {
         require(id.isNotBlank() && tenantId.isNotBlank() && saleId.isNotBlank() && reason.isNotBlank() && createdAt.isNotBlank())
         require(lines.isNotEmpty() && lines.map { it.key }.distinct().size == lines.size)
-        require(refundMinor >= 0 && refundMinor == lines.fold(0L) { total, line -> addMoney(total, line.totalMinor) })
+        require(refundMinor >= 0 && creditReductionMinor >= 0 && addMoney(refundMinor,creditReductionMinor) == lines.fold(0L) { total, line -> addMoney(total, line.totalMinor) })
     }
+    val returnedValueMinor:Long get()=addMoney(refundMinor,creditReductionMinor)
 }
 
 data class SupplierPayment(val id: String, val tenantId: String, val receiptId: String, val supplierName: String, val amountMinor: Long, val createdAt: String) {
