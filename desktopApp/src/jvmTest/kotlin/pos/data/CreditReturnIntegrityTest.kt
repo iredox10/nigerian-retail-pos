@@ -37,7 +37,7 @@ class CreditReturnIntegrityTest {
             val before=repo.exportTenantSnapshot(f.shop.id)
             assertFails {repo.returnItems(f.shop.id,f.sale.id,mapOf(f.item.id to 10),true,"All goods returned","return")}
             assertEquals(before,repo.exportTenantSnapshot(f.shop.id))
-            repo.allocateRepayment(f.shop.id,"payment",f.sale.id,400,"assignment")
+            repo.allocateRepayment(f.shop.id,repo.repayments(f.shop.id).single().id,f.sale.id,400,"assignment")
             repo.openCashShift(f.shop.id,1000)
             val returned=repo.returnItems(f.shop.id,f.sale.id,mapOf(f.item.id to 10),true,"All goods returned","return")
             assertEquals(400L,returned.creditReductionMinor);assertEquals(600L,returned.refundMinor)
@@ -54,7 +54,7 @@ class CreditReturnIntegrityTest {
     @Test fun fullyRepaidCreditSaleReturnsAsCashWithoutChangingOriginalCredit() {
         PosRepository(":memory:").use {repo ->
             val f=repo.fixture(0);repo.recordRepayment(f.shop.id,f.customer.id,1000,"payment")
-            repo.allocateRepayment(f.shop.id,"payment",f.sale.id,1000,"assignment")
+            repo.allocateRepayment(f.shop.id,repo.repayments(f.shop.id).single().id,f.sale.id,1000,"assignment")
             repo.openCashShift(f.shop.id,1000)
             val returned=repo.returnItems(f.shop.id,f.sale.id,mapOf(f.item.id to 10),false,"Paid goods returned","return")
             assertEquals(0L,returned.creditReductionMinor);assertEquals(1000L,returned.refundMinor)
@@ -69,7 +69,7 @@ class CreditReturnIntegrityTest {
     @Test fun insufficientCashOrStaleReviewedSplitLeavesStockDebtAndHistoryUnchanged() {
         PosRepository(":memory:").use {repo ->
             val f=repo.fixture();val reviewed=repo.creditReturnAllowance(f.shop.id,f.sale.id)
-            repo.recordRepayment(f.shop.id,f.customer.id,400,"payment");repo.allocateRepayment(f.shop.id,"payment",f.sale.id,400,"assignment")
+            repo.recordRepayment(f.shop.id,f.customer.id,400,"payment");repo.allocateRepayment(f.shop.id,repo.repayments(f.shop.id).single().id,f.sale.id,400,"assignment")
             repo.openCashShift(f.shop.id,500)
             val before=repo.exportTenantSnapshot(f.shop.id)
             assertFails {repo.returnCreditItemsReviewed(f.shop.id,f.sale.id,mapOf(f.item.id to 1),true,"Stale preview","stale",reviewed)}
@@ -95,11 +95,11 @@ class CreditReturnIntegrityTest {
     @Test fun returnsProtectRepaymentFundingButPermitUnconsumedAssignmentUndo() {
         PosRepository(":memory:").use {repo ->
             val f=repo.fixture(800);repo.recordRepayment(f.shop.id,f.customer.id,200,"payment")
-            repo.allocateRepayment(f.shop.id,"payment",f.sale.id,200,"assignment")
+            repo.allocateRepayment(f.shop.id,repo.repayments(f.shop.id).single().id,f.sale.id,200,"assignment")
             repo.openCashShift(f.shop.id,100)
             repo.returnItems(f.shop.id,f.sale.id,mapOf(f.item.id to 1),false,"One item returned","return")
             repo.reverseRepaymentAllocation(f.shop.id,"assignment","Payment not consumed by refund","undo")
-            assertEquals(200L,repo.unallocatedRepayment(f.shop.id,"payment"))
+            assertEquals(200L,repo.unallocatedRepayment(f.shop.id,repo.repayments(f.shop.id).single().id))
             assertEquals(200L,repo.unallocatedCredit(f.shop.id,f.sale.id))
             assertEquals(0L,repo.customers(f.shop.id).single().balanceMinor)
             assertFails {repo.returnItems(f.shop.id,f.sale.id,mapOf(f.item.id to 1),false,"Another item returned","next")}
@@ -110,8 +110,8 @@ class CreditReturnIntegrityTest {
             val f=repo.fixture(0)
             repo.returnItems(f.shop.id,f.sale.id,mapOf(f.item.id to 6),true,"Six items returned","return")
             repo.recordRepayment(f.shop.id,f.customer.id,400,"payment")
-            assertFails {repo.allocateRepayment(f.shop.id,"payment",f.sale.id,401,"over")}
-            repo.allocateRepayment(f.shop.id,"payment",f.sale.id,400,"assignment")
+            assertFails {repo.allocateRepayment(f.shop.id,repo.repayments(f.shop.id).single().id,f.sale.id,401,"over")}
+            repo.allocateRepayment(f.shop.id,repo.repayments(f.shop.id).single().id,f.sale.id,400,"assignment")
             repo.openCashShift(f.shop.id,400)
             val before=repo.exportTenantSnapshot(f.shop.id)
             repo.setPermissionCheck {_,p ->require(p!=StaffPermission.MANAGE_CUSTOMERS) {"Denied customer corrections"}}

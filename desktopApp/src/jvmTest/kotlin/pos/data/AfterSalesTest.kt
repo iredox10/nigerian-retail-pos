@@ -25,7 +25,7 @@ class AfterSalesTest {
             assertEquals(2,db.saleReturns(t.id).size)
         }
     }
-    @Test fun failedReturnAndUnsupportedCreditReturnLeaveAllLedgersUnchanged() {
+    @Test fun failedReturnAndDeniedCreditReturnLeaveAllLedgersUnchanged() {
         PosRepository(":memory:").use { db ->
             val t=db.createTenant("Shop"); val p=db.addProduct(t.id,"Malt","bottle",50000,10.0)
             val c=db.addCustomer(t.id,"Grace")
@@ -35,7 +35,9 @@ class AfterSalesTest {
             assertFailsWith<IllegalArgumentException> { db.returnItems(t.id,cash.id,mapOf(p.id to 1),true,"Return") }
             val shift=db.openCashShift(t.id,0)
             val pending=db.pendingSyncCount(t.id)
+            db.setPermissionCheck {_,permission -> require(permission!=pos.domain.StaffPermission.MANAGE_CUSTOMERS) {"Denied customer debt corrections"} }
             assertFailsWith<IllegalArgumentException> { db.returnItems(t.id,credit.id,mapOf(p.id to 1),true,"Return") }
+            db.setPermissionCheck(null)
             assertFailsWith<IllegalArgumentException> { db.returnItems(t.id,cash.id,mapOf(p.id to 1),true,"Return") }
             assertEquals(before,db.products(t.id).single().stock)
             assertEquals(0L,db.expectedCash(t.id,shift.id))
