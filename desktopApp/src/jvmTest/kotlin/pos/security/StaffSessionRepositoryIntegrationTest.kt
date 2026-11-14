@@ -74,7 +74,11 @@ class StaffSessionRepositoryIntegrationTest {
                     val owner=requireNotNull(access.unlockOwner(shop.id,"owner-password"))
                     access.addMember(owner,"Private cashier name",StaffRole.CASHIER,"cashier-secret")
                     val snapshot=repo.exportTenantSnapshot(shop.id)
-                    assertFalse(snapshot.tables.keys.any {it.contains("staff") || it.contains("session")})
+                    // Stock-count sessions are business records; credential/session stores are not.
+                    val securityTables=setOf("local_staff","staff_pins","login_attempts","staff_audit","sessions","staff_sessions","owner_credentials")
+                    assertTrue(snapshot.tables.keys.intersect(securityTables).isEmpty())
+                    val secretColumns=setOf("password","password_hash","pin","pin_hash","salt","creation_fingerprint","creation_salt","token","session_token")
+                    assertFalse(snapshot.tables.values.flatten().any {row -> row.keys.any {it in secretColumns}})
                     assertFalse(snapshot.tables.toString().contains("Private cashier name"))
                     assertFalse(snapshot.tables.toString().contains("cashier-secret"))
                     val restored=repo.restoreTenantSnapshot(snapshot,"Restored")
