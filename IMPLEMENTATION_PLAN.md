@@ -32,33 +32,46 @@ Started 13 November 2026. This plan orders execution; the complete scope remains
 - [x] Reconcile feature status and rerun integrated tests: 324 passing tests and a rebuilt Linux application image.
 
 Five agents completed the assigned audit, quantity, backlog, cash and help tasks in
-waves; the audit agent subsequently implemented PINs. Phases 3–5 below remain
-outstanding implementation, not completed work. External integrations are unavailable.
+waves; the audit agent subsequently implemented PINs. Phase 3 now includes the
+completed local slices below; its remaining scope and Phases 4–5 are unfinished.
+External integrations are unavailable.
 
 ## Phase 3: trading and financial completeness
 
-### Current five-agent assignments
+### Completed first-wave five-agent assignments
 
-The following work is underway; assignment does not mean completion. Each agent
-must deliver a usable local journey, meaningful integrity checks and small commits.
-The coordinator integrates migrations, backups, routes and rendered/offline checks.
+The five local slices below are integrated and pass a 389-test suite with zero failures,
+errors or skips. This supersedes the earlier 324-test checkpoint. The coordinator
+integrated migrations, backups and routes. Targeted rendered/offline checks do not
+establish complete keyboard, native-dialog, merchant or hardware acceptance.
 
-- [ ] Basket discounts: exact fixed/percentage allocation, measured quantities, saved baskets and refund conservation.
-- [ ] Supplier profiles: contact/terms/history, explicit purchase links and stable-account statements.
-- [ ] Stock-count sessions: durable multi-item drafts, cutoff/stale-count checks, atomic posting and preserved history.
-- [ ] Barcode labels: validated supported symbology, file generation and native print submission with hardware limits recorded.
-- [ ] Shop and receipt settings: durable business/contact settings, history, backups and rendered receipt branding.
+- [x] Basket discounts: exact fixed/percentage allocation, measured quantities, saved baskets and refund conservation.
+- [x] Supplier profiles: contact/terms/history, explicit purchase links and stable-account statements.
+- [x] Stock-count sessions: durable multi-item drafts, cutoff/stale-count checks, atomic posting and preserved history.
+- [x] Barcode labels: validated supported symbology, file generation and native print submission with hardware limits recorded.
+- [x] Shop and receipt settings: durable business/contact settings, history, backups, immutable receipt identity snapshots and branded A4/58/80 mm PDF receipts. Legacy receipts explicitly lack captured contacts.
 
-These run in waves of up to three workers alongside the coordinator. The full
+A subsequent offline statement-PDF slice adds dated customer and stable supplier-account
+PDF exports using the existing reconciled financial histories. Its targeted run passes
+7 statement tests plus 5 unchanged receipt tests; this is not a new whole-suite count.
+Current contacts, historical receipt names, selected WAT dates and page identities remain explicit.
+Full native save/overwrite/cancel UI acceptance remains pending.
+
+### Next wave underway
+
+- [ ] Purchase orders and partial deliveries: implementation underway; integration, backup and desktop acceptance not yet verified.
+- [ ] Inventory dispositions: implementation underway; integration, backup and desktop acceptance not yet verified.
+
+Work runs in waves of up to three workers alongside the coordinator. The full
 remaining specification below remains in scope; account/hardware/field research
 dependencies must not be marked successful without evidence.
 
-- [ ] Nested packages/repacking, variants/images, labels, reviewed bulk catalogue updates.
-- [ ] Basket discounts, price lists, promotions, bundles, floor-price approvals.
+- [ ] Nested packages/repacking, variants/images, additional label layouts/hardware support and reviewed bulk catalogue updates.
+- [ ] Price lists, promotions, bundles, floor-price approvals and broader basket-discount acceptance.
 - [ ] Explicit manual electronic-payment records, split tenders, customer advances/change owed and reversals.
 - [ ] Credit returns, exchanges, store credit and controlled corrections.
-- [ ] Supplier master accounts, purchasing, partial deliveries, landed costs and supplier credits.
-- [ ] Multi-item counts, stock locations, lots/expiry/serials and valuation.
+- [ ] Purchasing/partial deliveries under implementation, supplier account corrections, landed costs and supplier credits.
+- [ ] Count variance approvals and broader count acceptance, stock locations, lots/expiry/serials and valuation.
 - [ ] Cash custody, accounting/costing, documents, orders and fulfilment.
 
 Each item must be decomposed into a complete usable journey with persistence and

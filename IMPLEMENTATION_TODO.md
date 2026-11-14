@@ -3,18 +3,21 @@
 Authority: FEATURE_SPECIFICATION.md (all 32 sections). Coverage and evidence: IMPLEMENTATION_STATUS.md and BUILD_STATUS.md.
 Provider decisions: [PROVIDER_DECISIONS.md](PROVIDER_DECISIONS.md). Paystack selected; Telegram first; no existing Heroku app.
 
-Reconciled against source and recent commits on 13 November 2026. Use five specialist agents in waves within the available concurrency limit, integrate their work, and make small, explicitly scoped commits. An agent task is not a completion claim.
+Reconciled against source and recent commits on 14 November 2026. Use five specialist agents in waves within the available concurrency limit, integrate their work, and make small, explicitly scoped commits. An agent task is not a completion claim.
 
 A checked box means that specific item has implementation and recorded verification. It does not mark its whole module production-ready. Keep unfinished subtasks unchecked. External prerequisites are dependencies, not completed features. Do not invent credentials, successful integrations, merchant studies or hardware results.
 
 ## Current batch and evidence rules
 
-The current integrated batch passes **324 tests** (35 shared, 289 desktop; zero failures, errors or skips), and the Linux distributable builds. This supersedes the initial 287-test baseline. The coordinating agent performed an isolated Linux desktop check with no external network routes: fractional quantity edits blocked payment until applied, keyboard Tab/Return applied the edit, a discounted 1.375 kg sale completed with correct change, and a separate 0.375 kg cash return restored stock. A denomination closing check saved 9 × ₦1,000 against ₦10,000 expected and retained the ₦1,000 shortage and sheet in Past shifts. Offline Help rendered, and the rebuilt installed binary passed direct practice-launch readiness, duplicate suppression and child termination checks and a subsequent isolated cashier check configured a PIN, unlocked with it, and launched practice through Help. These targeted checks do not establish every keyboard journey, Windows/hardware support or merchant usability. See BUILD_STATUS.md and IMPLEMENTATION_PLAN.md for evidence and limits.
+The completed first-wave integrated batch passes **389 tests** with zero failures, errors or skips, superseding the 324-test and initial 287-test checkpoints. The Linux distributable was rebuilt. A subsequent targeted statement-PDF run passes 12 tests (7 statement and 5 receipt tests); it is not a new whole-suite count. Purchase orders/partial receipt delivery and inventory dispositions are underway in the next wave and are not yet verified as an integrated release. The coordinating agent performed an isolated Linux desktop check with no external network routes: fractional quantity edits blocked payment until applied, keyboard Tab/Return applied the edit, a discounted 1.375 kg sale completed with correct change, and a separate 0.375 kg cash return restored stock. A denomination closing check saved 9 × ₦1,000 against ₦10,000 expected and retained the ₦1,000 shortage and sheet in Past shifts. Offline Help rendered, and the rebuilt installed binary passed direct practice-launch readiness, duplicate suppression and child termination checks and a subsequent isolated cashier check configured a PIN, unlocked with it, and launched practice through Help. These targeted checks do not establish every keyboard journey, Windows/hardware support or merchant usability. See BUILD_STATUS.md and IMPLEMENTATION_PLAN.md for evidence and limits.
 
 - [x] Finish the current exact fractional-quantity service/persistence journey, including receive/sell/count/return, historical snapshots, drafts, CSV and encrypted backups; integrated tests and targeted actual offline desktop checks pass.
 - [x] Integrate and test percentage item discounts, catalogue metadata/filters and dated customer/supplier statement services. Their core implementation is present; broader UI acceptance remains separate.
 - [x] Add and test atomic opening/closing denomination sheets, local six-digit staff PIN policy and searchable offline help with a separate sample process.
-- [ ] Complete full rendered/keyboard/permission/failure acceptance for recent metadata, statement, denomination, PIN and help journeys; retain the distinction between targeted checks and full acceptance.
+- [x] Integrate the five local first-wave slices: whole-basket discounts; stable supplier profiles/accounts; multi-item count sessions; Code128 label output; shop/contact settings and branded PDF receipts. The 389-test run covers their integrated local implementation.
+- [x] Add dated customer and stable-ID supplier statement PDFs using reconciled existing histories; 12 targeted PDF tests pass, including receipt compatibility.
+- [ ] Complete full rendered/keyboard/permission/failure acceptance for recent local journeys, including native PDF dialogs; retain the distinction between targeted checks and full acceptance.
+- [ ] Finish and integrate the next-wave purchase-order/partial-delivery and inventory-disposition work; source in progress is not a verified completion.
 - [ ] Preserve and review pre-existing uncommitted test/artifact changes separately; never absorb unrelated changes into a feature commit.
 
 ## Dependency-ordered execution plan
@@ -24,7 +27,7 @@ See [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md) for the coordinating agent'
 Work is ordered by dependencies, not by hiding any part of the full specification. Each phase uses small working journeys with repository/domain tests, migration and retry checks where relevant, an actual desktop render for changed UI, and truthful evidence in BUILD_STATUS.md. Keep a feature unavailable until its persistence and failure behavior work.
 
 1. **Local feature batch — core integrated; broader acceptance remains.** Exact quantities, historical snapshots, checkout/receiving/counts/returns/drafts/backup/import/export, percentage discounts, catalogue and dated statement services are integrated and tested. Retain pending full UI/failure/keyboard journeys and independent-machine migration/recovery checks; do not reopen completed core work or declare broad acceptance from the targeted renders.
-2. **Close daily local retail gaps.** Add catalogue variants/images/labels and bulk updates; basket discounts/price lists/promotions; customer/supplier profiles and corrections; count sessions and inventory dispositions. Each slice must preserve audit and unit semantics and pass tenant/permission/retry tests. Add settings/document branding and extend the existing offline help/practice guidance without expanding the primary navigation.
+2. **Close daily local retail gaps.** Extend the implemented Code128 labels, basket discounts, stable supplier profiles and count sessions into the remaining catalogue variants/images/bulk updates, price lists/promotions, customer/supplier corrections and inventory dispositions. Each slice must preserve audit and unit semantics and pass tenant/permission/retry tests. Extend settings/document templates beyond the implemented shop branding and PDF receipts, and extend the existing offline help/practice guidance without expanding the primary navigation.
 3. **Establish accounting and custody.** Select and document historical costing/backdating policy before valuation/COGS/profit. Extend the existing denomination sheets/count-entry hiding into cashier/register drawers, secure blind accountability, handovers and controlled period corrections, then source-linked journals and accountant reports. Never call purchase subtraction profit. Verify full stock/cash/debt/journal reconciliation with returns and corrections.
 4. **Harden local identity, storage and recovery.** Extend the implemented local staff PIN policy with approval workflows, credential recovery, protected storage keys, working-data encryption, migration/interruption recovery, diagnostics and versioned backups. Verify denial leaves records unchanged, session revocation, bad keys/corruption/disk-full behavior and restore on another machine. Broader security assessment remains separate.
 5. **Build the online foundation.** Settle device identity, offline authorization duration, command/event schema, movement-based stock and conflict policies. Implement backend accounts/memberships, Postgres migrations, authenticated idempotent API, cursors/acknowledgements/retries and attachment transfer. Test two disconnected devices, duplicate delivery, stale permissions and late closed-period events before showing sync completion.
@@ -74,7 +77,8 @@ Work is ordered by dependencies, not by hiding any part of the full specificatio
 - [ ] Product images and offline attachment storage.
 - [x] Checkout Favourites filter.
 - [ ] Automatic frequently-sold selection.
-- [ ] Barcode label generation and printing.
+- [x] Code128 current-product/selling-pack label PNG output and native print submission, with saved barcode/unit/price snapshots and local decoding tests.
+- [ ] Additional label layouts/symbologies and real printer/scanner verification; print submission does not prove paper delivery.
 - [ ] Bulk edit/update CSV preview, validation, conflict handling and audit.
 - [ ] Opening balance imports for customers/suppliers with source history.
 
@@ -84,7 +88,8 @@ Work is ordered by dependencies, not by hiding any part of the full specificatio
 - [x] Reasoned lower unit prices, original/net price snapshots, exact discounted cash returns and recovered baskets.
 - [x] Per-selling-unit percentage discounts with explicit kobo rounding, recovered drafts and net-price returns; integrated tests and a targeted actual offline fractional-discount sale pass.
 - [ ] Broader percentage-discount UI/failure/keyboard acceptance, including partial-return journeys.
-- [ ] Whole-basket discounts with deterministic line allocation and return handling.
+- [x] Reasoned fixed/percentage whole-basket discounts with deterministic exact line allocation, saved basket recovery and cash-return conservation.
+- [ ] Full basket-discount UI/keyboard/failure acceptance and approval-policy extensions.
 - [ ] Retail/wholesale/customer price lists and quantity breaks.
 - [ ] Promotions, validity periods, usage rules and explicit offline time policy.
 - [ ] Bundles with component stock movements.
@@ -123,29 +128,33 @@ Work is ordered by dependencies, not by hiding any part of the full specificatio
 - [ ] Duplicate customer merge with review and immutable source links.
 - [x] Dated customer CSV statements with reconciled opening/closing debt and WAT cutoffs; integrated automated coverage passes.
 - [ ] Complete dated customer statement desktop/keyboard/failure acceptance.
-- [ ] PDF statements, sharing and server document delivery.
+- [x] Offline dated customer PDF statements with current-contact labels, WAT opening/activity/closing debt, embedded naira font and paginated identity; targeted tests pass.
+- [ ] Full native PDF export/overwrite/cancel acceptance, sharing and server document delivery.
 - [ ] Consented repayment reminders and delivery status.
 
 ## Purchasing and suppliers
 
-- [ ] Supplier master profiles, contacts and terms.
-- [ ] Purchase orders, approvals and multi-line purchasing.
-- [ ] Partial/short/damaged deliveries and outstanding purchase quantities.
+- [x] Local stable-ID supplier profiles, current contacts/terms, archive/edit history, explicit purchase links and reconciled dated account CSV/PDF statements.
+- [ ] Full supplier-account UI/keyboard/failure acceptance and historical contact snapshots.
+- [ ] Purchase orders, approvals and multi-line purchasing — next-wave implementation underway; integrated verification pending.
+- [ ] Partial/short/damaged deliveries and outstanding purchase quantities — partial-delivery implementation underway; integrated verification pending.
 - [ ] Supplier invoice duplicate detection and attachments.
 - [ ] Landed-cost allocation and purchase-cost history/comparisons.
 - [ ] Purchase returns, supplier credit notes and account adjustments.
 - [x] Dated receipt-name supplier statements and CSV, including paid receipts, opening/closing debt and current debt; integrated automated coverage passes.
 - [ ] Complete supplier statement desktop/keyboard/failure acceptance.
-- [ ] Extend statements to supplier master accounts, credits, adjustments and attachments after those source workflows exist.
+- [x] Extend dated statements to explicit stable supplier accounts, preserving historical supplier names on linked receipt activities.
+- [ ] Extend supplier accounts/statements to credits, adjustments and attachments after those source workflows exist; PDF native-dialog acceptance remains pending.
 - [ ] Reorder suggestions and supplier order export.
 
 ## Inventory
 
 - [x] Source movement history and configurable low-stock threshold/filter.
-- [ ] Multi-item stock-count sessions, cutoffs and variance approvals.
+- [x] Durable multi-item stock-count drafts, saved baseline/movement cutoffs, stale-count rejection, atomic posting/cancellation and backup history.
+- [ ] Separate variance approvals, multi-user count coordination and full count UI/failure acceptance.
 - [ ] Locations/bins, reservations and available/in-transit stock.
 - [ ] Lots, expiry dates, serial numbers and stock ageing.
-- [ ] Damage/loss/theft/owner-use adjustments with reason categories.
+- [ ] Damage/loss/theft/owner-use adjustments with reason categories — next-wave implementation underway; integrated verification pending.
 - [ ] Advanced replenishment, safety stock and stockout analysis.
 - [ ] Costing method, historical cost layers and stock valuation.
 
@@ -165,9 +174,12 @@ Work is ordered by dependencies, not by hiding any part of the full specificatio
 
 ## Documents, orders and trade modules
 
-- [ ] Shop/contact/branding settings and receipt templates.
-- [ ] PDF receipts, invoices, quotations, delivery notes and credit notes.
-- [ ] Thermal 58/80 mm layouts and hardware verification.
+- [x] Versioned shop/contact/footer settings with actor history, optimistic edit checks and backup inclusion; new completed sales capture immutable receipt identity. Legacy receipts explicitly lack captured contacts.
+- [ ] Logos, broader template customization and historical tax/contact requirements beyond the captured receipt profile.
+- [x] Branded offline PDF sales receipts and dated customer/supplier statements with embedded fonts, wrapping, pagination and guarded file replacement.
+- [ ] Invoices, quotations, delivery notes, credit notes and document sharing/delivery.
+- [x] A4/58/80 mm PDF receipt layouts with automated extraction, font and pagination checks.
+- [ ] Real thermal-printer delivery/size/scanner compatibility, Windows native dialogs and comprehensive native export acceptance.
 - [ ] Orders, deposits, layaway and reservation expiry.
 - [ ] Fulfilment, backorders, delivery/dispatch and proof of delivery.
 - [ ] Source channels, storefront/payment links and stock buffers.
