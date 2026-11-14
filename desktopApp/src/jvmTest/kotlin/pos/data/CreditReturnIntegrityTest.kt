@@ -122,6 +122,24 @@ class CreditReturnIntegrityTest {
             assertEquals(before,repo.exportTenantSnapshot(f.shop.id))
         }
     }
+    @Test fun backupCannotMoveRefundFundingAssignmentAfterTheReturn() {
+        PosRepository(":memory:").use {repo ->
+            val f=repo.fixture()
+            repo.recordRepayment(f.shop.id,f.customer.id,400,"payment")
+            repo.allocateRepayment(f.shop.id,repo.repayments(f.shop.id).single().id,f.sale.id,400,"assignment")
+            repo.openCashShift(f.shop.id,1000)
+            val returned=repo.returnItems(f.shop.id,f.sale.id,mapOf(f.item.id to 10),true,"All goods returned","return")
+            val snapshot=repo.exportTenantSnapshot(f.shop.id)
+            val later=java.time.Instant.parse(returned.createdAt).plusSeconds(1).toString()
+            val tampered=snapshot.copy(tables=snapshot.tables+("repayment_allocations" to snapshot.tables.getValue("repayment_allocations").map {it+("created_at" to later)}))
+            val before=repo.tenants()
+            assertFails {repo.restoreTenantSnapshot(tampered,"Changed funding time")}
+            assertEquals(before,repo.tenants())
+            val restored=repo.restoreTenantSnapshot(snapshot,"Valid funding")
+            assertEquals(600L,repo.saleReturns(restored.id).single().refundMinor)
+        }
+    }
+
     @Test fun sourcesAreImmutableAndOmissionsOrTamperingRejectBackupAtomically() {
         val dir=Files.createTempDirectory("credit-return-test-")
         try {
