@@ -15,6 +15,8 @@ class PriceListTest {
         assertEquals(100L,quote.discount()?.amountMinor)
         assertEquals(PriceListSource("list",2,2000,2000),PriceListSource.decode(quote.sourceReason))
         assertTrue(quote.sourceReason.length<=250)
+        assertEquals("Price list · revision 2",displayPriceListReason(quote.sourceReason))
+        assertEquals("Agreed discount",displayPriceListReason("Agreed discount"))
         assertFails {PriceListSource.decode("@price-list/1/list/02/2000/2000")}
     }
     @Test fun invalidScopesDuplicateAndIncreasingBreaksAreRejected() {

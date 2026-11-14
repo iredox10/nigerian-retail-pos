@@ -28,7 +28,7 @@ data class PriceListDetails(val name:String,val kind:PriceListKind,val customerI
 }
 
 data class PriceList(val id:String,val tenantId:String,val details:PriceListDetails,val version:Long,val updatedAt:String) {
-    init {require(id.isNotBlank() && tenantId.isNotBlank() && version>0 && updatedAt.isNotBlank())}
+    init {require(id.matches(Regex("[A-Za-z0-9_-]{1,100}")) && tenantId.isNotBlank() && version>0 && updatedAt.isNotBlank())}
 }
 
 data class PriceListChange(val id:String,val tenantId:String,val listId:String,val previous:PriceListDetails?,val current:PriceListDetails,val version:Long,val reason:String,val createdAt:String) {
@@ -62,3 +62,6 @@ data class PriceListSource(val listId:String,val version:Long,val minimumQuantit
         }
     }
 }
+
+/** Merchant copy never exposes the machine source token used for historical validation. */
+fun displayPriceListReason(reason:String):String = PriceListSource.decode(reason)?.let {"Price list · revision ${it.version}"} ?: reason
