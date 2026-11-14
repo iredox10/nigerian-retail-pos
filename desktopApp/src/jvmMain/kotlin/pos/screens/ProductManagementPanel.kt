@@ -52,7 +52,7 @@ internal fun ProductManagementPanel(
             SectionHeader(product.name, "Selling unit: ${product.unit} · ${product.stockLabel} available")
             if (product.archived) InlineNotice("Archived item", "Saved sales and history are kept. Restore this item before selling, receiving or counting it.", NoticeTone.Warning)
             Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                listOf("Details", "Catalogue", "Selling units", "Buying units", "Count stock", "History").forEach { label ->
+                listOf("Details", "Catalogue", "Selling units", "Buying units", "Labels", "Count stock", "History").forEach { label ->
                     FilterChip(selected = tab == label, onClick = { tab = label; error = null }, label = { Text(label) })
                 }
             }
@@ -89,6 +89,7 @@ internal fun ProductManagementPanel(
                 "Catalogue" -> ProductCataloguePanel(repo, tenantId, product, onChanged)
                 "Selling units" -> SellingUnitsPanel(repo, tenantId, product)
                 "Buying units" -> BuyingUnitsPanel(repo, tenantId, product)
+                "Labels" -> BarcodeLabelsPanel(repo, tenantId, product)
                 "Count stock" -> Surface(shape = MaterialTheme.shapes.medium, color = PosPalette.Surface) {
                     Column(Modifier.fillMaxWidth().padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                         SectionHeader("What did you count?", "For a stock correction, loss or recount. Use Add stock for goods received from a supplier.")
