@@ -11,6 +11,7 @@ import androidx.compose.ui.unit.dp
 import pos.data.PosRepository
 import pos.domain.Tenant
 import pos.output.BackupService
+import pos.backup.AutoBackupCoordinator
 import pos.security.WorkspaceAccess
 import pos.ui.components.*
 import java.nio.file.Path
@@ -18,7 +19,7 @@ import javax.swing.JFileChooser
 import javax.swing.filechooser.FileNameExtensionFilter
 
 @Composable
-fun BackupPanel(repo: PosRepository, tenant: Tenant) {
+fun BackupPanel(repo: PosRepository, tenant: Tenant, automaticBackups:AutoBackupCoordinator?=null) {
     var password by remember(tenant.id) { mutableStateOf("") }
     var repeat by remember(tenant.id) { mutableStateOf("") }
     var result by remember(tenant.id) { mutableStateOf<String?>(null) }
@@ -47,6 +48,7 @@ fun BackupPanel(repo: PosRepository, tenant: Tenant) {
             } catch(e:Exception) { error=e.message ?: "The backup could not be saved. Existing files were not replaced." }
             finally { saving=false }
         },enabled=!saving)
+        automaticBackups?.let {AutoBackupPanel(it,tenant)}
     }
 }
 
