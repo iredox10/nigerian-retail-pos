@@ -80,7 +80,7 @@ fun ReportsScreen(repo: PosRepository, tenantId: String) {
                     sum(sales.map { it.totalMinor }), sum(sales.map { it.cashMinor }), sum(sales.map { it.creditMinor }),
                     sum(records.customers.map { it.balanceMinor }), sum(cash.filter { it.kind == "repayment" }.map { it.amountMinor }),
                     sum(expenses.map { it.amountMinor }), sum(returns.map { it.refundMinor }), sum(receipts.map { it.totalCostMinor }),
-                    sum(receipts.map { it.paidCashMinor }), sum(supplierPayments.map { it.amountMinor }), sum(cash.map { it.amountMinor }),
+                    sum(receipts.map { it.paidCashMinor }), sum(supplierPayments.map { it.amountMinor }), sum(cash.map { it.amountMinor }),sum(sales.map {it.externalRecordedMinor}),sum(returns.map {it.creditReductionMinor}),
                 )
             }
             calculated.exceptionOrNull()?.let { InlineNotice("Report could not be calculated", it.message ?: "A stored date or amount needs checking.", NoticeTone.Danger) }
@@ -90,6 +90,8 @@ fun ReportsScreen(repo: PosRepository, tenantId: String) {
                     LabelValueRow("Original sales total", money(amounts.sales), emphasized = true)
                     LabelValueRow("Cash applied when these sales were made", money(amounts.saleCash))
                     LabelValueRow("Credit granted when these sales were made", money(amounts.saleCredit))
+                    LabelValueRow("External portions recorded · not confirmed",money(amounts.externalRecorded))
+                    LabelValueRow("Customer debt reduced by returns in range",money(amounts.creditReduced))
                     LabelValueRow("Cash customer repayments received in range", money(amounts.repayments))
                     LabelValueRow("Cash refunds recorded in range", money(amounts.refunds))
                     Text("Refunds use the return date and may relate to sales outside this range. Original sale totals and credit do not change after later repayments or returns.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -111,8 +113,8 @@ fun ReportsScreen(repo: PosRepository, tenantId: String) {
 
             Surface(shape = MaterialTheme.shapes.medium) { Column(Modifier.fillMaxWidth().padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                 SectionHeader("Export this shop's records", "CSV for a spreadsheet · Current product export includes archived items; customer and stock snapshots are not historical views")
-                if(selectedExport=="Staff activity") Text("Sales and refunds are grouped by the person who recorded each action, using their saved name and role. Refunds are not charged to the original salesperson. Earlier actions may have no actor recorded. This is not a commission or profit report.",style=MaterialTheme.typography.bodySmall)
-                if(selectedExport=="Product performance") Text("Sales and refunds use their own recorded dates. Returns may relate to older sales, so net sales and quantities can be negative. This is not profit or cash received. Quantities use each historical base unit.",style=MaterialTheme.typography.bodySmall)
+                if(selectedExport=="Staff activity") Text("Sales and returns are grouped by the person who recorded each action, using their saved name and role. Returns are not charged to the original salesperson. Earlier actions may have no actor recorded. This is not a commission or profit report.",style=MaterialTheme.typography.bodySmall)
+                if(selectedExport=="Product performance") Text("Sales and returned goods use their own recorded dates. Returns may relate to older sales, so net sales and quantities can be negative. This is not profit or cash received. Quantities use each historical base unit.",style=MaterialTheme.typography.bodySmall)
                 if(selectedExport=="Payment assignments") Text("Assignment dates use the selected period; Active/Undone status reflects all corrections saved now.",style=MaterialTheme.typography.bodySmall)
                 if(selectedExport=="Assignment corrections") Text("Includes undo events recorded in the selected period, even when the original assignment is older.",style=MaterialTheme.typography.bodySmall)
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -154,4 +156,4 @@ fun ReportsScreen(repo: PosRepository, tenantId: String) {
     }
 }
 
-private data class ReportAmounts(val sales: Long, val saleCash: Long, val saleCredit: Long, val currentDebt: Long, val repayments: Long, val expenses: Long, val refunds: Long, val purchases: Long, val purchaseCash: Long, val supplierPayments: Long, val netCash: Long)
+private data class ReportAmounts(val sales: Long, val saleCash: Long, val saleCredit: Long, val currentDebt: Long, val repayments: Long, val expenses: Long, val refunds: Long, val purchases: Long, val purchaseCash: Long, val supplierPayments: Long, val netCash: Long,val externalRecorded:Long,val creditReduced:Long)

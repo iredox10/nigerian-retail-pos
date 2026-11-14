@@ -31,6 +31,15 @@ class StaffPerformanceServiceTest {
         assertContains(csv,"Sales after discounts NGN")
     }
 
+    @Test fun creditReturnsSeparateGoodsValueFromCashAndDebtReduction() {
+        val creditSale=sale.copy(cashMinor=50,creditMinor=150,customerId="customer")
+        val creditReturn=refund.copy(refundMinor=0,creditReductionMinor=100)
+        val row=StaffPerformanceService.build("shop",listOf(creditSale),listOf(creditReturn),events,range).single {it.actor==manager}
+        assertEquals(0L,row.refundsMinor)
+        assertEquals(100L,row.returnedValueMinor)
+        assertEquals(100L,row.debtReducedMinor)
+    }
+
     @Test fun repeatedForeignOrMissingSourcesRejectRatherThanDoubleCount() {
         assertFails {StaffPerformanceService.build("other",listOf(sale),listOf(refund),events,range)}
         assertFails {StaffPerformanceService.build("shop",listOf(sale),listOf(refund),events+events.first(),range)}
