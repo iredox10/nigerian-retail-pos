@@ -23,6 +23,7 @@ import pos.screens.AuditScreen
 import pos.screens.SellScreen
 import pos.screens.StockScreen
 import pos.screens.ShopSettingsScreen
+import pos.screens.InventoryDispositionsScreen
 import pos.screens.StockCountSessionsScreen
 import pos.screens.MoneyScreen
 import pos.screens.SalesScreen
