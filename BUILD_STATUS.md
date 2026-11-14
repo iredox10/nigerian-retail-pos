@@ -1,8 +1,38 @@
 # Desktop build status
 
-14 November 2026 · Purchasing, stock control, basket discounts and printable documents
+14 November 2026 · Local tenders, credit returns, quotations and catalogue updates
 
 ## Current integrated checkpoint
+
+**508 tests pass**: 72 shared and 436 desktop, zero failures, errors or skips. Ran `gradle :shared:jvmTest :desktopApp:jvmTest :desktopApp:createDistributable --offline` with installed Gradle 8.13 and JDK 17; successful in 38 seconds. Linux image rebuilt at `desktopApp/build/compose/binaries/main/app/RetailPOS`. This supersedes the 424-test checkpoint below. `git diff --check` passes.
+
+Four specialist agents reviewed quotation persistence/output/UI, external-payment records, credit-return reconciliation and bulk catalogue updates. Root integrated schemas/backups, permission routes, report semantics and recovered drafts. Small commits separate domain, persistence, output, UI and fixes.
+
+### Local scope delivered in this continuation
+
+- Manual transfer/card records retain reference and receiving account/terminal, with explicit **not confirmed** status. Checkout supports one external portion plus cash and optional named-customer credit. External money is excluded from drawer cash. Drafts, receipts, search and CSV preserve it. Provider verification, settlement, reversals and external-method refunds remain unavailable.
+- Credit-sale returns reduce unpaid receipt debt first, then refund paid value in cash. Existing repayments must be assigned; reviewed funding changes invalidate the return. Assignment reversal cannot release already-refunded funding. Customer history, dated statements, ageing and product/staff reports distinguish debt reductions, returned goods and actual cash. Original sale/return history remains immutable.
+- Quotations capture goods, pack meanings, exact prices, contacts, notes and expiry in immutable revisions. Issue/accept/cancel do not move goods or money. Reviewed full-cash conversion checks current goods, pack identity, stock, expiry and price bounds and records one linked sale atomically. Credit/electronic/order conversion and reservations remain unavailable.
+- Bulk CSV updates review existing goods, display row errors and before/after values, reject stale versions and apply the full batch atomically with a reason/history. Reviewed SKU/barcode swaps are supported. Stock and completed receipts are unchanged. The earlier add-only new-product importer remains separate.
+- Versioned retail/wholesale/customer quantity price lists require explicit checkout selection; prices may match or reduce normal prices. Supplier invoice metadata includes normalized duplicate checks, reasoned corrections and local evidence-path history. Evidence file content is not managed or included in business backups.
+- Opt-in scheduled encrypted local backups retain versions with guarded pruning and bounded session passwords. The app must be running with an authorized session and supplied password. File/password checks do not establish successful recovery on another machine. Working SQLite storage remains unencrypted.
+
+### Actual rendered disconnected checks — continuation
+
+Linux Compose ran with sample data in Xvfb at 1440 × 1000 inside a user/network namespace with loopback only and no external route. Keyboard typing, Tab and selected pointer actions were exercised. These are targeted checks, not a full keyboard-only/accessibility study or merchant research.
+
+- Saved a ₦14,000 sale as a manually recorded ₦10,000 transfer plus ₦4,000 cash; completion explicitly says external payment **not confirmed**: [payment form](artifacts/desktop-manual-transfer-split-preview.png), [saved result](artifacts/desktop-manual-transfer-split-saved.png). This is sample bookkeeping, not a bank integration result.
+- Returned two sample bottles worth ₦1,000 from a part-credit receipt. Review split ₦750 debt reduction / ₦250 cash refund; saved result preserved original history: [review](artifacts/desktop-credit-return-split-preview.png), [saved return](artifacts/desktop-credit-return-saved.png).
+- Issued two bottles at an agreed ₦450 each, recorded acceptance, reviewed ₦900 full cash, and converted to one linked sale. Stock changed from 237 to 235 bottles: [issued quotation](artifacts/desktop-quotation-issued.png), [conversion review](artifacts/desktop-quotation-cash-review.png), [converted](artifacts/desktop-quotation-converted.png). Native quotation PDF save/cancel/overwrite was not exercised; output is covered by automated PDF tests.
+- Exported a real sample catalogue CSV through the native chooser, edited it under `/tmp`, reopened it through the chooser, reviewed one changed item among six, entered a reason, confirmed and saved. Soap changed ₦450→₦475 with SKU/category/favourite while remaining 96 pieces: [review](artifacts/desktop-bulk-catalogue-preview.png), [saved batch](artifacts/desktop-bulk-catalogue-saved.png), [Stock favourite](artifacts/desktop-bulk-catalogue-favourite.png).
+
+New automated checks include tenant isolation, rollback, immutable history, stale/retry identity, backup tampering, funding chronology, shared pack/base stock, recovered external drafts and JVM screen loading. Broader native coverage for backup scheduling, price-list setup, supplier invoice corrections, all changed failure/keyboard paths and compact layouts remains pending. Windows packaging, real printers/scanners/drawers, merchant comprehension, independent-machine restore and online services remain unperformed.
+
+### Retained earlier targeted evidence
+
+The earlier percentage-item and dated-statement checks are also retained: [percentage preview](artifacts/desktop-percentage-preview.png), [saved cash sale](artifacts/desktop-percentage-sale.png), [net refund preview](artifacts/desktop-percentage-refund-preview.png), [saved refund](artifacts/desktop-percentage-refund-saved.png), [dated customer statement](artifacts/desktop-customer-dated-statement.png). These sample checks predate this continuation and do not establish broader acceptance.
+
+## Previous 424-test integrated checkpoint
 
 **424 tests pass**: 56 shared and 368 desktop, zero failures, errors or skips. Ran `gradle :shared:jvmTest :desktopApp:jvmTest :desktopApp:createDistributable --offline` using installed Gradle 8.13 and JDK 17; successful in 27 seconds. The rebuilt Linux application image is at `desktopApp/build/compose/binaries/main/app/RetailPOS`. This supersedes the 389-test first-wave and 324-test earlier checkpoints. Windows packaging and hardware/merchant acceptance remain pending.
 

@@ -79,7 +79,8 @@ Work is ordered by dependencies, not by hiding any part of the full specificatio
 - [ ] Automatic frequently-sold selection.
 - [x] Code128 current-product/selling-pack label PNG output and native print submission, with saved barcode/unit/price snapshots and local decoding tests.
 - [ ] Additional label layouts/symbologies and real printer/scanner verification; print submission does not prove paper delivery.
-- [ ] Bulk edit/update CSV preview, validation, conflict handling and audit.
+- [x] Reviewed bulk CSV update with row errors, stale checks, atomic application, identifier swaps and immutable before/after history.
+- [ ] Broader bulk CSV keyboard/failure/large-catalogue acceptance.
 - [ ] Opening balance imports for customers/suppliers with source history.
 
 ## Pricing and checkout
@@ -90,26 +91,30 @@ Work is ordered by dependencies, not by hiding any part of the full specificatio
 - [ ] Broader percentage-discount UI/failure/keyboard acceptance, including partial-return journeys.
 - [x] Reasoned fixed/percentage whole-basket discounts with deterministic exact line allocation, saved basket recovery and cash-return conservation.
 - [ ] Full basket-discount UI/keyboard/failure acceptance and approval-policy extensions.
-- [ ] Retail/wholesale/customer price lists and quantity breaks.
+- [x] Versioned retail/wholesale/customer quantity price lists, explicit checkout review, provenance checks and historical sale snapshots; reduction-only.
+- [ ] Automatic pricing/markups and broader price-list UI/keyboard acceptance.
 - [ ] Promotions, validity periods, usage rules and explicit offline time policy.
 - [ ] Bundles with component stock movements.
 - [ ] Minimum selling prices, cost/margin warnings and approval controls.
-- [ ] Bulk repricing with preview and change history.
+- [x] Bulk catalogue repricing via reviewed CSV with stale checks and change history.
 - [ ] Described unlisted/open-price sale items with permissions.
-- [ ] Basket/sale notes and frozen agreed prices for held quotations.
+- [x] Separate quotations with frozen agreed goods/units/prices, notes, expiry, revisions, acceptance/cancellation and reviewed full-cash sale conversion.
+- [ ] General basket/sale notes and quotation conversion to orders/credit/electronic payment.
 - [ ] Sale backdating with effective and recorded timestamps and permissions.
 - [ ] Historical tender/change snapshots and receipt-number policy.
 
 ## Payments and returns
 
-- [ ] Manual transfer/card recording with explicit unverified status and references.
-- [ ] Split cash/transfer/card payments and payment allocation across invoices.
+- [x] Manual transfer/card portions with explicit unverified status, reference/account, immutable storage and receipt/CSV history.
+- [x] Checkout split of one external portion, cash and optional explicit named-customer credit; draft recovery and reference search.
+- [ ] Multiple external portions in checkout UI and allocation across invoices.
 - [ ] Underpayment/overpayment, customer advances and change-owed liabilities.
 - [ ] Payment reversal and dispute workflows preserving the ledger.
 - [ ] Provider adapter, authenticated webhook verification and idempotent processing.
 - [ ] Recheck/retry state machine and verified payment UI.
 - [ ] Provider settlement batches, fees and bank reconciliation.
-- [ ] Credit-sale returns with repayment/debt reconciliation.
+- [x] Credit-sale returns reduce unpaid receipt debt first, refund paid value in cash, require reconciled repayment assignments and retain immutable source history.
+- [ ] Broader credit-return keyboard/failure acceptance and original-method external refunds.
 - [ ] Exchanges and price differences.
 - [ ] Store-credit and original-method refunds.
 - [ ] No-receipt returns policy, approval and damaged/quarantined goods.
@@ -139,7 +144,8 @@ Work is ordered by dependencies, not by hiding any part of the full specificatio
 - [x] Local purchase-order drafts, approval/cancellation and atomic multi-line purchasing with immutable history.
 - [x] Partial deliveries and explicit outstanding purchase quantities.
 - [ ] Damaged/quarantined delivery workflows and discrepancy resolution.
-- [ ] Supplier invoice duplicate detection and attachments.
+- [x] Supplier invoice metadata, normalized duplicate review, immutable reasoned corrections and local evidence-path history.
+- [ ] Managed supplier attachment bytes, portability/backup and broader invoice UI acceptance.
 - [ ] Landed-cost allocation and purchase-cost history/comparisons.
 - [ ] Purchase returns, supplier credit notes and account adjustments.
 - [x] Dated receipt-name supplier statements and CSV, including paid receipts, opening/closing debt and current debt; integrated automated coverage passes.
@@ -178,7 +184,8 @@ Work is ordered by dependencies, not by hiding any part of the full specificatio
 - [x] Versioned shop/contact/footer settings with actor history, optimistic edit checks and backup inclusion; new completed sales capture immutable receipt identity. Legacy receipts explicitly lack captured contacts.
 - [ ] Logos, broader template customization and historical tax/contact requirements beyond the captured receipt profile.
 - [x] Branded offline PDF sales receipts and dated customer/supplier statements with embedded fonts, wrapping, pagination and guarded file replacement.
-- [ ] Invoices, quotations, delivery notes, credit notes and document sharing/delivery.
+- [x] Frozen quotation PDF/text including historical revision output.
+- [ ] Invoices, delivery notes, credit notes and document sharing/delivery.
 - [x] A4/58/80 mm PDF receipt layouts with automated extraction, font and pagination checks.
 - [ ] Real thermal-printer delivery/size/scanner compatibility, Windows native dialogs and comprehensive native export acceptance.
 - [ ] Orders, deposits, layaway and reservation expiry.
@@ -234,7 +241,8 @@ Work is ordered by dependencies, not by hiding any part of the full specificatio
 ## Security, recovery and release acceptance
 
 - [ ] Encrypted working database/drafts with protected device keys.
-- [ ] Automatic/versioned/cloud backups and recovery on another machine.
+- [x] Opt-in scheduled versioned encrypted local backups with verified encryption/password checks, guarded retention and bounded session-key lifecycle.
+- [ ] Cloud backups, app-closed scheduling, independent-machine restore drill and broad native backup acceptance.
 - [ ] MFA, remote device/session revocation and account closure.
 - [ ] Fail-safe disk-full/interruption/corruption recovery.
 - [ ] Threat review and security assessment.

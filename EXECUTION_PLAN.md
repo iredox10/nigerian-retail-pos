@@ -12,11 +12,11 @@ Started 13 November 2026. Authority: FEATURE_SPECIFICATION.md; detailed requirem
 
 ## Current batch
 
-- [ ] Agent 1: exact scaled-quantity foundation and boundary tests. Fractional stock/checkout migration remains a separate dependent integration.
-- [ ] Agent 2: catalogue SKU/category/brand/aliases, favourites, search/filter, history, migration and backup compatibility.
-- [ ] Agent 3: percentage item discounts, explicit rounding/reasons, checkout UI and regression tests.
-- [ ] Agent 4: receipt-based supplier statements and dated, reconciled exports; scheduled as a concurrency slot becomes available.
-- [ ] Root: integrate CSV/schema/UI changes, review permissions/retries/financial invariants, run integrated tests/package, inspect native renders where possible and record unperformed checks.
+- [x] Agent 1: exact scaled-quantity foundation and boundary tests. Fractional stock/checkout migration remains a separate dependent integration.
+- [x] Agent 2: catalogue SKU/category/brand/aliases, favourites, search/filter, history, migration and backup compatibility.
+- [x] Agent 3: percentage item discounts, explicit rounding/reasons, checkout UI and regression tests.
+- [x] Agent 4: receipt-based supplier statements and dated, reconciled exports; scheduled as a concurrency slot becomes available.
+- [x] Root: integrate CSV/schema/UI changes, review permissions/retries/financial invariants, run integrated tests/package, inspect native renders where possible and record unperformed checks.
 - [x] Root: recorded-date historical customer debt and configurable report ageing bands, including correction chronology and date validation.
 - [x] Root: product sales/refunds and recorded-staff activity exports.
 
@@ -36,3 +36,7 @@ Started 13 November 2026. Authority: FEATURE_SPECIFICATION.md; detailed requirem
 ## Acceptance evidence
 
 Each implementation batch updates BUILD_STATUS.md and IMPLEMENTATION_STATUS.md with actual commands/results, screenshots, and limitations. Physical hardware, merchant testing, platform-specific checks and external services remain unchecked until performed.
+
+## Later checkpoints
+
+The original four-agent batch above is complete. Subsequent quantity, cash, purchasing and document waves are recorded in IMPLEMENTATION_PLAN.md. The 14 November continuation used four specialist reviews for quotations, manual external payments, credit returns and reviewed bulk catalogue updates. LOCAL_DESKTOP_TODO.md is the current local backlog; BUILD_STATUS.md records the 508-test integrated checkpoint and selected actual offline checks. Unchecked broader requirements remain unfinished.

@@ -100,3 +100,11 @@ external dependencies. Local work must not claim those dependencies have succeed
 
 The detailed checklist remains authoritative for unlisted subtasks. No phase removes
 the rest of the specification or substitutes automated tests for field validation.
+
+## 14 November continuation — integrated local trade batch
+
+- [x] Four specialist reviews: quotations, manual external payments, credit returns and bulk catalogue updates, in concurrency-limited waves.
+- [x] Root storage/backup/permission integration, explicit desktop routes and recovered split-payment drafts.
+- [x] Versioned reduction-only price lists, supplier invoice metadata/correction evidence and opt-in encrypted scheduled local backup services/UI.
+- [x] 508 integrated tests, Linux packaging and selected disconnected native workflows. Detailed evidence and limits are in BUILD_STATUS.md.
+- [ ] Extend these slices into the unchecked LOCAL_DESKTOP_TODO.md scope; no whole specification section is complete.
