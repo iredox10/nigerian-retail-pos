@@ -64,6 +64,7 @@ internal fun PosRepository.validateMinimumPrices(tenantId:String) {
     require(policies.map {it.terms.key}.toSet()==changes.map {it.current.key}.toSet()) {"Backup minimum-price policies have incomplete history."}
     changes.groupBy {it.current.key}.forEach {(_,history) ->
         history.forEachIndexed {index,event ->
+            Instant.parse(event.createdAt)
             validateFloorOwner(tenantId,event.current.productId,event.current.sellingUnitId,false)
             require(event.version==index+1L && event.previous==history.getOrNull(index-1)?.current) {"Backup minimum-price revisions are inconsistent."}
             require(index==0 || !Instant.parse(event.createdAt).isBefore(Instant.parse(history[index-1].createdAt))) {"Backup minimum-price dates are inconsistent."}

@@ -105,6 +105,20 @@ class MinimumPriceIntegrityTest {
             bad.forEach {assertFails {repo.restoreTenantSnapshot(it,"Invalid")};assertEquals(before,repo.tenants())}
         }
     }
+    @Test fun malformedFirstPolicyDateCannotPassRestoreBeforeAnySalesExist() {
+        PosRepository(":memory:").use {repo ->
+            val shop=repo.createTenant("Shop");val item=repo.addProduct(shop.id,"Soap","piece",100,5.0)
+            repo.saveMinimumPrice(shop.id,item.id,null,90,0,"First policy")
+            val snapshot=repo.exportTenantSnapshot(shop.id)
+            val bad=snapshot.copy(tables=snapshot.tables+
+                ("minimum_price_policies" to snapshot.tables.getValue("minimum_price_policies").map {it+("updated_at" to "not-a-date")})+
+                ("minimum_price_changes" to snapshot.tables.getValue("minimum_price_changes").map {it+("created_at" to "not-a-date")}))
+            val before=repo.tenants()
+            assertFails {repo.restoreTenantSnapshot(bad,"Bad date")}
+            assertEquals(before,repo.tenants())
+        }
+    }
+
     @Test fun noPolicyLegacyBackupMayOmitNewTablesAndCaptureMarker() {
         PosRepository(":memory:").use {repo ->
             val shop=repo.createTenant("Legacy");val item=repo.addProduct(shop.id,"Soap","piece",100,5.0)
