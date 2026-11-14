@@ -53,10 +53,11 @@ data class Quotation(
     val totalMinor:Long get()=lines.fold(0L) {sum,line ->addMoney(sum,line.totalMinor)}
 }
 
-data class QuotationEvent(val id:String,val quotationId:String,val kind:String,val reason:String,val createdAt:String,val snapshot:Quotation) {
+data class QuotationEvent(val id:String,val quotationId:String,val kind:String,val reason:String,val createdAt:String,val snapshot:Quotation,val requestFingerprint:String?=null) {
     init {
         require(id.isNotBlank() && quotationId==snapshot.id && createdAt.isNotBlank())
         require(kind in setOf("issued","revised","accepted","cancelled","converted"))
+        require((kind=="converted")== (requestFingerprint!=null) && (requestFingerprint==null || requestFingerprint.matches(Regex("[a-f0-9]{64}"))))
         require(reason==reason.trim() && reason.length in 3..250 && reason.none {it.isISOControl()}) {"Enter a reason from 3 to 250 printable characters."}
     }
 }
