@@ -6,6 +6,16 @@ import kotlin.test.assertEquals
 import kotlin.test.assertNull
 
 class DraftStoreTest {
+    @Test fun externalPortionsSurviveRestartWithoutBasketDiscount() {
+        val directory = Files.createTempDirectory("pos-external-draft-test")
+        try {
+            val draft = SaleDraft("item:1", "external-operation", "25", method="split_credit",
+                externalMethod="card", externalAmountText="75", externalReference="terminal-ref", externalAccount="Till one")
+            DraftStore("shop", directory).save(draft)
+            assertEquals(draft, DraftStore("shop", directory).load())
+        } finally { directory.toFile().deleteRecursively() }
+    }
+
     @Test fun mixedPackAndLooseKeysSurviveRestartWithoutCombiningQuantities() {
         val directory = Files.createTempDirectory("pos-pack-draft-test")
         try {
