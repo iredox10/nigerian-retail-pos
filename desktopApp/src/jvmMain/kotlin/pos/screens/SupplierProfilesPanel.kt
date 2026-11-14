@@ -32,6 +32,7 @@ internal fun SupplierProfilesPanel(repo:PosRepository,tenantId:String,onChanged:
     var editing by remember {mutableStateOf(false)}
     var creating by remember {mutableStateOf(false)}
     var statementOpen by remember {mutableStateOf(false)}
+    var invoicesOpen by remember {mutableStateOf(false)}
     var linking by remember {mutableStateOf(false)}
     var historyOpen by remember {mutableStateOf(false)}
     var message by remember {mutableStateOf<String?>(null)}
@@ -78,6 +79,7 @@ internal fun SupplierProfilesPanel(repo:PosRepository,tenantId:String,onChanged:
                         NeutralButton("Edit supplier",{editing=true})
                         NeutralButton("View statement",{statementOpen=true})
                     }
+                    NeutralButton("Supplier invoices & evidence",{invoicesOpen=true})
                     NeutralButton("Link an older purchase",{linking=true},enabled=!selected.archived)
                     TextButton({historyOpen=!historyOpen}) {Text(if(historyOpen) "Hide profile history" else "View profile history")}
                 }}}
@@ -109,6 +111,7 @@ internal fun SupplierProfilesPanel(repo:PosRepository,tenantId:String,onChanged:
         if(creating) repo.addSupplierProfile(tenantId,details,operation) else repo.updateSupplierProfile(tenantId,selected!!.id,details,archived,selected.version,reason,operation)
         creating=false;editing=false;refresh("Supplier profile saved on this computer")
     }
+    if(invoicesOpen && selected!=null) SupplierInvoicesDialog(repo,selected,{invoicesOpen=false}) {revision++;onChanged()}
     if(statementOpen && selected!=null) SupplierAccountStatementDialog(repo,selected) {statementOpen=false}
     if(linking && selected!=null) LinkSupplierReceiptDialog(repo,selected,records.third.filter {receipt -> records.second.none {it.receiptId==receipt.id}},{linking=false}) {linking=false;refresh("Purchase linked. Its recorded name and money are unchanged.")}
 }
