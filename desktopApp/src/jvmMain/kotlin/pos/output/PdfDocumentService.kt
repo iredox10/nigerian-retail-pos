@@ -5,6 +5,10 @@ import org.apache.pdfbox.pdmodel.PDPage
 import org.apache.pdfbox.pdmodel.PDPageContentStream
 import org.apache.pdfbox.pdmodel.common.PDRectangle
 import org.apache.pdfbox.pdmodel.font.PDType0Font
+import org.apache.pdfbox.pdmodel.graphics.image.LosslessFactory
+import org.apache.pdfbox.pdmodel.graphics.image.PDImageXObject
+import java.io.ByteArrayInputStream
+import javax.imageio.ImageIO
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.nio.file.Files
@@ -29,10 +33,12 @@ object PdfDocumentService {
     private data class Row(val text:String,val size:Float,val bold:Boolean) {val height:Float get()=size*1.4f}
     private const val FONT_ROOT="/composeResources/pos.shared.generated.resources/font/"
 
-    fun createPdf(text:String,kind:PdfDocumentKind,paper:String="A4"):ByteArray {
+    fun createPdf(text:String,kind:PdfDocumentKind,paper:String="A4",logoPng:ByteArray?=null):ByteArray {
+        require(logoPng==null || kind==PdfDocumentKind.RECEIPT) {"Shop logos are supported on sales receipts only."}
         require(paper in setOf("A4","58mm","80mm")) {"Choose A4, 58 mm or 80 mm PDF paper."}
         require(text.isNotBlank() && text.length<=1_000_000 && text.lines().size<=20_000) {"Document text is empty or too large."}
         return PDDocument().use {document ->
+            val logo=logoPng?.let {receiptLogo(document,it)}
             val regular=loadFont(document,"ibm_plex_sans_regular.ttf")
             val bold=loadFont(document,"ibm_plex_sans_semibold.ttf")
             val thermal=paper!="A4"
@@ -40,6 +46,10 @@ object PdfDocumentService {
             val margin=if(thermal) 9f else 36f
             val bodySize=if(thermal) 8.5f else 10.5f
             val contentWidth=pageSize.width-2*margin
+            val logoScale=logo?.let {minOf((if(thermal) 100f else 144f)/it.width,(if(thermal) 44f else 72f)/it.height,1f)} ?: 0f
+            val logoWidth=(logo?.width ?: 0)*logoScale
+            val logoHeight=(logo?.height ?: 0)*logoScale
+            val logoSpace=if(logo!=null) logoHeight+12f else 0f
             val rows=text.lines().flatMapIndexed {index,line ->
                 require(line.none {it.isISOControl() && it!='\t'}) {"Document text contains an unsupported control character."}
                 val clean=line.replace('\t',' ')
@@ -54,7 +64,7 @@ object PdfDocumentService {
                 identity.flatMap {wrap(it,regular,bodySize,contentWidth,kind).map {part -> Row(part,bodySize,false)}}+Row("",bodySize,false)
             val available=pageSize.height-2*margin-20f
             val pages=mutableListOf<MutableList<Row>>(mutableListOf())
-            var used=0f
+            var used=logoSpace
             rows.forEach {row ->
                 if(used+row.height>available && pages.last().isNotEmpty()) {
                     require(pages.size<500) {"Document exceeds the supported PDF page count."}
@@ -68,6 +78,10 @@ object PdfDocumentService {
                 val page=PDPage(pageSize);document.addPage(page)
                 PDPageContentStream(document,page).use {stream ->
                     var y=pageSize.height-margin
+                    if(index==0 && logo!=null) {
+                        stream.drawImage(logo,margin+(contentWidth-logoWidth)/2,y-logoHeight,logoWidth,logoHeight)
+                        y-=logoSpace
+                    }
                     pageRows.forEach {row ->
                         y-=row.size
                         if(row.text.isNotEmpty()) {
@@ -84,9 +98,9 @@ object PdfDocumentService {
     }
 
     /** Existing files require a separately obtained user confirmation. Failed rendering leaves them intact. */
-    fun writePdf(text:String,kind:PdfDocumentKind,paper:String,destination:Path,replaceExisting:Boolean=false):Path {
+    fun writePdf(text:String,kind:PdfDocumentKind,paper:String,destination:Path,replaceExisting:Boolean=false,logoPng:ByteArray?=null):Path {
         require(replaceExisting || !Files.exists(destination)) {"Choose a new filename; this PDF already exists."}
-        val bytes=createPdf(text,kind,paper)
+        val bytes=createPdf(text,kind,paper,logoPng)
         val absolute=destination.toAbsolutePath()
         val temp=Files.createTempFile(absolute.parent,".document-",".pdf.tmp")
         try {
@@ -99,7 +113,7 @@ object PdfDocumentService {
         return absolute
     }
 
-    fun export(text:String,kind:PdfDocumentKind,paper:String="A4"):File? {
+    fun export(text:String,kind:PdfDocumentKind,paper:String="A4",logoPng:ByteArray?=null):File? {
         val chooser=JFileChooser().apply {
             dialogTitle="Save ${kind.label} PDF ($paper)"
             fileFilter=FileNameExtensionFilter("PDF document (*.pdf)","pdf")
@@ -110,7 +124,24 @@ object PdfDocumentService {
         val file=if(chosen.name.endsWith(".pdf",true)) chosen else File(chosen.parentFile,chosen.name+".pdf")
         val replace=file.exists()
         if(replace && onSwing {JOptionPane.showConfirmDialog(null,"Replace ${file.name}?","Replace ${kind.label} PDF",JOptionPane.YES_NO_OPTION)}!=JOptionPane.YES_OPTION) return null
-        return writePdf(text,kind,paper,file.toPath(),replace).toFile()
+        return writePdf(text,kind,paper,file.toPath(),replace,logoPng).toFile()
+    }
+
+    /** Decode only bounded local PNG bytes. Bad branding must not overwrite an existing export. */
+    private fun receiptLogo(document:PDDocument,bytes:ByteArray):PDImageXObject {
+        require(bytes.size in 8..1_048_576 && bytes.copyOfRange(0,8).contentEquals(byteArrayOf(-119,80,78,71,13,10,26,10))) {"The saved shop logo must be a PNG image up to 1 MB."}
+        val image=ImageIO.createImageInputStream(ByteArrayInputStream(bytes)).use {input ->
+            require(input!=null) {"The saved shop logo could not be read."}
+            val readers=ImageIO.getImageReaders(input)
+            require(readers.hasNext()) {"The saved shop logo is not a readable PNG."}
+            val reader=readers.next()
+            try {
+                reader.input=input
+                require(reader.formatName.equals("png",true) && reader.getWidth(0) in 1..1024 && reader.getHeight(0) in 1..1024) {"The saved shop logo exceeds the supported 1024-pixel dimensions."}
+                requireNotNull(reader.read(0)) {"The saved shop logo could not be decoded."}
+            } finally {reader.dispose()}
+        }
+        return LosslessFactory.createFromImage(document,image)
     }
 
     private fun loadFont(document:PDDocument,name:String):PDType0Font {
