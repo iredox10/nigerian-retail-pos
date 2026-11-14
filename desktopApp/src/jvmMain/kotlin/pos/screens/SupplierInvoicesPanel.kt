@@ -60,6 +60,9 @@ internal fun SupplierInvoicesDialog(repo:PosRepository,profile:SupplierProfile,d
                 invoice.details.notes?.let {Text("Notes: $it",style=MaterialTheme.typography.bodySmall)}
                 invoice.details.duplicateReviewReason?.let {Text("Repeated number reviewed: $it",style=MaterialTheme.typography.bodySmall)}
                 invoice.attachment?.let {Text("Attachment: ${it.fileName} · ${it.mediaType} · ${it.byteSize} bytes",style=MaterialTheme.typography.bodySmall)}
+                invoice.attachment?.takeIf {it.mediaType.startsWith("image/")}?.let {ref ->
+                    InvoiceImagePreview(repo,profile.tenantId,invoice.id,invoice.version,ref)
+                }
                 Row(horizontalArrangement=Arrangement.spacedBy(8.dp)) {
                     TextButton({editing=invoice}) {Text("Correct record")}
                     TextButton({historyId=if(historyId==invoice.id)null else invoice.id}) {Text(if(historyId==invoice.id) "Hide history" else "View history")}
@@ -82,6 +85,7 @@ internal fun SupplierInvoicesDialog(repo:PosRepository,profile:SupplierProfile,d
                         Text("${event.invoice.details.number} · ${event.invoice.details.invoiceDate} · ${event.invoice.status} · Receipts: ${event.invoice.receiptIds.joinToString {it.takeLast(8)}}",style=MaterialTheme.typography.bodySmall)
                         event.invoice.attachment?.let {ref ->
                             Text("Evidence retained: ${ref.fileName} · SHA-256 ${ref.hash}",style=MaterialTheme.typography.bodySmall)
+                            if(ref.mediaType.startsWith("image/")) InvoiceImagePreview(repo,profile.tenantId,invoice.id,event.invoice.version,ref)
                             TextButton({try {
                                 val chooser=JFileChooser().apply {dialogTitle="Save historical invoice evidence copy";selectedFile=java.io.File(ref.fileName)}
                                 if(chooser.showSaveDialog(null)==JFileChooser.APPROVE_OPTION) {
@@ -165,4 +169,21 @@ private fun SupplierInvoiceEditor(repo:PosRepository,profile:SupplierProfile,inv
         else repo.correctSupplierInvoice(profile.tenantId,invoice.id,details,if(voided)emptyList() else selected.toList(),if(voided)SupplierInvoiceStatus.VOIDED else SupplierInvoiceStatus.ACTIVE,attachment,upload,reason.trim(),invoice.version,operation)
         saved()
     } catch(e:Exception) {error=e.message ?: "Invoice could not be saved. Your entries remain here."}})},dismissButton={TextButton(dismiss) {Text("Cancel")}})
+}
+
+
+/** Bounded evidence preview uses the saved revision's bytes; never opens a remote URL. */
+@Composable
+private fun InvoiceImagePreview(repo:PosRepository,tenantId:String,invoiceId:String,version:Long,ref:SupplierInvoiceAttachmentRef) {
+    var showing by remember(tenantId,invoiceId,version,ref.hash) {mutableStateOf(false)}
+    TextButton({showing=true}) {Text("View image · revision $version")}
+    if(showing) {
+        val loaded=remember(tenantId,invoiceId,version,ref.hash) {runCatching {repo.supplierInvoiceAttachmentBytes(tenantId,invoiceId,version)}}
+        AlertDialog(onDismissRequest={showing=false},title={Text("Invoice image · revision $version")},text={Column(verticalArrangement=Arrangement.spacedBy(12.dp)) {
+            Text(ref.fileName)
+            loaded.getOrNull()?.let {LocalImage(it,"Invoice evidence ${ref.fileName}",Modifier.fillMaxWidth().height(300.dp))}
+            loaded.exceptionOrNull()?.let {InlineNotice("Image unavailable",it.message ?: "Try again.",NoticeTone.Danger)}
+            Text("Saved evidence for this revision. Viewing it does not change stock, debt or payment status.",style=MaterialTheme.typography.bodySmall)
+        }},confirmButton={TextButton({showing=false}) {Text("Close")}})
+    }
 }

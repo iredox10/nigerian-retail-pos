@@ -18,6 +18,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import pos.data.PosRepository
+import pos.data.receiptImageBytes
 import pos.data.receiptProfile
 import pos.data.creditReturnAllowance
 import pos.data.returnCreditItemsReviewed
@@ -153,7 +154,7 @@ private fun TenantSalesScreen(repo: PosRepository, tenantId: String, allowReturn
                                 scope.launch {
                                     try {
                                         val file = withContext(Dispatchers.IO) {
-                                            PdfReceiptService.exportReceipt(receipt, profileResult.getOrNull()?.details?.receiptPaper ?: "A4")
+                                            PdfReceiptService.exportReceipt(receipt, profileResult.getOrNull()?.details?.receiptPaper ?: "A4",repo.receiptImageBytes(tenantId,selected.id))
                                         }
                                         noticeError = false
                                         notice = file?.let { "Receipt PDF saved to ${it.absolutePath}" } ?: "PDF export cancelled. The sale is unchanged."

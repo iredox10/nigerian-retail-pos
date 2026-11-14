@@ -167,6 +167,7 @@ private fun TenantStockScreen(repo: PosRepository, tenantId: String, onChanged: 
                                     Surface(color = PosPalette.Surface) {
                                         Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                                             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(20.dp)) {
+                                                SavedImage(repo,tenantId,"product",product.id,"Photo of ${product.name}",revision,Modifier.size(48.dp))
                                                 Column(Modifier.weight(1f)) {
                                                     Text(product.name, fontWeight = FontWeight.Medium)
                                                     listOfNotNull(product.sku?.let {"SKU $it"},product.category,product.brand,if(product.favourite) "Favourite" else null).takeIf {it.isNotEmpty()}?.let { Text(it.joinToString(" · "),style=MaterialTheme.typography.bodySmall,color=PosPalette.Secondary) }

@@ -15,6 +15,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.window.*
 import pos.domain.*
+import pos.data.imageSelection
+import pos.data.imageBytes
 import pos.data.PosRepository
 import pos.security.WorkspaceAccess
 import pos.security.StaffAccess
@@ -167,6 +169,8 @@ fun main(args: Array<String>) {
             Column(Modifier.width(208.dp).fillMaxHeight().background(MaterialTheme.colorScheme.surface).padding(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Column(Modifier.weight(1f).verticalScroll(rememberScrollState()),verticalArrangement=Arrangement.spacedBy(8.dp)) {
                 Text("RETAIL / POS", fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.primary, fontSize = 14.sp)
+                val logo=remember(current.id,revision) {runCatching {repo.imageSelection(current.id,"shop","shop").assetId?.let {repo.imageBytes(current.id,it)}}.getOrNull()}
+                if(logo!=null) pos.ui.components.LocalImage(logo,"Shop logo",Modifier.padding(top=16.dp).size(64.dp))
                 Text(current.name, style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(vertical = 16.dp))
                 Text(session?.let { "${it.name} · ${it.role.name.lowercase().replaceFirstChar { c -> c.uppercaseChar() }}" } ?: "Isolated owner preview", style = MaterialTheme.typography.labelMedium)
                 Spacer(Modifier.height(20.dp))
@@ -204,7 +208,7 @@ fun main(args: Array<String>) {
                 Box(Modifier.weight(1f).padding(24.dp)) {
                     if (!routeAllowed(route)) Text("Your role cannot open this workspace. Lock the shop to sign in with another account.")
                     else when (route) {
-                        "Sell" -> saleStates.SaveableStateProvider(current.id) { SellScreen(current.id, products, customers, remember(current.id, revision) { repo.sellingUnits(current.id) }, allowCredit = allowed(StaffPermission.SELL_CREDIT), allowDiscounts = allowed(StaffPermission.DISCOUNT),repository=repo) { lines, cash, customer, operationId, dueDate, basketDiscount, externalPayments ->
+                        "Sell" -> saleStates.SaveableStateProvider(current.id) { SellScreen(current.id, products, customers, remember(current.id, revision) { repo.sellingUnits(current.id) }, allowCredit = allowed(StaffPermission.SELL_CREDIT), allowDiscounts = allowed(StaffPermission.DISCOUNT),repository=repo,imageRevision=revision) { lines, cash, customer, operationId, dueDate, basketDiscount, externalPayments ->
                             try { repo.checkout(current.id, lines, cash, customer, operationId,dueDate,basketDiscount,externalPayments); revision++; null } catch (e: Exception) { e.message ?: "Sale not saved" }
                         } }
                         "Stock" -> StockScreen(repo, current.id, onChanged={ revision++ }, onImport={ route="Import" }, onCounts={route="Stock counts"}, onDispositions={route="Stock removed"}, onBulkUpdate={route="Bulk update"}, onPriceLists={route="Price lists"})

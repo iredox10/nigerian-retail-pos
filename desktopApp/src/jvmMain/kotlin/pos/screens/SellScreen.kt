@@ -16,6 +16,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import pos.domain.*
+import pos.ui.components.SavedImage
 import pos.data.DraftDiscountCodec
 import pos.data.DraftStore
 import pos.data.SaleDraft
@@ -34,6 +35,7 @@ fun SellScreen(
     allowCredit: Boolean = true,
     allowDiscounts: Boolean = true,
     repository:pos.data.PosRepository?=null,
+    imageRevision:Int=0,
     onCheckout: (List<CartLine>, Long, String?, String, String?, BasketDiscount?, List<ExternalPayment>) -> String?,
 ) {
     val draftStoreResult = remember(tenantId) { runCatching { DraftStore(tenantId) } }
@@ -221,11 +223,7 @@ fun SellScreen(
                             var choosingUnit by remember(product.id) { mutableStateOf(false) }
                             Surface(Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.medium) {
                                 Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                                    Surface(color = MaterialTheme.colorScheme.surfaceVariant, shape = MaterialTheme.shapes.small) {
-                                        Box(Modifier.size(44.dp), contentAlignment = Alignment.Center) {
-                                            Text(product.name.take(1).uppercase(), fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                        }
-                                    }
+                                    SavedImage(repository,tenantId,"product",product.id,"Photo of ${product.name}",imageRevision,Modifier.size(52.dp))
                                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                                         Text(product.name, fontWeight = FontWeight.Medium, fontSize = 16.sp)
                                         Text("${money(choice.unitPriceMinor)} / ${choice.sellingUnit}", style = MaterialTheme.typography.bodyMedium)
