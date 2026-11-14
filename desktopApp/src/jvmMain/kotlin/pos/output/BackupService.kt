@@ -15,6 +15,8 @@ import javax.crypto.spec.PBEKeySpec
 /** Tenant-only encrypted recovery files; never includes other shops or password credentials. */
 object BackupService {
     private const val LIMIT = 64 * 1024 * 1024
+    // A supported 1 MB invoice file expands to 1.34 MB as base64 in its snapshot field.
+    private const val FIELD_LIMIT = 2 * 1024 * 1024
     private const val ITERATIONS = 210_000
     private val MAGIC = "RETAILPOS-BACKUP-1".toByteArray(Charsets.US_ASCII)
 
@@ -116,10 +118,10 @@ object BackupService {
     }
 
     private fun DataOutputStream.string(value: String) {
-        val bytes = value.toByteArray(Charsets.UTF_8); require(bytes.size <= 1024 * 1024) { "A backup field is too large." }; writeInt(bytes.size); write(bytes)
+        val bytes = value.toByteArray(Charsets.UTF_8); require(bytes.size <= FIELD_LIMIT) { "A backup field is too large." }; writeInt(bytes.size); write(bytes)
     }
     private fun DataInputStream.string(): String {
-        val size = readInt().also { require(it in 0..1024 * 1024) { "Invalid backup field size." } }
+        val size = readInt().also { require(it in 0..FIELD_LIMIT) { "Invalid backup field size." } }
         require(size <= available()) { "Truncated backup field." }
         return ByteArray(size).also(::readFully).toString(Charsets.UTF_8)
     }

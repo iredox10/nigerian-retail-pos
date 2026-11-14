@@ -105,6 +105,24 @@ class SupplierInvoiceIntegrityTest {
             assertEquals(before,repo.tenants())
         }
     }
+    @Test fun supportedLargeImageEvidenceFitsEncryptedBackupFieldBounds() {
+        val image=java.awt.image.BufferedImage(600,500,java.awt.image.BufferedImage.TYPE_INT_RGB)
+        val random=java.util.Random(7301)
+        for(y in 0 until image.height) for(x in 0 until image.width) image.setRGB(x,y,random.nextInt(0x1000000))
+        val bytes=ByteArrayOutputStream().also {javax.imageio.ImageIO.write(image,"png",it)}.toByteArray()
+        assertTrue(bytes.size in 786433..1048576)
+        val directory=Files.createTempDirectory("invoice-large-backup")
+        try {
+            PosRepository(":memory:").use {repo ->
+                val(t,s)=setup(repo)
+                val invoice=repo.recordSupplierInvoice(t,s,SupplierInvoiceDetails("LARGE","2026-11-14"),listOf("r1"),SupplierInvoiceAttachmentUpload.fromBytes("large.png",bytes),"large")
+                val backup=directory.resolve("shop.backup")
+                BackupService.create(repo,t,"invoice-backup-password",backup)
+                val restored=repo.restoreTenantSnapshot(BackupService.read(backup,"invoice-backup-password"),"Recovered image")
+                assertContentEquals(bytes,repo.supplierInvoiceAttachmentBytes(restored.id,invoice.id))
+            }
+        } finally {directory.toFile().deleteRecursively()}
+    }
     @Test fun recordsSurviveRestartAndEvidenceCannotBeEdited() {
         val path=Files.createTempDirectory("invoice-restart").resolve("shop.db").toString();var tenant=""
         PosRepository(path).use {repo ->val(t,s)=setup(repo);tenant=t;repo.recordSupplierInvoice(t,s,SupplierInvoiceDetails("1","2026-11-14"),listOf("r1"),operationId="i")}
