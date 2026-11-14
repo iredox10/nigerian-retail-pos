@@ -56,7 +56,7 @@ class QuotationIntegrityTest {
             assertFails {repo.convertQuotation(shop.id,accepted.id,accepted.version,"wrong",13750,"conversion")}
             assertFails {repo.convertQuotation(shop.id,accepted.id,accepted.version,review.token,13750,"another-sale")}
             assertEquals(1,repo.sales(shop.id).size)
-            assertEquals(1,repo.cashEntries(shop.id).count {it.sourceId==sale.id})
+            assertEquals(1,repo.cashEntries(shop.id).count {it.kind=="sale"})
             assertEquals(13750L,repo.expectedCash(shop.id,repo.cashShifts(shop.id).single().id))
             assertEquals(sale.id,repo.quotations(shop.id).single().saleId)
             repo.validateQuotations(shop.id)
