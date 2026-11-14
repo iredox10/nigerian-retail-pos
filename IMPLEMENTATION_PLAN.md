@@ -57,10 +57,12 @@ PDF exports using the existing reconciled financial histories. Its targeted run 
 Current contacts, historical receipt names, selected WAT dates and page identities remain explicit.
 Full native save/overwrite/cancel UI acceptance remains pending.
 
-### Next wave underway
+### Subsequent local wave verified
 
-- [ ] Purchase orders and partial deliveries: implementation underway; integration, backup and desktop acceptance not yet verified.
-- [ ] Inventory dispositions: implementation underway; integration, backup and desktop acceptance not yet verified.
+Final checkpoint: 424 passing tests (56 shared + 368 desktop), zero failures/errors/skips; Linux package rebuilt. See BUILD_STATUS.md for selected native and PDF evidence.
+
+- [x] Purchase-order drafts/approval/cancellation and atomic multi-line partial receiving: integrated tests, backup/history and selected offline native checks pass. Damaged receipts, landed costs and supplier credits remain pending.
+- [x] Classified physical stock removals: integrated exact-quantity/backup/history tests and selected offline native review/save pass. Accounting valuation remains pending.
 
 Work runs in waves of up to three workers alongside the coordinator. The full
 remaining specification below remains in scope; account/hardware/field research

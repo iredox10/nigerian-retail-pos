@@ -1,8 +1,34 @@
 # Desktop build status
 
-13 November 2026 · Fractional quantities, cash count sheets, staff PINs and offline help
+14 November 2026 · Purchasing, stock control, basket discounts and printable documents
 
 ## Current integrated checkpoint
+
+**424 tests pass**: 56 shared and 368 desktop, zero failures, errors or skips. Ran `gradle :shared:jvmTest :desktopApp:jvmTest :desktopApp:createDistributable --offline` using installed Gradle 8.13 and JDK 17; successful in 27 seconds. The rebuilt Linux application image is at `desktopApp/build/compose/binaries/main/app/RetailPOS`. This supersedes the 389-test first-wave and 324-test earlier checkpoints. Windows packaging and hardware/merchant acceptance remain pending.
+
+## New local functionality — 14 November 2026
+
+- Fixed/percentage basket discounts use integer allocation and preserved net-paid refunds. Restored/changed baskets require explicit review; invalid changes block payment. Supplier profiles retain contact/terms history and explicit stable-account links; legacy name-only receipts remain separate.
+- Multi-item counts save unfinished drafts and post all corrections atomically. Any intervening movement, including a net-zero sale/return, requires a new count. This is a conservative cutoff, not continuous count reconciliation.
+- Versioned shop receipt settings are captured on new sales. PDF receipts support A4/58/80 mm; customer/supplier statements export reconciled local records to A4 PDF with account/period continuation headers. Native PDF save dialogs and real printers still need broader platform testing.
+- Code128 labels use saved base/selling-pack barcodes, integer module widths and quiet zones. PNG export and print submission are implemented; other symbologies, physical scanner readability and printer output remain unverified.
+- Purchase orders support editable drafts, approval, cancellation, explicit partial deliveries, immutable history and CSV exports. Only delivery creates a stock receipt and actual cash/debt effects. Estimated ordered cost can differ from the sum of individually rounded deliveries. Landed costs, supplier credits and damaged-delivery handling remain pending.
+- Reasoned stock removals preserve exact before/after quantities, category, actor and activity history. They change physical stock only; accounting valuation and expense/COGS recognition remain pending.
+
+### Rendered evidence for this batch
+
+Actual Linux Compose checks used the installed app in an isolated practice process, Xvfb at 1440 × 1000 and a network namespace with loopback only. Keyboard typing and selected pointer actions were exercised; full keyboard-only/accessibility and merchant comprehension studies were not performed.
+
+- Entered a 12.5% basket discount on ₦14,000, showing ₦1,750 reduction and ₦12,250 due. Increasing a quantity then disabled payment and requested another review: [applied discount](artifacts/desktop-basket-percentage-applied.png), [blocked changed basket](artifacts/desktop-basket-review-required.png).
+- Saved and posted two physical counts, 94 pieces from 96 and 9.875 kg from 10 kg, with the reason and differences preserved: [posting confirmation](artifacts/desktop-stock-count-review.png), [posted result](artifacts/desktop-stock-count-posted.png).
+- Inspected stable supplier details and ₦18,000 owed on its explicitly linked ₦20,000 purchase: [supplier account](artifacts/desktop-supplier-profile-detail.png).
+- Edited shop name/footer, entered a reason, reached Save through scrolling and saved the form; inspected the saved fields: [receipt settings](artifacts/desktop-shop-settings-saved.png). Historical branding retention is covered by repository tests, not an additional native end-to-end sale in this pass.
+- Inspected the rendered Code128 preview and a generated PNG: [label screen](artifacts/desktop-label-options.png), [label file](artifacts/barcode-label-proof.png). No physical print/scan was performed.
+- Created and approved a 10-piece purchase order at ₦300 each, then entered a partial delivery of 4 pieces with explicit ₦0 cash using keyboard Tab between fields. The saved order shows 4 received and 6 remaining: [approved order](artifacts/desktop-purchase-order-approved.png), [delivery preview](artifacts/desktop-purchase-order-partial-preview.png), [saved delivery](artifacts/desktop-purchase-order-partial-saved.png).
+- Recorded 2 damaged pieces from 96 with a reason, reviewed the 94-piece remainder and saved immutable history: [review](artifacts/desktop-stock-removal-review.png), [saved removal](artifacts/desktop-stock-removal-saved.png).
+- Poppler rendering and text extraction verified the receipt and statement PDFs, readable naira glyphs, wrapping, page identity and reconciliation. Customer debt ₦100−₦32.10=₦67.90; supplier ₦1,481.40−₦281.40−₦32.10=₦1,167.90. [Receipt](artifacts/pdf-branded-receipt.png), [customer statement](artifacts/pdf-customer-statement.png), [supplier first page](artifacts/pdf-supplier-statement.png), [supplier final page](artifacts/pdf-supplier-statement-last-page.png).
+
+## Previous integrated checkpoint
 
 - **324 automated tests pass**: 35 shared and 289 desktop, zero failures, errors or skips. Ran `gradle :shared:jvmTest :desktopApp:jvmTest :desktopApp:createDistributable --offline` with the installed Gradle 8.13 and JDK 17; the final run completed successfully in 24 seconds. The wrapper specifies a different distribution and was not used for this checkpoint.
 - Linux application image rebuilt at `desktopApp/build/compose/binaries/main/app/RetailPOS`. Windows packaging and hardware compatibility remain unverified.

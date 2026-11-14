@@ -9,7 +9,7 @@ A checked box means that specific item has implementation and recorded verificat
 
 ## Current batch and evidence rules
 
-The completed first-wave integrated batch passes **389 tests** with zero failures, errors or skips, superseding the 324-test and initial 287-test checkpoints. The Linux distributable was rebuilt. A subsequent targeted statement-PDF run passes 12 tests (7 statement and 5 receipt tests); it is not a new whole-suite count. Purchase orders/partial receipt delivery and inventory dispositions are underway in the next wave and are not yet verified as an integrated release. The coordinating agent performed an isolated Linux desktop check with no external network routes: fractional quantity edits blocked payment until applied, keyboard Tab/Return applied the edit, a discounted 1.375 kg sale completed with correct change, and a separate 0.375 kg cash return restored stock. A denomination closing check saved 9 × ₦1,000 against ₦10,000 expected and retained the ₦1,000 shortage and sheet in Past shifts. Offline Help rendered, and the rebuilt installed binary passed direct practice-launch readiness, duplicate suppression and child termination checks and a subsequent isolated cashier check configured a PIN, unlocked with it, and launched practice through Help. These targeted checks do not establish every keyboard journey, Windows/hardware support or merchant usability. See BUILD_STATUS.md and IMPLEMENTATION_PLAN.md for evidence and limits.
+The current integrated batch passes **424 tests** (56 shared + 368 desktop), zero failures, errors or skips. The Linux distributable was rebuilt. Basket discounts, supplier profiles, multi-item counts, Code128 labels, receipt settings/PDFs, statement PDFs, purchase orders/partial deliveries and classified physical stock removals are integrated. Selected native offline and rendered PDF checks are recorded in BUILD_STATUS.md. The coordinating agent performed an isolated Linux desktop check with no external network routes: fractional quantity edits blocked payment until applied, keyboard Tab/Return applied the edit, a discounted 1.375 kg sale completed with correct change, and a separate 0.375 kg cash return restored stock. A denomination closing check saved 9 × ₦1,000 against ₦10,000 expected and retained the ₦1,000 shortage and sheet in Past shifts. Offline Help rendered, and the rebuilt installed binary passed direct practice-launch readiness, duplicate suppression and child termination checks and a subsequent isolated cashier check configured a PIN, unlocked with it, and launched practice through Help. These targeted checks do not establish every keyboard journey, Windows/hardware support or merchant usability. See BUILD_STATUS.md and IMPLEMENTATION_PLAN.md for evidence and limits.
 
 - [x] Finish the current exact fractional-quantity service/persistence journey, including receive/sell/count/return, historical snapshots, drafts, CSV and encrypted backups; integrated tests and targeted actual offline desktop checks pass.
 - [x] Integrate and test percentage item discounts, catalogue metadata/filters and dated customer/supplier statement services. Their core implementation is present; broader UI acceptance remains separate.
@@ -17,7 +17,7 @@ The completed first-wave integrated batch passes **389 tests** with zero failure
 - [x] Integrate the five local first-wave slices: whole-basket discounts; stable supplier profiles/accounts; multi-item count sessions; Code128 label output; shop/contact settings and branded PDF receipts. The 389-test run covers their integrated local implementation.
 - [x] Add dated customer and stable-ID supplier statement PDFs using reconciled existing histories; 12 targeted PDF tests pass, including receipt compatibility.
 - [ ] Complete full rendered/keyboard/permission/failure acceptance for recent local journeys, including native PDF dialogs; retain the distinction between targeted checks and full acceptance.
-- [ ] Finish and integrate the next-wave purchase-order/partial-delivery and inventory-disposition work; source in progress is not a verified completion.
+- [x] Integrate purchase orders/partial delivery and classified stock removal; 424-test full suite and selected native offline journeys pass.
 - [ ] Preserve and review pre-existing uncommitted test/artifact changes separately; never absorb unrelated changes into a feature commit.
 
 ## Dependency-ordered execution plan
@@ -136,8 +136,9 @@ Work is ordered by dependencies, not by hiding any part of the full specificatio
 
 - [x] Local stable-ID supplier profiles, current contacts/terms, archive/edit history, explicit purchase links and reconciled dated account CSV/PDF statements.
 - [ ] Full supplier-account UI/keyboard/failure acceptance and historical contact snapshots.
-- [ ] Purchase orders, approvals and multi-line purchasing — next-wave implementation underway; integrated verification pending.
-- [ ] Partial/short/damaged deliveries and outstanding purchase quantities — partial-delivery implementation underway; integrated verification pending.
+- [x] Local purchase-order drafts, approval/cancellation and atomic multi-line purchasing with immutable history.
+- [x] Partial deliveries and explicit outstanding purchase quantities.
+- [ ] Damaged/quarantined delivery workflows and discrepancy resolution.
 - [ ] Supplier invoice duplicate detection and attachments.
 - [ ] Landed-cost allocation and purchase-cost history/comparisons.
 - [ ] Purchase returns, supplier credit notes and account adjustments.
@@ -154,7 +155,7 @@ Work is ordered by dependencies, not by hiding any part of the full specificatio
 - [ ] Separate variance approvals, multi-user count coordination and full count UI/failure acceptance.
 - [ ] Locations/bins, reservations and available/in-transit stock.
 - [ ] Lots, expiry dates, serial numbers and stock ageing.
-- [ ] Damage/loss/theft/owner-use adjustments with reason categories — next-wave implementation underway; integrated verification pending.
+- [x] Damage/loss/theft/owner-use physical stock removals with reason categories and immutable quantity/history snapshots; no financial valuation.
 - [ ] Advanced replenishment, safety stock and stockout analysis.
 - [ ] Costing method, historical cost layers and stock valuation.
 
