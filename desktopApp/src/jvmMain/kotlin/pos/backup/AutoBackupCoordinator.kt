@@ -162,7 +162,11 @@ class AutoBackupCoordinator(
             // Remove ownership from the index before deleting; failed deletion preserves an orphan copy.
             store.saveVersions(tenantId,configuration,all.filterNot {it in prune})
             var failed=0
-            prune.forEach {candidate ->try {Files.delete(directory.resolve(candidate.name))} catch(_:Exception) {failed++}}
+            prune.forEach {candidate ->try {
+                // Recheck after index replacement as another process may have changed the file.
+                verify(tenantId,configuration,candidate,password)
+                Files.delete(directory.resolve(candidate.name))
+            } catch(_:Exception) {failed++}}
             if(failed>0) warnings[tenantId]="$failed older copies could not be removed. The new backup was saved."
         }
         if(invalid>0) warnings[tenantId]="$invalid older missing or changed copies were kept in the index; they were not deleted."
