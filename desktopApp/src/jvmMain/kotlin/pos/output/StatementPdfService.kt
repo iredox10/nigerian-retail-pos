@@ -27,7 +27,7 @@ object StatementPdfService {
             appendLine("Opening debt: ${money(value.openingMinor)}");appendLine()
             if(value.events.isEmpty()) appendLine("No sales or debt repayments recorded in this period.")
             value.events.forEach { (event,balance) ->
-                appendLine("${date(event.createdAt)} | ${if(event.sale!=null) "Original sale" else "Cash debt repayment"}")
+                appendLine("${date(event.createdAt)} | ${if(event.sale!=null) "Original sale" else if(event.repayment!=null) "Cash debt repayment" else "Credit-sale return"}")
                 appendLine("Source ID: ${event.id}")
                 event.sale?.let {sale ->
                     appendLine("Original sale total: ${money(sale.totalMinor)}")
@@ -35,12 +35,18 @@ object StatementPdfService {
                     appendLine("Credit added at sale: ${money(sale.creditMinor)}")
                 }
                 event.repayment?.let {appendLine("Cash received against debt: ${money(it.amountMinor)}")}
+                event.creditReturn?.let {returned ->
+                    appendLine("Original sale: ${returned.saleId}")
+                    appendLine("Debt reduced for returned goods: ${money(returned.amountMinor)}")
+                    appendLine("Cash refunded: ${money(returned.cashRefundMinor)}")
+                    appendLine("This return is not a customer repayment.")
+                }
                 appendLine("Debt after activity: ${money(balance)}");appendLine()
             }
             appendLine("Closing debt: ${money(value.closingMinor)}")
             appendLine("Closing debt is through the selected WAT end date.")
             appendLine("Current debt, all saved dates: ${money(customer.balanceMinor)}")
-            appendLine("Original sales and later repayments remain separate. Cash returns are recorded under Sales.")
+            appendLine("Original sales, later repayments and credit-sale returns remain separate. Cash-only sale returns are under Sales.")
             appendLine("Statement of saved local records. Exporting does not record a sale or payment.")
         }
     }

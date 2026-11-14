@@ -4,14 +4,15 @@ import pos.domain.Customer
 import pos.domain.CustomerRepayment
 import pos.domain.RepaymentAllocation
 import pos.domain.Sale
+import pos.domain.CreditReturnReduction
 import java.math.BigInteger
 import java.time.LocalDate
 
 /** Balance after explicitly assigned repayments, before any unassigned customer payments. */
-data class CreditReceiptBalance(val sale: Sale, val allocatedMinor: Long, val remainingMinor: Long) {
+data class CreditReceiptBalance(val sale: Sale, val allocatedMinor: Long, val remainingMinor: Long,val returnedCreditMinor:Long=0) {
     init {
         require(sale.creditMinor > 0 && allocatedMinor in 0..sale.creditMinor)
-        require(remainingMinor == sale.creditMinor - allocatedMinor)
+        require(returnedCreditMinor>=0 && returnedCreditMinor<=sale.creditMinor && remainingMinor>=0 && remainingMinor == sale.creditMinor - allocatedMinor - returnedCreditMinor)
     }
 }
 
@@ -109,19 +110,21 @@ object DebtAgeingService {
         repayments: List<CustomerRepayment>,
         asOf: LocalDate,
         allocations: List<RepaymentAllocation> = emptyList(),
+        creditReturns:List<CreditReturnReduction> = emptyList(),
     ): List<CreditReviewRow> {
         require(tenantId.isNotBlank()) { "Choose a shop before reviewing credit." }
-        require(customers.all { it.tenantId == tenantId } && sales.all { it.tenantId == tenantId } && repayments.all { it.tenantId == tenantId } && allocations.all { it.tenantId == tenantId }) {
+        require(customers.all { it.tenantId == tenantId } && sales.all { it.tenantId == tenantId } && repayments.all { it.tenantId == tenantId } && allocations.all { it.tenantId == tenantId } && creditReturns.all {it.tenantId==tenantId}) {
             "Credit history includes another shop's records."
         }
         require(customers.map { it.id }.distinct().size == customers.size &&
             sales.map { it.id }.distinct().size == sales.size &&
             repayments.map { it.id }.distinct().size == repayments.size &&
-            allocations.map { it.id }.distinct().size == allocations.size) { "Credit history contains repeated records." }
+            allocations.map { it.id }.distinct().size == allocations.size && creditReturns.map {it.returnId}.distinct().size==creditReturns.size) { "Credit history contains repeated records." }
         val ids = customers.map { it.id }.toSet()
-        require(sales.all { it.customerId == null || it.customerId in ids } && repayments.all { it.customerId in ids }) {
+        require(sales.all { it.customerId == null || it.customerId in ids } && repayments.all { it.customerId in ids } && creditReturns.all {it.customerId in ids}) {
             "Credit history refers to an unavailable customer. Refresh the complete customer list."
         }
+        val returnedBySale=creditReturns.groupBy {it.saleId}.mapValues {(_,rows) ->exactTotal(rows.map {it.amountMinor})}
         val salesById=sales.associateBy { it.id }
         val repaymentsById=repayments.associateBy { it.id }
         allocations.forEach { allocation ->
@@ -134,7 +137,7 @@ object DebtAgeingService {
         val allocatedByPayment=allocations.groupBy { it.repaymentId }.mapValues { (_,rows) -> exactTotal(rows.map { it.amountMinor }) }
         val allocatedBySale=allocations.groupBy { it.saleId }.mapValues { (_,rows) -> exactTotal(rows.map { it.amountMinor }) }
         allocatedByPayment.forEach { (id,amount) -> require(amount<=repaymentsById.getValue(id).amountMinor) { "Assigned payments exceed the received repayment." } }
-        allocatedBySale.forEach { (id,amount) -> require(amount<=salesById.getValue(id).creditMinor) { "Assigned payments exceed the original sale credit." } }
+        allocatedBySale.forEach { (id,amount) -> require(amount<=Math.subtractExact(salesById.getValue(id).creditMinor,returnedBySale[id] ?: 0L)) { "Assigned payments exceed the original sale credit." } }
         // Validate dates even on settled customers; malformed saved data must not quietly disappear.
         val dueDates = sales.associate { sale ->
             val due = sale.dueDate?.let { value ->
@@ -145,14 +148,15 @@ object DebtAgeingService {
             sale.id to due
         }
         return customers.mapNotNull { customer ->
-            val statement = CustomerStatementService.build(tenantId, customer, sales, repayments)
+            val statement = CustomerStatementService.build(tenantId, customer, sales, repayments,creditReturns)
             val creditSales = statement.events.mapNotNull { it.sale }.filter { it.creditMinor > 0 }
             fun sorted(values: List<Sale>) = values.sortedWith(compareBy<Sale> { dueDates[it.id] }.thenBy { it.createdAt }.thenBy { it.id })
             val past = sorted(creditSales.filter { dueDates[it.id]?.isBefore(asOf) == true })
             exactTotal(past.map { it.creditMinor })
             val receiptBalances=sorted(creditSales).map { sale ->
                 val allocated=allocatedBySale[sale.id] ?: 0
-                CreditReceiptBalance(sale,allocated,sale.creditMinor-allocated)
+                val returned=returnedBySale[sale.id] ?: 0L
+                CreditReceiptBalance(sale,allocated,Math.subtractExact(Math.subtractExact(sale.creditMinor,allocated),returned),returned)
             }
             val unassigned=exactTotal(repayments.filter { it.customerId==customer.id }.map { payment -> payment.amountMinor-(allocatedByPayment[payment.id] ?: 0) })
             val remaining=exactTotal(receiptBalances.map { it.remainingMinor })

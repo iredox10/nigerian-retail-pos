@@ -45,7 +45,8 @@ class ProductPerformanceServiceTest {
     @Test fun creditSalesCountAsSalesAndNotAsCashOrProfit() {
         val credit=sale.copy(cashMinor=0,creditMinor=4000,customerId="customer")
         assertEquals(4000L,ProductPerformanceService.build("shop",listOf(credit),emptyList(),range()).single().salesMinor)
-        assertFails {ProductPerformanceService.build("shop",listOf(credit),listOf(refund),range())}
+        val creditReturn=refund.copy(refundMinor=0,creditReductionMinor=2000)
+        assertEquals(2000L,ProductPerformanceService.build("shop",listOf(credit),listOf(creditReturn),range()).single().netSalesMinor)
         val before=sale.copy(createdAt="2026-10-31T22:59:59Z")
         assertTrue(ProductPerformanceService.build("shop",listOf(before),emptyList(),range()).isEmpty())
         val start=sale.copy(createdAt="2026-10-31T23:00:00Z")

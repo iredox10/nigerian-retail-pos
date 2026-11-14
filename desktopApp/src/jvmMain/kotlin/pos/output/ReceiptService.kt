@@ -31,7 +31,9 @@ object ReceiptService {
         require(sale.tenantId == tenant.id) { "This receipt belongs to another shop." }
         require(returns.all { it.tenantId == tenant.id && it.saleId == sale.id }) { "Return records belong to another receipt or shop." }
         val refunded = returns.fold(0L) { total, item -> Math.addExact(total, item.refundMinor) }
-        require(refunded in 0..sale.totalMinor) { "Refund total exceeds the original sale." }
+        val returnedValue=returns.fold(0L) {sum,item ->Math.addExact(sum,item.returnedValueMinor)}
+        val reduced=returns.fold(0L) {sum,item ->Math.addExact(sum,item.creditReductionMinor)}
+        require(returnedValue in 0..sale.totalMinor && refunded<=returnedValue) { "Refund total exceeds the original sale." }
         return buildString {
             appendLine(tenant.name)
             appendLine("SALES RECEIPT")
@@ -43,7 +45,7 @@ object ReceiptService {
                 appendLine("  ${line.quantityLabel} ${line.sellingUnit} x ${money(line.unitPriceMinor)}")
                 if (line.discountPerUnitMinor > 0) {
                     appendLine("  Discount: ${money(line.discountPerUnitMinor)} per ${line.sellingUnit}")
-                    appendLine("  Reason: ${line.discountReason}")
+                    appendLine("  Reason: ${line.discountReason?.let(::displayPriceListReason)}")
                     appendLine("  ${if(line.basketDiscountMinor>0) "Price before basket discount" else "Price paid"}: ${money(line.netUnitPriceMinor)} per ${line.sellingUnit}")
                 }
                 if(line.basketDiscountMinor>0) appendLine("  Basket discount share: ${money(line.basketDiscountMinor)}")
@@ -66,21 +68,26 @@ object ReceiptService {
                 appendLine("Customer owed at sale: ${money(sale.creditMinor)}")
                 appendLine("This is not the customer's current debt.")
                 appendLine(sale.dueDate?.let { "Agreed repayment due date: $it (WAT)" } ?: "No repayment due date recorded")
-            } else appendLine("Paid in cash")
+            } else if(sale.externalPayments.isEmpty()) appendLine("Paid in cash")
+            sale.externalPayments.forEach {p ->appendLine("${p.label}: ${money(p.amountMinor)}");appendLine("Reference: ${p.reference}");appendLine("Receiving account / terminal: ${p.receivingAccount}")}
+            if(sale.externalPayments.isNotEmpty()) appendLine("Manually recorded. This app has not confirmed bank receipt or settlement.")
             // Tender/change are not stored by the initial sale model; never invent them.
             if (returns.isNotEmpty()) {
                 appendLine()
-                appendLine("RETURNS AND CASH REFUNDS")
+                appendLine("RETURNS AND REFUNDS")
                 returns.forEach { item ->
                     appendLine("Return: ${item.id}")
                     appendLine(receiptDate(item.createdAt))
                     item.lines.forEach { line -> appendLine("  ${line.quantityLabel} ${line.unit} ${line.name}") }
+                    appendLine("Returned goods value: ${money(item.returnedValueMinor)}")
                     appendLine("Cash refunded: ${money(item.refundMinor)}")
+                    if(item.creditReductionMinor>0) appendLine("Customer debt reduced: ${money(item.creditReductionMinor)}")
                     appendLine(if (item.restock) "Returned goods added back to stock" else "Returned goods not added to sellable stock")
                     appendLine("Reason: ${item.reason}")
                 }
                 appendLine("Total cash refunded: ${money(refunded)}")
-                appendLine("Sale value after returns: ${money(sale.totalMinor - refunded)}")
+                if(reduced>0) appendLine("Total customer debt reduced: ${money(reduced)}")
+                appendLine("Sale value after returns: ${money(sale.totalMinor - returnedValue)}")
             }
             appendLine()
             appendLine("Saved sale record. Printed/exported copies do")

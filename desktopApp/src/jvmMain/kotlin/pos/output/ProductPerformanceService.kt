@@ -24,7 +24,7 @@ object ProductPerformanceService {
         val refunded=mutableMapOf<Pair<String,String>,Long>()
         returns.forEach { refund ->
             val sale=requireNotNull(source[refund.saleId]) { "Return sale is missing from the complete history." }
-            require(sale.creditMinor==0L && Instant.parse(refund.createdAt)>=Instant.parse(sale.createdAt)) { "Return has an unsupported sale or recorded date." }
+            require(sale.externalPayments.isEmpty() && Instant.parse(refund.createdAt)>=Instant.parse(sale.createdAt)) { "Return has an unsupported sale or recorded date." }
             refund.lines.forEach { line ->
                 val original=requireNotNull(sale.lines.singleOrNull {it.key==line.key}) { "Returned item is missing from its sale." }
                 require(line.unitPriceMinor==original.netUnitPriceMinor && line.baseUnitsPerUnit==original.baseUnitsPerUnit && line.baseUnit==original.product.unit && line.unit==original.sellingUnit && line.quantityPrecision==original.quantityPrecision && line.basePrecision==original.product.quantityPrecision) { "Return does not match the original selling unit or price." }
@@ -65,7 +65,7 @@ object ProductPerformanceService {
         fun text(value:String)=CsvCell.Text(value)
         fun number(value:Long)=CsvCell.Number(value.toString())
         fun amount(value:Long)=CsvCell.Number(BigDecimal.valueOf(value,2).toPlainString())
-        return CsvService.encode(listOf("Product ID","Latest recorded item name in range","Base unit","From WAT","Through WAT","Sold base quantity","Returned base quantity","Net sold base quantity","Sales after discounts NGN","Refunds recorded in range NGN","Net sales NGN"),
+        return CsvService.encode(listOf("Product ID","Latest recorded item name in range","Base unit","From WAT","Through WAT","Sold base quantity","Returned base quantity","Net sold base quantity","Sales after discounts NGN","Returned goods value in range NGN","Net sales NGN"),
             build(tenantId,sales,returns,range).map { row -> listOf(text(row.productId),text(row.name),text(row.baseUnit),text(range.from.toString()),text(range.through.toString()),CsvCell.Number(quantityLabel(row.soldBaseQuantity,row.quantityPrecision)),CsvCell.Number(quantityLabel(row.returnedBaseQuantity,row.quantityPrecision)),CsvCell.Number(if(row.netBaseQuantity<0) "-"+quantityLabel(-row.netBaseQuantity,row.quantityPrecision) else quantityLabel(row.netBaseQuantity,row.quantityPrecision)),amount(row.salesMinor),amount(row.refundsMinor),amount(row.netSalesMinor)) })
     }
 }

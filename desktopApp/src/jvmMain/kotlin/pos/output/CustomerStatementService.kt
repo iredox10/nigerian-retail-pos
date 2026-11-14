@@ -3,6 +3,7 @@ package pos.output
 import pos.domain.Customer
 import pos.domain.CustomerRepayment
 import pos.domain.Sale
+import pos.domain.CreditReturnReduction
 import java.math.BigDecimal
 import java.math.BigInteger
 import java.time.Instant
@@ -10,8 +11,10 @@ import java.time.Instant
 /** Original sales and later debt payments are separate events; repayment is not another sale. */
 data class CustomerStatementEvent(
     val id: String, val createdAt: String, val sale: Sale? = null, val repayment: CustomerRepayment? = null,
+    val creditReturn:CreditReturnReduction? = null,
 ) {
-    init { require((sale == null) != (repayment == null)) }
+    init { require(listOf(sale,repayment,creditReturn).count {it!=null}==1) }
+    val debtDeltaMinor:Long get()=Math.subtractExact(Math.subtractExact(sale?.creditMinor ?: 0L,repayment?.amountMinor ?: 0L),creditReturn?.amountMinor ?: 0L)
 }
 
 data class CustomerStatement(
@@ -20,37 +23,45 @@ data class CustomerStatement(
     val originalSalesMinor: Long,
     val creditGrantedMinor: Long,
     val repaidMinor: Long,
+    val creditReturnedMinor:Long=0,
 )
 
 object CustomerStatementService {
     /** Input is complete local history for a tenant, never an arbitrary date-filtered debt reconstruction. */
-    fun build(tenantId: String, customer: Customer, sales: List<Sale>, repayments: List<CustomerRepayment>): CustomerStatement {
+    fun build(tenantId: String, customer: Customer, sales: List<Sale>, repayments: List<CustomerRepayment>, creditReturns:List<CreditReturnReduction> = emptyList()): CustomerStatement {
         require(tenantId.isNotBlank() && customer.tenantId == tenantId) { "Customer belongs to another shop." }
-        require(sales.all { it.tenantId == tenantId } && repayments.all { it.tenantId == tenantId }) { "History includes another shop's records." }
-        require(sales.map { it.id }.distinct().size == sales.size && repayments.map { it.id }.distinct().size == repayments.size) { "History contains repeated records." }
+        require(sales.all { it.tenantId == tenantId } && repayments.all { it.tenantId == tenantId } && creditReturns.all {it.tenantId==tenantId}) { "History includes another shop's records." }
+        require(sales.map { it.id }.distinct().size == sales.size && repayments.map { it.id }.distinct().size == repayments.size && creditReturns.map {it.returnId}.distinct().size==creditReturns.size) { "History contains repeated records." }
         val customerSales = sales.filter { it.customerId == customer.id }
         val customerPayments = repayments.filter { it.customerId == customer.id }
+        val customerReturns=creditReturns.filter {it.customerId==customer.id}
+        customerReturns.forEach {returned ->
+            val original=requireNotNull(customerSales.singleOrNull {it.id==returned.saleId}) {"Credit return has no original sale for this customer."}
+            require(original.creditMinor>0 && original.externalPayments.isEmpty() && !Instant.parse(returned.createdAt).isBefore(Instant.parse(original.createdAt))) {"Credit return does not match its original sale."}
+        }
+        customerReturns.groupBy {it.saleId}.forEach {(id,rows) ->require(rows.fold(BigInteger.ZERO) {sum,row ->sum+BigInteger.valueOf(row.amountMinor)}<=BigInteger.valueOf(customerSales.single {it.id==id}.creditMinor)) {"Returned credit exceeds the original credit sale."}}
         fun total(values: List<Long>): Long = values.fold(BigInteger.ZERO) { sum, value -> sum.add(BigInteger.valueOf(value)) }.longValueExact()
         val granted = total(customerSales.map { it.creditMinor })
         val paid = total(customerPayments.map { it.amountMinor })
-        require(paid <= granted && granted - paid == customer.balanceMinor) { "Saved customer debt does not match the available history. Refresh before exporting a statement." }
+        val returned=total(customerReturns.map {it.amountMinor})
+        require(paid <= granted && returned<=granted-paid && granted - paid - returned == customer.balanceMinor) { "Saved customer debt does not match the available history. Refresh before exporting a statement." }
         val events = (customerSales.map { CustomerStatementEvent(it.id, it.createdAt, sale = it) } +
-            customerPayments.map { CustomerStatementEvent(it.id, it.createdAt, repayment = it) })
-            .sortedWith(compareBy<CustomerStatementEvent> { Instant.parse(it.createdAt) }.thenBy { if (it.sale != null) 0 else 1 }.thenBy { it.id })
-        return CustomerStatement(customer, events, total(customerSales.map { it.totalMinor }), granted, paid)
+            customerPayments.map { CustomerStatementEvent(it.id, it.createdAt, repayment = it) } + customerReturns.map {CustomerStatementEvent(it.returnId,it.createdAt,creditReturn=it)})
+            .sortedWith(compareBy<CustomerStatementEvent> { Instant.parse(it.createdAt) }.thenBy { if (it.sale != null) 0 else if(it.repayment!=null) 1 else 2 }.thenBy { it.id })
+        return CustomerStatement(customer, events, total(customerSales.map { it.totalMinor }), granted, paid,returned)
     }
 
     fun csv(statement: CustomerStatement): String {
         val verified = build(statement.customer.tenantId, statement.customer,
-            statement.events.mapNotNull { it.sale }, statement.events.mapNotNull { it.repayment })
+            statement.events.mapNotNull { it.sale }, statement.events.mapNotNull { it.repayment },statement.events.mapNotNull {it.creditReturn})
         require(verified == statement) { "Statement contains inconsistent customer history." }
         fun text(value: String) = CsvCell.Text(value)
         fun amount(value: Long) = CsvCell.Number(BigDecimal.valueOf(value, 2).toPlainString())
         val customer = statement.customer
         val rows = statement.events.map { event ->
-            listOf(text(customer.id), text(customer.name), text(event.createdAt), text(if (event.sale != null) "Original sale" else "Cash debt repayment"), text(event.id),
-                amount(event.sale?.totalMinor ?: 0), amount(event.sale?.cashMinor ?: 0), amount(event.sale?.creditMinor ?: 0), amount(event.repayment?.amountMinor ?: 0), text(""),text(event.sale?.dueDate.orEmpty()))
-        } + listOf(listOf(text(customer.id), text(customer.name), text(""), text("Current debt — all dates"), text(""), text(""), text(""), text(""), text(""), amount(customer.balanceMinor),text("")))
-        return CsvService.encode(listOf("Customer ID", "Customer name", "Recorded at UTC", "Activity", "Record ID", "Original sale total NGN", "Cash applied at sale NGN", "Credit added at sale NGN", "Later repayment NGN", "Current debt NGN", "Agreed repayment due date WAT"), rows)
+            listOf(text(customer.id), text(customer.name), text(event.createdAt), text(if (event.sale != null) "Original sale" else if(event.repayment!=null) "Cash debt repayment" else "Credit-sale return"), text(event.id),
+                amount(event.sale?.totalMinor ?: 0), amount(event.sale?.cashMinor ?: 0), amount(event.sale?.creditMinor ?: 0), amount(event.repayment?.amountMinor ?: 0), text(""),text(event.sale?.dueDate.orEmpty()),amount(event.creditReturn?.amountMinor ?: 0),amount(event.creditReturn?.cashRefundMinor ?: 0))
+        } + listOf(listOf(text(customer.id), text(customer.name), text(""), text("Current debt — all dates"), text(""), text(""), text(""), text(""), text(""), amount(customer.balanceMinor),text(""),text(""),text("")))
+        return CsvService.encode(listOf("Customer ID", "Customer name", "Recorded at UTC", "Activity", "Record ID", "Original sale total NGN", "Cash applied at sale NGN", "Credit added at sale NGN", "Later repayment NGN", "Current debt NGN", "Agreed repayment due date WAT","Debt reduced on return NGN","Cash refunded on credit return NGN"), rows)
     }
 }
