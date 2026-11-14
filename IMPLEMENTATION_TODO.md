@@ -146,7 +146,7 @@ Work is ordered by dependencies, not by hiding any part of the full specificatio
 - [x] Local purchase-order drafts, approval/cancellation and atomic multi-line purchasing with immutable history.
 - [x] Partial deliveries and explicit outstanding purchase quantities.
 - [ ] Damaged/quarantined delivery workflows and discrepancy resolution.
-- [x] Supplier invoice metadata, normalized duplicate review, immutable reasoned corrections and local evidence-path history.
+- [x] Supplier invoice metadata, normalized duplicate review, immutable reasoned corrections and managed local evidence history.
 - [x] Managed supplier PDF/PNG/JPEG attachment bytes and historical versions in encrypted backups, with current/historical image preview and file export.
 - [ ] Broader invoice native/keyboard acceptance.
 - [ ] Landed-cost allocation and purchase-cost history/comparisons.
