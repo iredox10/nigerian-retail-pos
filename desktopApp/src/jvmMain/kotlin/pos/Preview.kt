@@ -61,7 +61,7 @@ internal fun runPracticeApplication() {
                 DraftStore(t.id).save(SaleDraft("${malt.id}:3;${rice.id}:1",java.util.UUID.randomUUID().toString()))
             }
         }
-        val route = System.getenv("POS_PREVIEW_SCREEN")?.takeIf { it in setOf("Sell","Stock","Stock counts","Stock removed","Bulk update","Price lists","Quotations","Money","Sales","Customers","Reports","Suppliers","Backup","Import","Credit review","Staff","Audit","Help","Shop settings") } ?: "Sell"
+        val route = System.getenv("POS_PREVIEW_SCREEN")?.takeIf { it in setOf("Sell","Stock","Stock counts","Stock removed","Bulk update","Price lists","Minimum prices","Repacking","Quotations","Money","Sales","Customers","Reports","Suppliers","Backup","Import","Credit review","Staff","Audit","Help","Shop settings") } ?: "Sell"
         val width = System.getenv("POS_PREVIEW_WIDTH")?.toIntOrNull()?.coerceIn(800,1920) ?: 1440
         val height = System.getenv("POS_PREVIEW_HEIGHT")?.toIntOrNull()?.coerceIn(600,1200) ?: 900
         val placement = if (System.getenv("POS_PREVIEW_WIDTH") != null || System.getenv("POS_PREVIEW_HEIGHT") != null) WindowPlacement.Floating else WindowPlacement.Fullscreen

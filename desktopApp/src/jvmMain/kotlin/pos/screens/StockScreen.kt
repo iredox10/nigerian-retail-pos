@@ -31,12 +31,12 @@ import java.util.UUID
 
 /** Every read and write remains scoped to the selected business, including editor state. */
 @Composable
-fun StockScreen(repo: PosRepository, tenantId: String, onChanged: () -> Unit, onImport: (() -> Unit)? = null, onCounts: (() -> Unit)? = null, onDispositions: (() -> Unit)? = null, onBulkUpdate:(()->Unit)?=null, onPriceLists:(()->Unit)?=null) {
-    key(tenantId) { TenantStockScreen(repo, tenantId, onChanged, onImport, onCounts, onDispositions, onBulkUpdate, onPriceLists) }
+fun StockScreen(repo: PosRepository, tenantId: String, onChanged: () -> Unit, onImport: (() -> Unit)? = null, onCounts: (() -> Unit)? = null, onDispositions: (() -> Unit)? = null, onBulkUpdate:(()->Unit)?=null, onPriceLists:(()->Unit)?=null, onMinimumPrices:(()->Unit)?=null, onRepacking:(()->Unit)?=null) {
+    key(tenantId) { TenantStockScreen(repo, tenantId, onChanged, onImport, onCounts, onDispositions, onBulkUpdate, onPriceLists, onMinimumPrices, onRepacking) }
 }
 
 @Composable
-private fun TenantStockScreen(repo: PosRepository, tenantId: String, onChanged: () -> Unit, onImport: (() -> Unit)?, onCounts: (() -> Unit)?, onDispositions: (() -> Unit)?, onBulkUpdate:(()->Unit)?,onPriceLists:(()->Unit)?) {
+private fun TenantStockScreen(repo: PosRepository, tenantId: String, onChanged: () -> Unit, onImport: (() -> Unit)?, onCounts: (() -> Unit)?, onDispositions: (() -> Unit)?, onBulkUpdate:(()->Unit)?,onPriceLists:(()->Unit)?, onMinimumPrices:(()->Unit)?, onRepacking:(()->Unit)?) {
     var revision by remember { mutableStateOf(0) }
     val allProducts = remember(tenantId, revision) { repo.products(tenantId, includeArchived = true) }
     val products = allProducts.filterNot { it.archived }
@@ -63,11 +63,18 @@ private fun TenantStockScreen(repo: PosRepository, tenantId: String, onChanged: 
                 Row(if (compact) Modifier.fillMaxWidth().horizontalScroll(toolbarScroll) else Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     if (!compact) SectionHeader("Stock", "Know what is available and record what came in.", Modifier.weight(1f))
                     if (editor == null) {
-                        if(onBulkUpdate!=null) NeutralButton("Update CSV",onBulkUpdate)
-                        if(onPriceLists!=null) NeutralButton("Price lists",onPriceLists)
-                        if(onDispositions!=null) NeutralButton("Stock removed",onDispositions)
-                        if(onCounts!=null) NeutralButton("Count several items",onCounts)
-                        if(onImport!=null) NeutralButton("Import CSV",onImport)
+                        var toolsOpen by remember {mutableStateOf(false)}
+                        Box {
+                            NeutralButton("Stock tools ▾",{toolsOpen=true})
+                            DropdownMenu(toolsOpen,{toolsOpen=false}) {
+                                listOf("Count several items" to onCounts,"Stock removed" to onDispositions,
+                                    "Price lists" to onPriceLists,"Minimum selling prices" to onMinimumPrices,
+                                    "Repack goods" to onRepacking,"Update existing goods from CSV" to onBulkUpdate,
+                                    "Import new items from CSV" to onImport).forEach {(label,action) ->
+                                    if(action!=null) DropdownMenuItem(text={Text(label)},onClick={toolsOpen=false;action()})
+                                }
+                            }
+                        }
                         NeutralButton("Add item", { savedMessage = null; editor = "item" })
                         PosButton("Add stock", {
                             selectedProductId = null; savedMessage = null; editor = "receive"

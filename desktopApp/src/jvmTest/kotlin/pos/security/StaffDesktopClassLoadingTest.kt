@@ -11,6 +11,7 @@ class StaffDesktopClassLoadingTest {
             "pos.screens.SuppliersScreenKt","pos.screens.CustomerScreenKt","pos.screens.CreditReviewScreenKt",
             "pos.screens.BulkCatalogueUpdateScreenKt","pos.screens.PriceListsScreenKt",
             "pos.screens.QuotationsScreenKt","pos.screens.SalesScreenKt",
+            "pos.screens.MinimumPricesScreenKt","pos.screens.RepackingScreenKt","pos.screens.ExpenseAttachmentsPanelKt","pos.screens.OwnerCashScreenKt",
             "pos.MainKt","pos.PreviewKt").forEach {
             assertNotNull(Class.forName(it,false,javaClass.classLoader))
         }

@@ -38,7 +38,7 @@ fun MoneyScreen(repo: PosRepository, tenantId: String, onChanged: () -> Unit) {
     Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(20.dp)) {
         SectionHeader("Your shop's money", "Cash on this computer · Only this shop's records")
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            listOf("Today's cash", "Expenses", "Past shifts").forEach { label ->
+            listOf("Today's cash", "Expenses", "Owner money", "Past shifts").forEach { label ->
                 FilterChip(tab == label, { tab = label }, label = { Text(label) })
             }
         }
@@ -91,10 +91,14 @@ fun MoneyScreen(repo: PosRepository, tenantId: String, onChanged: () -> Unit) {
                             Text(expense.description, fontWeight = FontWeight.Medium)
                             Text("${expense.category} · ${cashTime(expense.createdAt)}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
-                        MoneyText(expense.amountMinor)
+                        Column(horizontalAlignment=Alignment.End) {
+                            MoneyText(expense.amountMinor)
+                            ExpenseAttachmentsPanel(repo,tenantId,expense.id)
+                        }
                     } }
                 }
             }
+            "Owner money" -> OwnerCashScreen(repo,tenantId) {refresh("Owner money saved on this computer")}
             else -> LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 item { SectionHeader("Past shifts", "Closing a shift preserves its counted cash and any difference. It does not change your sales.") }
                 val closed = shiftsResult.getOrThrow().filter { it.closedAt != null }.sortedByDescending { it.closedAt }
