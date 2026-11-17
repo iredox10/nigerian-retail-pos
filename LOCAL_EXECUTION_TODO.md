@@ -4,13 +4,13 @@
 
 ## Active local batch
 
-- [ ] Minimum prices: versioned explicit policy, final line-total enforcement after all discounts, contextual Stock configuration/history. Separate-identity approvals stay a later dependency.
-- [ ] Repacking: saved declared input/output recipes, explicit batch review, atomic exact stock movements and immutable history. No invented costing.
-- [ ] Expense evidence: copied PDF/PNG/JPEG receipt bytes, reasoned replace/remove history, preview/export and encrypted recovery.
-- [ ] Owner money: explicitly classified cash contributions/drawings, counterparty/reason, immutable entries and export, separate from revenue/operating expenses.
-- [ ] Integrate permissions, schema/backup validation, stock counts and reports; run serialized shared/desktop tests and Linux packaging.
-- [ ] Inspect actual changed desktop journeys with sample records while disconnected; record unperformed hardware/Windows/merchant checks.
-- [ ] Make coherent micro commits and reconcile remaining-feature evidence.
+- [x] Minimum prices: versioned explicit policy, final line-total enforcement after all discounts, contextual Stock configuration/history. Separate-identity approvals stay a later dependency.
+- [x] Repacking: saved declared input/output recipes, explicit batch review, atomic exact stock movements and immutable history. No invented costing.
+- [x] Expense evidence: copied PDF/PNG/JPEG receipt bytes, reasoned replace/remove history, preview/export and encrypted recovery.
+- [x] Owner money: explicitly classified cash contributions/drawings, counterparty/reason, immutable entries and export, separate from revenue/operating expenses.
+- [x] Integrate permissions, schema/backup validation, stock counts and reports; run serialized shared/desktop tests and Linux packaging.
+- [x] Inspect actual changed desktop journeys with sample records while disconnected; record unperformed hardware/Windows/merchant checks.
+- [x] Make coherent micro commits and reconcile remaining-feature evidence.
 
 ## Following local dependency work
 
@@ -25,3 +25,9 @@
 9. Broader keyboard/accessibility/performance checks; Windows and real peripheral/merchant acceptance require their actual environments/evidence.
 
 Online transport, cloud sync/backend enrollment and live provider/messaging integration are not part of this execution batch. Existing local outbox records remain a local implementation detail, never evidence of synchronization.
+
+## Verified checkpoint — 17 November 2026
+
+The four local slices above are integrated, with 555 tests passing (77 shared + 478 desktop) and a rebuilt Linux application image. Selected actual Linux Compose keyboard/pointer checks ran with sample records in an isolated display and loopback-only network namespace: below-minimum checkout rejection, owner contribution review/save, expense receipt import/save/preview and two-batch repacking. BUILD_STATUS.md records screenshots and unperformed broader checks. No cloud transport or sync implementation was added.
+
+The following dependency list remains unfinished; completing this batch does not complete the full local specification.

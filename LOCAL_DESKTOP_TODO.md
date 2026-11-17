@@ -27,17 +27,21 @@ Started 14 November 2026. Scope: the local desktop gaps listed in the conversati
 - [ ] Landed costs with explicit allocation and historical purchase cost comparison.
 - [x] Reviewed bulk CSV catalogue update/repricing with row errors, stale checks and atomic application.
 - [x] Retail/wholesale/customer price lists and quantity breaks with historical sale snapshots.
-- [ ] Minimum-price policy and approval; promotions/bundles with exact stock/discount arithmetic.
+- [x] Versioned base/selling-pack minimum prices, strict final-line enforcement after discounts and historical sale checks.
+- [ ] Separate-identity minimum-price approval/override; promotions/bundles with exact stock/discount arithmetic.
 - [x] Shop logo and one product photo with offline database bytes, reasoned replacement/removal history, Stock/Sell thumbnails, captured receipt logos and encrypted backup/restore.
 - [x] On-demand PNG/JPEG preview of current/historical supplier invoice evidence.
-- [ ] Product variants/variant barcodes, image galleries/cropping/EXIF orientation and expense receipt attachments.
-- [ ] Explicit repacking/nested conversions with conserved inventory and history.
+- [x] Expense receipt PDF/PNG/JPEG attachments, retained historical bytes, preview/export and encrypted recovery.
+- [ ] Product variants/variant barcodes and image galleries/cropping/EXIF orientation.
+- [x] Versioned explicit input/output repacking recipes between two products, reviewed whole-batch execution, atomic paired stock changes and history.
+- [ ] Nested package definitions, multi-input assembly, costing and repacking yield/loss accounting.
 
 ## 4. Cash, customer accounts and accounting
 
 - [ ] Per-cashier/register drawers, handover/sign-off and custody transfers.
 - [ ] Authorized customer debt adjustments/write-offs/reinstatement/disputes; duplicate customer merge.
-- [ ] Owner contributions/drawings and non-cash/accrued expenses.
+- [x] Classified owner cash contributions/drawings, reviewed current drawer balance, linked opposite cash corrections and CSV history.
+- [ ] Formal owner equity/loan accounts and non-cash/accrued expenses.
 - [ ] Document costing/backdating policy; historical cost layers, COGS, stock valuation and reliable profit.
 - [ ] Journals, chart of accounts, period controls and accountant exports.
 
@@ -60,3 +64,7 @@ Started 14 November 2026. Scope: the local desktop gaps listed in the conversati
 Four specialists reviewed quotations, external payments, credit returns and bulk CSV updates in waves. Root integrated storage, routes, draft recovery and report semantics. The final serialized run passes **508 tests** (72 shared + 436 desktop); Linux packaging passes. See BUILD_STATUS.md for actual disconnected sample workflows and screenshots.
 
 Scope limits: checkout currently exposes one external portion plus cash and optional named credit; no provider verification, settlement or external refund. Credit returns require repayment assignment before debt/cash allocation. Price lists are explicitly selected reductions, not automatic pricing or markups. Invoice evidence stores actual bounded PDF/PNG/JPEG bytes and revision history in encrypted backups; the earlier source-path-only description was incorrect. Scheduled backups require the running app, authorized session and supplied password; they are local, not cloud backup or a replacement-machine restore drill. Wider keyboard/accessibility, hardware, Windows and merchant checks remain pending.
+
+## 17 November local trading checkpoint
+
+Minimum prices, explicit repacking recipes, managed expense evidence and classified owner cash are implemented and integrated. **555 tests pass** (77 shared + 478 desktop); Linux image rebuild and selected actual disconnected native workflows pass. See LOCAL_EXECUTION_TODO.md for delivery order and BUILD_STATUS.md for exact evidence. Broader native/hardware/Windows/merchant acceptance remains pending. Cloud sync is excluded by the current user instruction.

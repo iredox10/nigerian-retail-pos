@@ -70,7 +70,8 @@ Work is ordered by dependencies, not by hiding any part of the full specificatio
 - [x] Fractional checkout, stock receiving, cash returns, counts and historical precision/conversion snapshots with tested exact kobo rounding.
 - [x] Legacy quantity migration and backward-compatible drafts/encrypted backups/CSV, including optional quantity_precision import. Legacy fractional precision-zero balances remain visible without silent conversion; only their whole portion is sellable until explicitly reconciled.
 - [ ] Independent-machine restore/migration drills and comprehensive quantity UI/failure acceptance.
-- [ ] Nested package conversion definitions and explicit repacking/break-bulk reconciliation.
+- [x] Explicit versioned source/output repacking recipes and reviewed whole batches with exact atomic stock movements/history.
+- [ ] Nested package definitions, multi-input assembly and repacking costing/yield-loss reconciliation.
 - [x] SKU/category/brand/alias editing, immutable metadata history, CSV snapshots and checkout search/category filters; integrated automated coverage passes.
 - [ ] Complete rendered keyboard/failure acceptance for catalogue metadata/filter workflows.
 - [ ] Product variants and unique variant barcodes.
@@ -97,7 +98,8 @@ Work is ordered by dependencies, not by hiding any part of the full specificatio
 - [ ] Automatic pricing/markups and broader price-list UI/keyboard acceptance.
 - [ ] Promotions, validity periods, usage rules and explicit offline time policy.
 - [ ] Bundles with component stock movements.
-- [ ] Minimum selling prices, cost/margin warnings and approval controls.
+- [x] Versioned base/selling-pack minimum prices and final-line enforcement after every discount, including measured whole-line ceilings; preserved historical checks.
+- [ ] Cost/margin warnings and separately authenticated price approvals/overrides.
 - [x] Bulk catalogue repricing via reviewed CSV with stale checks and change history.
 - [ ] Described unlisted/open-price sale items with permissions.
 - [x] Separate quotations with frozen agreed goods/units/prices, notes, expiry, revisions, acceptance/cancellation and reviewed full-cash sale conversion.
@@ -176,8 +178,10 @@ Work is ordered by dependencies, not by hiding any part of the full specificatio
 - [x] Targeted actual desktop denomination close retained the count sheet and shortage in Past shifts.
 - [ ] Secure blind-accountability policy, cashier handover/sign-off and full denomination UI/keyboard acceptance.
 - [ ] Cash custody transfers and controlled period corrections.
-- [ ] Accrued/recurring expenses, attachments and non-cash funding sources.
-- [ ] Explicit contributions/drawings accounts.
+- [x] Managed expense PDF/PNG/JPEG receipt files with reasoned replace/remove history, preview/export and encrypted backup/restore.
+- [ ] Accrued/recurring expenses and non-cash funding sources.
+- [x] Classified owner drawer contributions/drawings, stale-balance review, append-only opposite cash corrections and history CSV.
+- [ ] Formal owner equity/loan accounts and accounting postings.
 - [ ] Historical COGS and reliable gross/net profit.
 - [ ] Chart of accounts, double-entry journals and period controls.
 - [ ] Trial balance, balance sheet and accounting exports.

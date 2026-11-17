@@ -1,8 +1,29 @@
 # Desktop build status
 
-14 November 2026 · Local tenders, credit returns, quotations and catalogue updates
+17 November 2026 · Local minimum prices, repacking, expense receipts and owner money
 
-## Current integrated checkpoint — shop and product images
+## Current integrated checkpoint — local trading controls
+
+**555 tests pass**: 77 shared + 478 desktop, zero failures/errors/skips. Ran `gradle :shared:jvmTest :desktopApp:jvmTest :desktopApp:createDistributable --offline` using installed Gradle 8.13/JDK 17; successful in 1 minute 14 seconds. Linux image rebuilt at `desktopApp/build/compose/binaries/main/app/RetailPOS`. This supersedes the 519-test checkpoint below. `git diff --check` passes.
+
+- Minimum selling prices have reasoned immutable revisions, optimistic edit checks and tenant/permission boundaries. A base-unit floor also constrains packs; final line values include allocated basket discounts and fractional minimums round upward to kobo. Below-minimum checkout fails atomically. New sales retain policy checks, with a completeness marker for recovery; old sales are not judged by a later policy. Owner/manager settings exist; separate-identity approvals/overrides and margin/cost warnings remain pending.
+- Repacking uses explicitly declared source/output quantities between two distinct catalogue products. Saved recipes retain revisions; whole batches require current-stock review and a reason. Both exact stock changes save in one transaction, appear in stock history and invalidate stale physical counts, including net-zero movement cases. There is no inferred equivalence, new selling-unit definition, cost allocation, sale or cash effect. Multi-input assembly, costing/yield-loss accounting and nested package definitions remain pending.
+- Expense receipts copy real bounded PDF/PNG/JPEG bytes into local storage. Reasoned replacements/removals retain history; current and earlier files can be previewed/exported. Encrypted backups validate attachment content, ownership, chronology and revision/activity completeness. Files support up to 1 MB each with an 8 MB retained expense-evidence budget per shop. Expense amount/cash remains unchanged. Accrued/non-cash expenses remain pending.
+- Owner money records classify actual drawer cash as contribution or drawing, with owner name, reason, current drawer/balance review, immutable cash source and CSV. An explicit equal opposite correction requires actual cash movement and preserves the original. These cash classifications are separate from sales/operating expenses; formal equity/loan accounts, journals and per-cashier custody remain pending.
+- Advanced Stock actions now live under a labeled Stock tools menu, keeping Add item/Add stock and the existing five primary destinations. Backup table count bounds increase from 64 to 128 for the added modules; 64 MB file, 2 MB field and 200,000-row limits remain in force. Old supported backups remain recoverable.
+
+### Actual native offline evidence — 17 November
+
+The rebuilt installed Linux app ran in its isolated sample practice mode on Xvfb at 1440 × 1000, with a network namespace containing only loopback and no external routes. Keyboard text entry/Tab and selected pointer actions were performed; complete keyboard-only/accessibility testing and merchant studies were not performed.
+
+- Set sample Malt minimum to ₦450/bottle, then negotiated ₦400 each on three bottles. Checkout rejected the ₦1,200 line against its ₦1,350 minimum instead of saving: [saved policy](artifacts/desktop-minimum-price-saved.png), [blocked payment](artifacts/desktop-minimum-price-blocked.png).
+- Entered owner name, ₦2,000 and reason, reviewed the direction against ₦10,000 drawer cash, then saved: [review](artifacts/desktop-owner-contribution-review.png), [saved contribution](artifacts/desktop-owner-contribution-saved.png). Drawings/corrections are covered by automated integrity tests; their full native journey was not performed in this pass.
+- Selected a clearly labeled sample receipt PNG through the native chooser, entered a reason, saved a copy and opened the saved revision preview: [saved expense receipt](artifacts/desktop-expense-receipt-saved.png), [preview](artifacts/desktop-expense-receipt-preview.png). The existing expense remained ₦1,250. Native overwrite/cancel/historical-removal journeys remain broader acceptance work.
+- Created an explicit one-bag-to-five-kg sample recipe and saved two reviewed batches. Bag stock changed 34→32, loose stock 10→20 kg: [review](artifacts/desktop-repacking-review.png), [completed history](artifacts/desktop-repacking-saved.png), [stock result](artifacts/desktop-repacking-stock.png).
+
+Automated coverage includes source isolation, permission denial, late-actor/injected-write rollback, stale/retry identities, exact measured/basket pricing, immutable histories, encrypted recovery and missing/tampered records. Full compact-layout, Windows/hardware, replacement-machine recovery, performance and merchant acceptance remain pending. Cloud synchronization and live provider/messaging services were excluded and are not implemented by this batch.
+
+## Previous integrated checkpoint — shop and product images
 
 **519 tests pass**: 72 shared + 447 desktop, zero failures/errors/skips. Ran `gradle :shared:jvmTest :desktopApp:jvmTest :desktopApp:createDistributable --offline` with installed Gradle 8.13/JDK 17; successful in 34 seconds. Linux image rebuilt. This supersedes the 508-test checkpoint below.
 
