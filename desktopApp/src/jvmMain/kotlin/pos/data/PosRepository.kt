@@ -147,6 +147,10 @@ class PosRepository(path: String = File(System.getProperty("user.home"), ".niger
         initializeCreditReturns()
         initializeQuotations()
         initializeLocalImages()
+        initializeOwnerCash()
+        initializeMinimumPrices()
+        initializeRepacking()
+        initializeExpenseAttachments()
         execute("CREATE TRIGGER IF NOT EXISTS activity_audit_no_update BEFORE UPDATE ON activity_audit BEGIN SELECT RAISE(ABORT,'Activity history cannot be edited'); END")
         execute("CREATE TRIGGER IF NOT EXISTS activity_audit_no_delete BEFORE DELETE ON activity_audit BEGIN SELECT RAISE(ABORT,'Activity history cannot be removed'); END")
     }
@@ -287,6 +291,7 @@ class PosRepository(path: String = File(System.getProperty("user.home"), ".niger
         }.also { movements+=it }
         stockAdjustments(tenantId,productId).forEach { count -> movements+=InventoryMovement("count:${count.id}",tenantId,productId,"count",count.difference,count.id,count.createdAt,"Count ${count.previousStock} → ${count.countedStockLabel}: ${count.reason}") }
         movements+=inventoryDispositionMovements(tenantId,productId)
+        movements+=repackingMovements(tenantId,productId)
         return movements.sortedWith(compareBy<InventoryMovement> { Instant.parse(it.createdAt) }.thenBy { it.id })
     }
     @Synchronized fun productByBarcode(tenantId:String,barcode:String):Product? {
@@ -532,6 +537,7 @@ class PosRepository(path: String = File(System.getProperty("user.home"), ".niger
             val quantity=group.fold(0L) { sum,line -> Math.addExact(sum,line.baseQuantity) }
             productId to scaledStock(requireProduct(tenantId,productId),Math.negateExact(quantity))
         }
+        validateMinimumPricesAtCheckout(tenantId,normalized)
         val total=cartTotal(normalized)
         require(Math.addExact(cashMinor,externalRecorded)<=total) { "Record applied cash only; return extra cash as change." }
         val credit=total-cashMinor-externalRecorded
@@ -558,6 +564,7 @@ class PosRepository(path: String = File(System.getProperty("user.home"), ".niger
         saveExternalPayments(tenantId,sale.id,externalPayments)
         captureReceiptProfile(tenantId,sale.id)
         captureReceiptImage(tenantId,sale.id)
+        captureMinimumPriceChecks(tenantId,sale.id,normalized)
         enqueue(tenantId,"sale.completed",sale.id)
         sale
     }
@@ -932,7 +939,7 @@ class PosRepository(path: String = File(System.getProperty("user.home"), ".niger
     }
     private fun supplierPayment(r:ResultSet)=SupplierPayment(r.getString("id"),r.getString("tenant_id"),r.getString("receipt_id"),r.getString("supplier_name"),r.getLong("amount_minor"),r.getString("created_at"))
 
-    private val snapshotTableOrder get() = listOf("products","product_metadata_changes","selling_units","stock_settings_changes","purchase_units","customers","customer_changes","cash_shifts","sales","sale_lines","repayments","repayment_allocations","allocation_reversals","stock_receipts","expenses","sale_returns","return_lines","supplier_payments","cash_entries","catalogue_changes","stock_adjustments","outbox","activity_audit") + supplierProfileSnapshotTables + purchaseOrderSnapshotTables + inventoryDispositionSnapshotTables + stockCountSessionSnapshotTables + shopProfileSnapshotTables + externalPaymentSnapshotTables + priceListSnapshotTables + bulkCatalogueUpdateSnapshotTables + supplierInvoiceSnapshotTables + creditReturnSnapshotTables + quotationSnapshotTables + localImageSnapshotTables
+    private val snapshotTableOrder get() = listOf("products","product_metadata_changes","selling_units","stock_settings_changes","purchase_units","customers","customer_changes","cash_shifts","sales","sale_lines","repayments","repayment_allocations","allocation_reversals","stock_receipts","expenses","sale_returns","return_lines","supplier_payments","cash_entries","catalogue_changes","stock_adjustments","outbox","activity_audit") + supplierProfileSnapshotTables + purchaseOrderSnapshotTables + inventoryDispositionSnapshotTables + stockCountSessionSnapshotTables + shopProfileSnapshotTables + externalPaymentSnapshotTables + priceListSnapshotTables + bulkCatalogueUpdateSnapshotTables + supplierInvoiceSnapshotTables + creditReturnSnapshotTables + quotationSnapshotTables + localImageSnapshotTables + ownerCashSnapshotTables + minimumPriceSnapshotTables + repackingSnapshotTables + expenseAttachmentSnapshotTables
     @Synchronized fun exportTenantSnapshot(tenantId:String):TenantSnapshot = transaction {
         requirePermission(tenantId, StaffPermission.BACKUP)
         requireTenant(tenantId)
@@ -960,7 +967,7 @@ class PosRepository(path: String = File(System.getProperty("user.home"), ".niger
                 schema.values.forEach { (name,type,required) ->
                     val value=row[name]
                     val generatedId=(table=="sale_lines" || table=="return_lines") && name=="id"
-                    require(!required || value!=null || generatedId || (name in setOf("quantity_precision","base_precision") && name !in row) || (table=="cash_shifts" && name=="closing_blind" && name !in row) || (table=="sales" && name in setOf("receipt_profile_captured","receipt_image_captured") && name !in row) || (table=="products" && name in setOf("archived","aliases","favourite") && name !in row) || (table in setOf("stock_receipts","sale_lines","return_lines") && name=="base_units_per_unit" && name !in row) || (table=="sale_lines" && name in setOf("discount_per_unit_minor","basket_discount_minor") && name !in row)) { "Backup is missing a required value in $table." }
+                    require(!required || value!=null || generatedId || (name in setOf("quantity_precision","base_precision") && name !in row) || (table=="cash_shifts" && name=="closing_blind" && name !in row) || (table=="sales" && name in setOf("receipt_profile_captured","receipt_image_captured","minimum_price_captured") && name !in row) || (table=="products" && name in setOf("archived","aliases","favourite") && name !in row) || (table in setOf("stock_receipts","sale_lines","return_lines") && name=="base_units_per_unit" && name !in row) || (table=="sale_lines" && name in setOf("discount_per_unit_minor","basket_discount_minor") && name !in row)) { "Backup is missing a required value in $table." }
                     if(value!=null && type=="INTEGER") require(value.toLongOrNull()!=null) { "Backup has invalid integer data in $table." }
                     if(value!=null && name=="quantity" && table in setOf("sale_lines","stock_receipts","return_lines")) {
                         val quantity=value.toLongOrNull()
@@ -1117,6 +1124,10 @@ class PosRepository(path: String = File(System.getProperty("user.home"), ".niger
         validateCreditReturns(tenant.id)
         validateQuotations(tenant.id)
         validateLocalImages(tenant.id)
+        validateOwnerCash(tenant.id)
+        validateMinimumPrices(tenant.id)
+        validateRepacking(tenant.id)
+        validateExpenseAttachments(tenant.id)
         provisionOwner(tenant)
         tenant
     }

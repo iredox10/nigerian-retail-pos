@@ -7,9 +7,9 @@ data class InventoryMovement(
 ) {
     init {
         require(listOf(id,tenantId,productId,sourceId,createdAt,description).all { it.isNotBlank() })
-        require(kind in setOf("opening","purchase","sale","return","count","disposition"))
+        require(kind in setOf("opening","purchase","sale","return","count","disposition","repacking_in","repacking_out"))
         require(quantityDelta.isFinite() && quantityDelta in -9_007_199_254_740_991.0..9_007_199_254_740_991.0)
-        require(when(kind) { "opening","purchase","return" -> quantityDelta>=0; "sale","disposition" -> quantityDelta<0; else -> true })
+        require(when(kind) { "opening","purchase","return","repacking_in" -> quantityDelta>=0; "sale","disposition","repacking_out" -> quantityDelta<0; else -> true })
     }
 }
 

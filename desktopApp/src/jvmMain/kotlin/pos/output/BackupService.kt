@@ -80,7 +80,7 @@ object BackupService {
         }
         DataOutputStream(bounded).use { out ->
             out.writeInt(1); out.string(snapshot.tenant.id); out.string(snapshot.tenant.name)
-            require(snapshot.tables.size <= 64)
+            require(snapshot.tables.size <= 128)
             out.writeInt(snapshot.tables.size)
             var rows = 0
             snapshot.tables.forEach { (name, records) ->
@@ -99,7 +99,7 @@ object BackupService {
         require(input.readInt() == 1) { "Unsupported backup format." }
         val tenant = Tenant(input.string(), input.string())
         val tables = linkedMapOf<String, List<Map<String,String?>>>()
-        val tableCount = input.readInt().also { require(it in 0..64) }
+        val tableCount = input.readInt().also { require(it in 0..128) }
         var totalRows = 0
         repeat(tableCount) {
             val name = input.string(); require(!tables.containsKey(name)) { "Duplicate backup table." }
