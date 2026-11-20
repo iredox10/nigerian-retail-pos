@@ -88,7 +88,7 @@ fun PosRepository.convertQuotation(tenantId:String,quotationId:String,expectedVe
     require(cashMinor==old.totalMinor) {"Quotation conversion currently supports full cash payment only. No short payment becomes debt."}
     val now=quoteTime(old)
     require(!quotationExpired(old.expiresOn,Instant.parse(now))) {"This quotation expired before the sale was recorded."}
-    val sale=checkout(tenantId,review.lines,cashMinor,old.customer?.customerId,operationId)
+    val sale=checkout(tenantId,review.lines,cashMinor,old.customer?.customerId,operationId,cashGivenMinor = cashMinor)
     val completed=quoteTime(old)
     require(!quotationExpired(old.expiresOn,Instant.parse(completed))) {"Quotation expired while conversion was being recorded. No sale was saved."}
     val converted=old.copy(status=QuotationStatus.CONVERTED,version=Math.addExact(old.version,1),updatedAt=completed,saleId=sale.id)

@@ -108,8 +108,10 @@ data class Sale(
     val dueDate: String? = null,
     val basketDiscount: BasketDiscount? = null,
     val externalPayments: List<ExternalPayment> = emptyList(),
+    val cashGivenMinor: Long? = null,
 ) {
     val externalRecordedMinor:Long get()=externalPaymentTotal(externalPayments)
+    val changeMinor: Long? get() = cashGivenMinor?.minus(cashMinor)
     init {
         require(dueDate == null || (creditMinor > 0 && isValidCreditDueDate(dueDate))) { "A due date must be a valid YYYY-MM-DD date for a credit sale." }
         require(id.isNotBlank() && tenantId.isNotBlank() && createdAt.isNotBlank())
@@ -120,6 +122,14 @@ data class Sale(
         require(totalMinor >= 0 && totalMinor == cartTotal(lines)) { "Sale total does not match its items." }
         require(cashMinor >= 0 && creditMinor >= 0 && addMoney(addMoney(cashMinor, creditMinor),externalRecordedMinor) == totalMinor) {
             "Cash, recorded external portions and credit must cover the sale exactly."
+        }
+        cashGivenMinor?.let { tender ->
+            require(tender >= cashMinor && (cashMinor > 0L || tender == 0L)) {
+                "Cash given must cover the recorded cash portion."
+            }
+            require(tender == cashMinor || creditMinor == 0L) {
+                "Review payment. A sale giving change cannot leave customer debt."
+            }
         }
         require(customerId == null || customerId.isNotBlank())
         require(creditMinor == 0L || customerId != null) { "Choose a customer for money owed." }
