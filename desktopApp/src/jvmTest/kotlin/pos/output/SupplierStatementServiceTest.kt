@@ -1,8 +1,13 @@
 package pos.output
 
 import kotlin.test.*
+import pos.domain.PurchaseReturn
 import pos.domain.StockReceipt
 import pos.domain.SupplierPayment
+import pos.domain.SupplierDetails
+import pos.domain.SupplierProfile
+import pos.domain.SupplierReceiptLink
+import pos.domain.Tenant
 import java.time.LocalDate
 
 class SupplierStatementServiceTest {
@@ -90,5 +95,29 @@ class SupplierStatementServiceTest {
         assertEquals(800L,statement.openingMinor)
         assertEquals(800L,statement.closingMinor)
         assertEquals(0L,statement.purchasesMinor)
+    }
+
+    @Test fun returnsReduceOnlyReceiptDebtAndAppearInBothSupplierStatementExports() {
+        val original = StockReceipt("rice", "shop", "item", "Rice", "bag", 4, 1_000, 4_000, 500, name, "2026-11-01T09:00:00Z")
+        val laterPayment = payment("payment", original.id, "2026-11-03T09:00:00Z", 200)
+        val first = PurchaseReturn("return-one", "shop", original.id, 1, 1_000, 3_500, 4, 3, "Unopened bag", "2026-11-02T09:00:00Z")
+        val second = PurchaseReturn("return-two", "shop", original.id, 1, 1_000, 2_300, 3, 2, "Unopened bag", "2026-11-04T09:00:00Z")
+        val statement = SupplierStatementService.build("shop", name, listOf(original), listOf(laterPayment), from, through, listOf(second, first))
+        assertEquals(3_500L, statement.openingMinor)
+        assertEquals(1_000L, statement.returnCreditsMinor)
+        assertEquals(200L, statement.laterPaymentsMinor)
+        assertEquals(2_300L, statement.closingMinor)
+        assertEquals(1_300L, statement.currentOutstandingMinor)
+        assertEquals(listOf("Purchase return", "Later cash payment"), statement.events.map { it.activity })
+        assertContains(SupplierStatementService.csv(statement), "\"Purchase return\",\"return-one\"")
+        assertFalse(SupplierStatementService.csv(statement).contains("return-two"))
+        assertFails { SupplierStatementService.csv(statement.copy(returns = listOf(second, first.copy(creditMinor = 10)))) }
+
+        val profile = SupplierProfile("account", "shop", SupplierDetails("Rice wholesaler"), false, 1, "2026-11-01T08:00:00Z")
+        val link = SupplierReceiptLink("shop", original.id, profile.id, "link", "2026-11-01T09:30:00Z")
+        val account = SupplierAccountStatementService.build(profile, listOf(link), listOf(original), listOf(laterPayment), from, through, listOf(second, first))
+        assertEquals(statement.events, account.statement.events)
+        assertContains(SupplierAccountStatementService.csv(account), "\"Purchase return credit NGN\"")
+        assertContains(StatementPdfService.supplier(Tenant("shop", "Shop"), account), "Purchase return credit: ₦10.00")
     }
 }

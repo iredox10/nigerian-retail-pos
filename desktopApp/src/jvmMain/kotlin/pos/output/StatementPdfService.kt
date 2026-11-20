@@ -54,7 +54,7 @@ object StatementPdfService {
     fun supplier(tenant:Tenant,value:SupplierAccountStatement):String {
         val profile=value.profile;val statement=value.statement
         require(profile.tenantId==tenant.id) {"Supplier statement belongs to another shop."}
-        require(SupplierAccountStatementService.build(profile,value.links,value.receipts,value.payments,statement.from,statement.through)==value) {"Supplier statement has inconsistent history or totals."}
+        require(SupplierAccountStatementService.build(profile,value.links,value.receipts,value.payments,statement.from,statement.through,value.returns)==value) {"Supplier statement has inconsistent history or totals."}
         val receipts=value.receipts.associateBy {it.id}
         return buildString {
             appendLine(tenant.name);appendLine("SUPPLIER STATEMENT")
@@ -68,19 +68,25 @@ object StatementPdfService {
             appendLine("Only purchases explicitly linked to this supplier account are included.")
             appendLine("Period: ${statement.from} through ${statement.through} (inclusive WAT)")
             appendLine("Opening amount owed: ${money(statement.openingMinor)}");appendLine()
-            if(statement.events.isEmpty()) appendLine("No linked purchases or payments recorded in this period.")
+            if(statement.events.isEmpty()) appendLine("No linked purchases, payments or returns recorded in this period.")
             statement.events.forEach {event ->
-                appendLine("${date(event.createdAt)} | ${if(event.laterPaymentMinor>0) "Later cash payment" else "Stock received"}")
+                appendLine("${date(event.createdAt)} | ${event.activity}")
                 appendLine("Source ID: ${event.id}");appendLine("Stock receipt ID: ${event.receiptId}")
                 appendLine("Supplier name saved on receipt: ${receipts.getValue(event.receiptId).supplierName}")
-                appendLine("Purchase total: ${money(event.purchaseMinor)}")
-                appendLine("Cash paid at receipt: ${money(event.paidAtReceiptMinor)}")
-                appendLine("Later cash payment: ${money(event.laterPaymentMinor)}")
+                when {
+                    event.returnCreditMinor > 0 -> appendLine("Purchase return credit: ${money(event.returnCreditMinor)}")
+                    event.laterPaymentMinor > 0 -> appendLine("Later cash payment: ${money(event.laterPaymentMinor)}")
+                    else -> {
+                        appendLine("Purchase total: ${money(event.purchaseMinor)}")
+                        appendLine("Cash paid at receipt: ${money(event.paidAtReceiptMinor)}")
+                    }
+                }
                 appendLine("Amount owed after activity: ${money(event.balanceAfterMinor)}");appendLine()
             }
             appendLine("Purchases in period: ${money(statement.purchasesMinor)}")
             appendLine("Cash paid at receipt in period: ${money(statement.paidAtReceiptMinor)}")
             appendLine("Later payments in period: ${money(statement.laterPaymentsMinor)}")
+            appendLine("Purchase return credits in period: ${money(statement.returnCreditsMinor)}")
             appendLine("Closing amount owed: ${money(statement.closingMinor)}")
             appendLine("Closing amount owed is through the selected WAT end date.")
             appendLine("Current outstanding, all saved dates: ${money(statement.currentOutstandingMinor)}")
