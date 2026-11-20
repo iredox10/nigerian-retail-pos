@@ -181,11 +181,14 @@ private fun SupplierAccountStatementDialog(repo:PosRepository,profile:SupplierPr
     val loaded=remember(profile,from,through,revision) {runCatching {
         require(isValidCreditDueDate(from) && isValidCreditDueDate(through)) {"Use YYYY-MM-DD for both dates."}
         val end=LocalDate.parse(through);require(!end.isAfter(today)) {"Choose today or an earlier end date."}
-        SupplierAccountStatementService.build(profile,repo.supplierReceiptLinks(profile.tenantId),repo.stockReceipts(profile.tenantId),repo.supplierPayments(profile.tenantId),LocalDate.parse(from),end)
+        SupplierAccountStatementService.build(
+            profile,repo.supplierReceiptLinks(profile.tenantId),repo.stockReceipts(profile.tenantId),
+            repo.supplierPayments(profile.tenantId),LocalDate.parse(from),end,repo.purchaseReturns(profile.tenantId),
+        )
     }}
     AlertDialog(onDismissRequest=dismiss,title={Text("Supplier account statement")},text={Column(Modifier.widthIn(max=560.dp).heightIn(max=550.dp).verticalScroll(rememberScrollState()),verticalArrangement=Arrangement.spacedBy(12.dp)) {
         Text("Current profile: ${profile.details.name} · Account ${profile.id.takeLast(8)}")
-        Text("Only explicitly linked purchases are included, using their recorded dates in West Africa Time. Names saved on receipts remain unchanged.",style=MaterialTheme.typography.bodySmall)
+        Text("Includes purchases explicitly linked to this supplier and their payments and returns, dated in West Africa Time.",style=MaterialTheme.typography.bodySmall)
         PosTextField(from,{from=it;message=null},"From (YYYY-MM-DD)")
         PosTextField(through,{through=it;message=null},"Through (YYYY-MM-DD)")
         NeutralButton("Refresh",{revision++})
@@ -195,10 +198,14 @@ private fun SupplierAccountStatementDialog(repo:PosRepository,profile:SupplierPr
             LabelValueRow("Purchases in period",money(s.purchasesMinor))
             LabelValueRow("Cash paid at receipt",money(s.paidAtReceiptMinor))
             LabelValueRow("Later payments",money(s.laterPaymentsMinor))
+            LabelValueRow("Purchase return credits",money(s.returnCreditsMinor))
             LabelValueRow("Closing amount owed",money(s.closingMinor),emphasized=true)
             LabelValueRow("Owed now, all dates",money(s.currentOutstandingMinor))
-            if(s.events.isEmpty()) Text("No linked purchases or payments were recorded in this period.",style=MaterialTheme.typography.bodySmall)
-            s.events.forEach {event -> Text("${event.createdAt} · ${event.receiptId.takeLast(8)} · ${if(event.laterPaymentMinor>0) "Cash paid ${money(event.laterPaymentMinor)}" else "Purchase ${money(event.purchaseMinor)}"}",style=MaterialTheme.typography.bodySmall)}
+            if(s.events.isEmpty()) Text("No linked purchases, payments or returns were recorded in this period.",style=MaterialTheme.typography.bodySmall)
+            s.events.forEach {event ->
+                val amount = maxOf(event.returnCreditMinor, event.laterPaymentMinor, event.purchaseMinor)
+                Text("${event.createdAt} · ${event.receiptId.takeLast(8)} · ${event.activity} ${money(amount)}",style=MaterialTheme.typography.bodySmall)
+            }
         }
         message?.let {InlineNotice(it,tone=NoticeTone.Success)}
         NeutralButton("Save statement PDF",{try {

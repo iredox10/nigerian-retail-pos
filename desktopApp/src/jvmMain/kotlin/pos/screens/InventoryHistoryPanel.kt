@@ -56,7 +56,7 @@ internal fun InventoryMovementHistory(repo: PosRepository, tenantId: String, pro
             LabelValueRow("Recorded stock now", "${inventoryQuantity(product.stock)} ${product.unit}", emphasized = true)
             if (product.openingStock == null) InlineNotice("Opening quantity was not recorded in history", "This older item's saved movements are listed below, but its original opening quantity is unknown. No starting quantity or running balance has been guessed.", NoticeTone.Info)
             else LabelValueRow("Opening quantity recorded", "${inventoryQuantity(product.openingStock!!)} ${product.unit}")
-            Text("Purchases add the converted selling quantity. Sales and classified stock removals deduct goods; returns add them only when marked for restocking. Count corrections show the difference recorded at the count. These are saved stock changes, not a valuation or profit report.", style = MaterialTheme.typography.bodySmall, color = PosPalette.Secondary)
+            Text("Purchases add stock in the selling unit. Sales, supplier returns and stock removals deduct goods. Customer returns add goods when restocked. Count corrections show the difference recorded at the count.", style = MaterialTheme.typography.bodySmall, color = PosPalette.Secondary)
             NeutralButton("Refresh stock history", { revision++ })
         }
     }
@@ -67,7 +67,16 @@ internal fun InventoryMovementHistory(repo: PosRepository, tenantId: String, pro
         movements.asReversed().take(visibleCount).forEach { movement ->
             Surface(color = PosPalette.Surface, shape = MaterialTheme.shapes.small) {
                 Column(Modifier.fillMaxWidth().padding(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    val label = when (movement.kind) { "opening" -> "Opening count"; "purchase" -> "Stock received"; "sale" -> "Sale"; "return" -> "Return added to stock"; "count" -> "Count correction"; "disposition" -> "Stock removed"; else -> movement.kind }
+                    val label = when (movement.kind) {
+                        "opening" -> "Opening count"
+                        "purchase" -> "Stock received"
+                        "sale" -> "Sale"
+                        "return" -> "Return added to stock"
+                        "purchase_return" -> "Returned to supplier"
+                        "count" -> "Count correction"
+                        "disposition" -> "Stock removed"
+                        else -> movement.kind
+                    }
                     LabelValueRow(label, "${if (movement.quantityDelta > 0) "+" else ""}${inventoryQuantity(movement.quantityDelta)} ${product.unit}", emphasized = true)
                     Text(movement.description)
                     Text(inventoryDate(movement.createdAt), style = MaterialTheme.typography.bodySmall, color = PosPalette.Secondary)

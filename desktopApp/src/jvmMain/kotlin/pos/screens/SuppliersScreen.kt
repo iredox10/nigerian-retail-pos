@@ -12,10 +12,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import pos.data.PosRepository
+import pos.data.purchaseReturns
+import pos.domain.PurchaseReturn
 import pos.domain.StockReceipt
 import pos.domain.SupplierPayment
 import pos.domain.money
 import pos.domain.parseNaira
+import pos.domain.quantityLabel
 import pos.output.CsvService
 import pos.output.SupplierStatementService
 import pos.ui.components.*
@@ -43,19 +46,21 @@ fun SuppliersScreen(repo: PosRepository, tenantId: String, onChanged: () -> Unit
     }
 }
 
-private data class ReceiptBalance(val receipt: StockReceipt, val payments: List<SupplierPayment>, val outstanding: Long)
+private data class ReceiptBalance(val receipt: StockReceipt, val payments: List<SupplierPayment>, val returns: List<PurchaseReturn>, val outstanding: Long)
 
 @Composable
 private fun TenantSuppliers(repo: PosRepository, tenantId: String, onChanged: () -> Unit) {
     var revision by remember { mutableIntStateOf(0) }
     var search by remember { mutableStateOf("") }
     var selected by remember { mutableStateOf<StockReceipt?>(null) }
+    var returnReceipt by remember { mutableStateOf<StockReceipt?>(null) }
     var statementSupplier by remember { mutableStateOf<String?>(null) }
     var message by remember { mutableStateOf<String?>(null) }
     var showPaid by remember { mutableStateOf(false) }
     val result = remember(revision) { runCatching {
+        val returns = repo.purchaseReturns(tenantId).groupBy { it.receiptId }
         repo.stockReceipts(tenantId).map { receipt ->
-            ReceiptBalance(receipt, repo.supplierPayments(tenantId, receipt.id), repo.supplierOutstanding(tenantId, receipt.id))
+            ReceiptBalance(receipt, repo.supplierPayments(tenantId, receipt.id), returns[receipt.id].orEmpty(), repo.supplierOutstanding(tenantId, receipt.id))
         }
     } }
     val shiftResult = remember(revision) { runCatching { repo.activeCashShift(tenantId) } }
@@ -65,10 +70,10 @@ private fun TenantSuppliers(repo: PosRepository, tenantId: String, onChanged: ()
         (it.receipt.supplierName.contains(search, true) || it.receipt.productName.contains(search, true) || it.receipt.id.contains(search, true)) }
 
     Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-        SectionHeader("Suppliers", "See what you still owe and record cash payments against a stock receipt.")
+        SectionHeader("Suppliers", "See what you still owe, record a payment or return goods to a supplier.")
         PosTextField(search, { search = it }, "Search supplier, item or receipt", modifier = Modifier.fillMaxWidth())
         Row(verticalAlignment = Alignment.CenterVertically) {
-            FilterChip(showPaid, { showPaid = !showPaid }, label = { Text("Include fully paid receipts") })
+            FilterChip(showPaid, { showPaid = !showPaid }, label = { Text("Include settled receipts") })
             Spacer(Modifier.weight(1f))
             NeutralButton("Refresh", { revision++ })
         }
@@ -82,7 +87,7 @@ private fun TenantSuppliers(repo: PosRepository, tenantId: String, onChanged: ()
         if (error == null) LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(16.dp)) {
             if (visible.isEmpty()) item {
                 EmptyState(if (rows.isEmpty()) "No supplier purchases yet" else "No matching unpaid receipts",
-                    if (rows.isEmpty()) "Use Stock → Add stock to record a purchase and any supplier balance." else "Try another search or include fully paid receipts.")
+                    if (rows.isEmpty()) "Use Stock → Add stock to record a purchase and any supplier balance." else "Try another search or include settled receipts.")
             }
             visible.groupBy { it.receipt.supplierName }.toSortedMap().forEach { (name, purchases) ->
                 item(key = "supplier:$name") {
@@ -95,7 +100,11 @@ private fun TenantSuppliers(repo: PosRepository, tenantId: String, onChanged: ()
                     NeutralButton("View supplier statement", { statementSupplier=name })
                 }
                 items(purchases, key = { it.receipt.id }) { row ->
-                    SupplierReceipt(row, shiftResult.getOrNull() != null) { selected = row.receipt; message = null }
+                    SupplierReceipt(
+                        row, shiftResult.getOrNull() != null,
+                        pay = { selected = row.receipt; message = null },
+                        returnGoods = { returnReceipt = row.receipt; message = null },
+                    )
                 }
             }
         }
@@ -104,6 +113,14 @@ private fun TenantSuppliers(repo: PosRepository, tenantId: String, onChanged: ()
         SupplierPaymentDialog(repo, tenantId, receipt, { selected = null }) {
             selected = null
             message = "Supplier payment saved on this computer"
+            revision++
+            onChanged()
+        }
+    }
+    returnReceipt?.let { receipt ->
+        PurchaseReturnDialog(repo, receipt, { returnReceipt = null }) {
+            returnReceipt = null
+            message = "Supplier return saved on this computer"
             revision++
             onChanged()
         }
@@ -122,21 +139,21 @@ private fun SupplierStatementDialog(repo:PosRepository,tenantId:String,supplierN
     var revision by remember {mutableIntStateOf(0)}
     var message by remember {mutableStateOf<String?>(null)}
     var exportError by remember {mutableStateOf<String?>(null)}
-    val history=remember(tenantId,revision) {runCatching {repo.stockReceipts(tenantId) to repo.supplierPayments(tenantId)}}
+    val history=remember(tenantId,revision) {runCatching {Triple(repo.stockReceipts(tenantId),repo.supplierPayments(tenantId),repo.purchaseReturns(tenantId))}}
     val loaded=remember(history,fromText,throughText) {runCatching {
         require(listOf(fromText,throughText).all {it.matches(Regex("\\d{4}-\\d{2}-\\d{2}"))}) {"Use YYYY-MM-DD for both dates."}
         val from=LocalDate.parse(fromText)
         val through=LocalDate.parse(throughText)
         require(!through.isAfter(today)) {"Choose today or an earlier end date."}
         val records=history.getOrThrow()
-        SupplierStatementService.build(tenantId,supplierName,records.first,records.second,from,through)
+        SupplierStatementService.build(tenantId,supplierName,records.first,records.second,from,through,records.third)
     }}
     AlertDialog(
         onDismissRequest=dismiss,
         title={Text("Statement · ${supplierName.ifBlank {"Supplier not recorded"}}")},
         text={
             Column(Modifier.heightIn(max=520.dp).verticalScroll(rememberScrollState()),verticalArrangement=Arrangement.spacedBy(12.dp)) {
-                Text("Saved receipt and cash-payment history for this exact recorded name. Includes fully paid receipts and ignores the supplier list's search filters. This is not a supplier master account.",style=MaterialTheme.typography.bodySmall)
+                Text("Saved receipts, cash payments and purchase returns for this exact recorded name, including settled receipts.",style=MaterialTheme.typography.bodySmall)
                 PosTextField(fromText,{fromText=it;message=null;exportError=null},"From (YYYY-MM-DD)",Modifier.fillMaxWidth())
                 PosTextField(throughText,{throughText=it;message=null;exportError=null},"Through (YYYY-MM-DD)",Modifier.fillMaxWidth())
                 Text("Dates include the whole day in West Africa Time.",style=MaterialTheme.typography.bodySmall)
@@ -147,18 +164,20 @@ private fun SupplierStatementDialog(repo:PosRepository,tenantId:String,supplierN
                     LabelValueRow("Purchases received in range",money(statement.purchasesMinor))
                     LabelValueRow("Cash paid when receiving this stock",money(statement.paidAtReceiptMinor))
                     LabelValueRow("Later cash payments in range",money(statement.laterPaymentsMinor))
+                    LabelValueRow("Purchase return credits in range",money(statement.returnCreditsMinor))
                     LabelValueRow("Closing debt through ${statement.through}",money(statement.closingMinor),emphasized=true)
                     HorizontalDivider()
                     LabelValueRow("Current outstanding — all recorded dates",money(statement.currentOutstandingMinor))
-                    Text("Current outstanding includes records after the chosen end date. No supplier credits, purchase returns or opening balances outside saved receipts are assumed.",style=MaterialTheme.typography.bodySmall)
+                    Text("Current outstanding includes records after the chosen end date.",style=MaterialTheme.typography.bodySmall)
                     HorizontalDivider()
                     Text("Activity in this date range",style=MaterialTheme.typography.titleSmall)
-                    if(statement.events.isEmpty()) Text("No purchases or payments were recorded in this period. Any opening debt is carried into the closing debt.",style=MaterialTheme.typography.bodySmall)
+                    if(statement.events.isEmpty()) Text("No purchases, payments or returns were recorded in this period.",style=MaterialTheme.typography.bodySmall)
                     statement.events.forEach {event ->
                         Column(verticalArrangement=Arrangement.spacedBy(4.dp)) {
-                            Text(if(event.laterPaymentMinor>0) "Later cash payment" else "Stock received",fontWeight=FontWeight.SemiBold)
+                            Text(event.activity,fontWeight=FontWeight.SemiBold)
                             Text("${supplierTime(event.createdAt)} · Receipt ${event.receiptId.takeLast(8).uppercase()}",style=MaterialTheme.typography.bodySmall)
-                            if(event.laterPaymentMinor>0) LabelValueRow("Cash paid",money(event.laterPaymentMinor))
+                            if(event.returnCreditMinor>0) LabelValueRow("Supplier credit",money(event.returnCreditMinor))
+                            else if(event.laterPaymentMinor>0) LabelValueRow("Cash paid",money(event.laterPaymentMinor))
                             else {
                                 LabelValueRow("Purchase total",money(event.purchaseMinor))
                                 LabelValueRow("Cash paid at receipt",money(event.paidAtReceiptMinor))
@@ -184,7 +203,7 @@ private fun SupplierStatementDialog(repo:PosRepository,tenantId:String,supplierN
 }
 
 @Composable
-private fun SupplierReceipt(row: ReceiptBalance, canPay: Boolean, pay: () -> Unit) {
+private fun SupplierReceipt(row: ReceiptBalance, canPay: Boolean, pay: () -> Unit, returnGoods: () -> Unit) {
     val receipt = row.receipt
     Surface(shape = MaterialTheme.shapes.medium) {
         Column(Modifier.fillMaxWidth().padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -193,15 +212,16 @@ private fun SupplierReceipt(row: ReceiptBalance, canPay: Boolean, pay: () -> Uni
                     Text(receipt.productName, fontWeight = FontWeight.SemiBold)
                     Text("${receipt.quantityLabel} ${receipt.unit} · Receipt ${receipt.id.takeLast(8).uppercase()} · ${supplierTime(receipt.createdAt)}", style = MaterialTheme.typography.bodySmall)
                 }
-                StatusPill(if (row.outstanding > 0) "Money owed" else "Fully paid", if (row.outstanding > 0) NoticeTone.Warning else NoticeTone.Success)
+                StatusPill(if (row.outstanding > 0) "Money owed" else "Settled", if (row.outstanding > 0) NoticeTone.Warning else NoticeTone.Success)
             }
             if(receipt.purchaseUnitId!=null) Text("${receipt.quantityLabel} ${receipt.unit} × ${receipt.baseUnitsPerUnit} ${receipt.baseUnit} = ${receipt.baseQuantityLabel} ${receipt.baseUnit} added to stock",style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
             LabelValueRow("Purchase total", money(receipt.totalCostMinor))
             LabelValueRow("Cash paid when stock arrived", money(receipt.paidCashMinor))
             val laterPaid = row.payments.fold(0L) { sum, payment -> Math.addExact(sum, payment.amountMinor) }
             LabelValueRow("Payments recorded later", money(laterPaid))
+            if (row.returns.isNotEmpty()) LabelValueRow("Purchase return credits", money(row.returns.sumOf { it.creditMinor }))
             LabelValueRow("Still owed on this receipt", money(row.outstanding), emphasized = true)
-            Text("Originally owed ${money(receipt.unpaidMinor)} when stock arrived. The current amount above includes later payments.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text("Originally owed ${money(receipt.unpaidMinor)} when stock arrived.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             if (row.payments.isNotEmpty()) {
                 HorizontalDivider()
                 Text("Later payments", style = MaterialTheme.typography.titleSmall)
@@ -209,7 +229,20 @@ private fun SupplierReceipt(row: ReceiptBalance, canPay: Boolean, pay: () -> Uni
                     LabelValueRow(supplierTime(payment.createdAt), money(payment.amountMinor))
                 }
             }
-            if (row.outstanding > 0) NeutralButton("Record supplier payment", pay, enabled = canPay)
+            if (row.returns.isNotEmpty()) {
+                HorizontalDivider()
+                Text("Purchase returns", style = MaterialTheme.typography.titleSmall)
+                row.returns.forEach { event ->
+                    LabelValueRow("${quantityLabel(event.quantity.toLong(), receipt.quantityPrecision)} ${receipt.unit} · ${supplierTime(event.createdAt)}", money(event.creditMinor))
+                    Text(event.reason, style = MaterialTheme.typography.bodySmall)
+                }
+            }
+            if (row.outstanding > 0) {
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    NeutralButton("Record supplier payment", pay, enabled = canPay)
+                    NeutralButton("Return to supplier", returnGoods)
+                }
+            }
         }
     }
 }
