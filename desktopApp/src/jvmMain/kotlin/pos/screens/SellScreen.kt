@@ -278,11 +278,6 @@ fun SellScreen(
                                 TextButton({holding=true;holdName="";heldError=null},enabled=encodedCart.isNotEmpty()) { Text("Put sale aside") }
                                 TextButton({showHeld=true;try {heldSales=requireNotNull(draftStore).heldSales();heldError=null} catch(e:Exception) {heldError=e.message ?: "Saved sales could not be read."}}) { Text("Saved sales (${heldSales.size})") }
                             }
-                            if (stage == "items" && lines.isNotEmpty()) {
-                                TextButton({ noteEntry = note; noteError = null; editingNote = true }) {
-                                    Text(if (note.isEmpty()) "Add sale note" else "Edit sale note")
-                                }
-                            }
                             if(stage=="items" && allowDiscounts && repository!=null) Row(horizontalArrangement=Arrangement.spacedBy(4.dp)) {
                                 TextButton({selectingPriceCustomer=true}) {Text(customer?.name ?: "Add customer")}
                                 TextButton({selectingPrices=true},enabled=rawLines.isNotEmpty()) {Text("Choose price list")}
@@ -393,11 +388,18 @@ fun SellScreen(
                             HorizontalDivider()
                             Spacer(Modifier.height(16.dp))
                             if (stage == "items" && lines.isNotEmpty()) {
-                                TextButton({ noteEntry = note; noteError = null; editingNote = true }) {
-                                    Text(if (note.isEmpty()) "Add sale note" else "Edit sale note")
+                                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                    TextButton({ noteEntry = note; noteError = null; editingNote = true }) {
+                                        Text(if (note.isEmpty()) "Add sale note" else "Edit sale note")
+                                    }
+                                    if (allowDiscounts) TextButton(
+                                        { editingBasket = true },
+                                        enabled = quantityErrors.none { it.key in quantities && it.value }
+                                    ) {
+                                        Text(if (basketRule == null) "Basket discount" else "Review basket discount")
+                                    }
                                 }
                             }
-                            if(stage=="items" && allowDiscounts && lines.isNotEmpty()) TextButton({editingBasket=true},enabled=quantityErrors.none {it.key in quantities && it.value}) {Text(if(basketRule==null) "Basket discount" else "Review basket discount")}
                             Text("Total", color = MaterialTheme.colorScheme.onSurfaceVariant)
                             if ((discounts.isNotEmpty() || basketRule!=null) && totalResult.isSuccess) {
                                 Row(Modifier.fillMaxWidth()) { Text("Before discount", Modifier.weight(1f)); Text(money(cartSubtotal(lines))) }
