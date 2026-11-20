@@ -34,12 +34,12 @@ import java.util.UUID
 
 /** Customer history is local to the selected shop; original credit and later cash remain distinct. */
 @Composable
-fun CustomerWorkspace(repo: PosRepository, tenantId: String, onChanged: () -> Unit) {
-    key(tenantId) { TenantCustomers(repo, tenantId, onChanged) }
+fun CustomerWorkspace(repo: PosRepository, tenantId: String, onFollowUps: (() -> Unit)? = null, onChanged: () -> Unit) {
+    key(tenantId) { TenantCustomers(repo, tenantId, onFollowUps, onChanged) }
 }
 
 @Composable
-private fun TenantCustomers(repo: PosRepository, tenantId: String, onChanged: () -> Unit) {
+private fun TenantCustomers(repo: PosRepository, tenantId: String, onFollowUps: (() -> Unit)?, onChanged: () -> Unit) {
     var revision by remember { mutableIntStateOf(0) }
     var search by remember { mutableStateOf("") }
     var selectedId by remember { mutableStateOf<String?>(null) }
@@ -63,6 +63,7 @@ private fun TenantCustomers(repo: PosRepository, tenantId: String, onChanged: ()
             PosTextField(search, { search = it }, "Search for a customer", Modifier.fillMaxWidth(), hint = "Customer name or phone number")
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text("${customers.size} customers · This shop only", Modifier.weight(1f), style = MaterialTheme.typography.bodySmall)
+                if (onFollowUps != null) TextButton(onFollowUps) { Text("Repayment follow-ups") }
                 NeutralButton("Refresh", { revision++ })
             }
         } else {
