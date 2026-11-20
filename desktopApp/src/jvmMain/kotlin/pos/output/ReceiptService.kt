@@ -75,6 +75,7 @@ object ReceiptService {
                 appendLine("Cash given by customer: ${money(tender)}")
                 appendLine("Change at sale: ${money(requireNotNull(sale.changeMinor))}")
             }
+            sale.note?.let { appendLine("Sale note: $it") }
             if (returns.isNotEmpty()) {
                 appendLine()
                 appendLine("RETURNS AND REFUNDS")

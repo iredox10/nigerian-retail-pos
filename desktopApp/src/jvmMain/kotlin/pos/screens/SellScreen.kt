@@ -36,7 +36,7 @@ fun SellScreen(
     allowDiscounts: Boolean = true,
     repository:pos.data.PosRepository?=null,
     imageRevision:Int=0,
-    onCheckout: (List<CartLine>, Long, String?, String, String?, BasketDiscount?, List<ExternalPayment>, Long) -> String?,
+    onCheckout: (List<CartLine>, Long, String?, String, String?, BasketDiscount?, List<ExternalPayment>, Long, String?) -> String?,
 ) {
     val draftStoreResult = remember(tenantId) { runCatching { DraftStore(tenantId) } }
     val draftStore = draftStoreResult.getOrNull()
@@ -74,6 +74,10 @@ fun SellScreen(
     var externalAmountText by rememberSaveable {mutableStateOf(restoredDraft.getOrNull()?.externalAmountText.orEmpty())}
     var externalReference by rememberSaveable {mutableStateOf(restoredDraft.getOrNull()?.externalReference.orEmpty())}
     var externalAccount by rememberSaveable {mutableStateOf(restoredDraft.getOrNull()?.externalAccount.orEmpty())}
+    var note by rememberSaveable { mutableStateOf(restoredDraft.getOrNull()?.note.orEmpty()) }
+    var editingNote by remember { mutableStateOf(false) }
+    var noteEntry by remember { mutableStateOf("") }
+    var noteError by remember { mutableStateOf<String?>(null) }
     var savedExternal by rememberSaveable {mutableStateOf(0L)}
     var error by remember { mutableStateOf<String?>(draftStoreResult.exceptionOrNull()?.let { "Draft storage unavailable: ${it.message}" } ?: restoredDraft.exceptionOrNull()?.let { "Could not restore saved sale: ${it.message}. Original draft has not been changed." }) }
     var savedTotal by rememberSaveable { mutableStateOf(0L) }
@@ -89,15 +93,15 @@ fun SellScreen(
     var heldError by remember { mutableStateOf<String?>(heldResult.exceptionOrNull()?.message) }
     var discard by remember { mutableStateOf<HeldSale?>(null) }
     var reviewNotice by remember { mutableStateOf<String?>(null) }
-    fun currentDraft() = SaleDraft(encodedCart,operationId,cashText,selectedCustomer,method,dueDateText,discounts,basketRule,if(basketRule==null) null else basketBasis,externalMethod,externalAmountText,externalReference,externalAccount)
+    fun currentDraft() = SaleDraft(encodedCart,operationId,cashText,selectedCustomer,method,dueDateText,discounts,basketRule,if(basketRule==null) null else basketBasis,externalMethod,externalAmountText,externalReference,externalAccount,note)
     fun persistPayment(cash:String=cashText,customerId:String?=selectedCustomer,paymentMethod:String=method,due:String=dueDateText) {
         try {
             require(draftStore!=null && restoredDraft.isSuccess) { "Draft storage is unavailable." }
-            draftStore.save(SaleDraft(encodedCart,operationId,cash,customerId,paymentMethod,due,discounts,basketRule,if(basketRule==null) null else basketBasis,externalMethod,externalAmountText,externalReference,externalAccount))
+            draftStore.save(SaleDraft(encodedCart,operationId,cash,customerId,paymentMethod,due,discounts,basketRule,if(basketRule==null) null else basketBasis,externalMethod,externalAmountText,externalReference,externalAccount,note))
             cashText=cash;selectedCustomer=customerId;method=paymentMethod;dueDateText=due;error=null
         } catch(e:Exception) { error="Payment details not saved: ${e.message}" }
     }
-    fun resetCurrent() { basketKind="";basketValue=0;basketReason="";basketBasis="";encodedCart="";encodedDiscounts="";changingPrice=null;operationId=UUID.randomUUID().toString();stage="items";cashText="";selectedCustomer=null;method="cash";externalMethod="transfer";externalAmountText="";externalReference="";externalAccount="";dueDateText="";search="";showSaleOnly=false;error=null;reviewNotice=null }
+    fun resetCurrent() { basketKind="";basketValue=0;basketReason="";basketBasis="";encodedCart="";encodedDiscounts="";changingPrice=null;operationId=UUID.randomUUID().toString();stage="items";cashText="";selectedCustomer=null;method="cash";externalMethod="transfer";externalAmountText="";externalReference="";externalAccount="";note="";dueDateText="";search="";showSaleOnly=false;error=null;reviewNotice=null }
     val quantities = remember(encodedCart) {
         encodedCart.split(';').mapNotNull { item ->
             val index = item.lastIndexOf(':')
@@ -122,7 +126,7 @@ fun SellScreen(
     val lines=basketAllocation.getOrDefault(rawLines)
     fun persistBasketRule(rule:BasketDiscount?) {
         val basis=rule?.let {basketDiscountBasis(rawLines)}
-        requireNotNull(draftStore).save(SaleDraft(encodedCart,operationId,cashText,selectedCustomer,method,dueDateText,discounts,rule,basis,externalMethod,externalAmountText,externalReference,externalAccount))
+        requireNotNull(draftStore).save(SaleDraft(encodedCart,operationId,cashText,selectedCustomer,method,dueDateText,discounts,rule,basis,externalMethod,externalAmountText,externalReference,externalAccount,note))
         basketKind=rule?.kind.orEmpty();basketValue=rule?.value ?: 0;basketReason=rule?.reason.orEmpty();basketBasis=basis.orEmpty()
     }
     fun fitsStock(line: CartLine, quantity: Int): Boolean = runCatching {
@@ -147,7 +151,7 @@ fun SellScreen(
         val updated = next.entries.joinToString(";") { "${it.key}:${it.value}" }
         require(draftStore != null && restoredDraft.isSuccess) { "Draft storage is unavailable. Resolve the saved-draft error first." }
         val keptRule=if(next.isEmpty()) null else basketRule
-        draftStore.save(SaleDraft(updated, operationId,cashText,selectedCustomer,method,dueDateText,nextDiscounts,keptRule,if(keptRule==null) null else basketBasis,externalMethod,externalAmountText,externalReference,externalAccount))
+        draftStore.save(SaleDraft(updated, operationId,cashText,selectedCustomer,method,dueDateText,nextDiscounts,keptRule,if(keptRule==null) null else basketBasis,externalMethod,externalAmountText,externalReference,externalAccount,note))
         if(keptRule==null) {basketKind="";basketValue=0;basketReason="";basketBasis=""}
         encodedCart = updated
         encodedDiscounts = DraftDiscountCodec.encode(nextDiscounts)
@@ -274,6 +278,11 @@ fun SellScreen(
                                 TextButton({holding=true;holdName="";heldError=null},enabled=encodedCart.isNotEmpty()) { Text("Put sale aside") }
                                 TextButton({showHeld=true;try {heldSales=requireNotNull(draftStore).heldSales();heldError=null} catch(e:Exception) {heldError=e.message ?: "Saved sales could not be read."}}) { Text("Saved sales (${heldSales.size})") }
                             }
+                            if (stage == "items" && lines.isNotEmpty()) {
+                                TextButton({ noteEntry = note; noteError = null; editingNote = true }) {
+                                    Text(if (note.isEmpty()) "Add sale note" else "Edit sale note")
+                                }
+                            }
                             if(stage=="items" && allowDiscounts && repository!=null) Row(horizontalArrangement=Arrangement.spacedBy(4.dp)) {
                                 TextButton({selectingPriceCustomer=true}) {Text(customer?.name ?: "Add customer")}
                                 TextButton({selectingPrices=true},enabled=rawLines.isNotEmpty()) {Text("Choose price list")}
@@ -383,6 +392,11 @@ fun SellScreen(
                             error?.let { Text(it, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(vertical = 8.dp)) }
                             HorizontalDivider()
                             Spacer(Modifier.height(16.dp))
+                            if (stage == "items" && lines.isNotEmpty()) {
+                                TextButton({ noteEntry = note; noteError = null; editingNote = true }) {
+                                    Text(if (note.isEmpty()) "Add sale note" else "Edit sale note")
+                                }
+                            }
                             if(stage=="items" && allowDiscounts && lines.isNotEmpty()) TextButton({editingBasket=true},enabled=quantityErrors.none {it.key in quantities && it.value}) {Text(if(basketRule==null) "Basket discount" else "Review basket discount")}
                             Text("Total", color = MaterialTheme.colorScheme.onSurfaceVariant)
                             if ((discounts.isNotEmpty() || basketRule!=null) && totalResult.isSuccess) {
@@ -403,7 +417,7 @@ fun SellScreen(
                                     method in setOf("credit","split_credit") && credit>0 && dueDateText.isNotBlank() && runCatching { val date=java.time.LocalDate.parse(dueDateText.trim()); require(date.toString()==dueDateText.trim() && !date.isBefore(java.time.LocalDate.now(java.time.ZoneId.of("Africa/Lagos")))) }.isFailure -> error="Use YYYY-MM-DD for a due date today or later."
                                     else -> {
                                         committing = true
-                                        val result = try { onCheckout(lines, appliedCash, customer?.id, operationId, if(credit>0) dueDateText.trim().ifBlank { null } else null,basketRule,externalPayments,cash) } catch (e: Exception) { e.message ?: "Sale not saved" }
+                                        val result = try { onCheckout(lines, appliedCash, customer?.id, operationId, if(credit>0) dueDateText.trim().ifBlank { null } else null,basketRule,externalPayments,cash,note.ifEmpty { null }) } catch (e: Exception) { e.message ?: "Sale not saved" }
                                         committing = false
                                         if (result == null) {
                                             savedTotal = total; savedChange = maxOf(0, cash - cashNeeded); savedCredit = credit;savedExternal=externalAmount; stage = "saved"
@@ -513,6 +527,31 @@ fun SellScreen(
         try { requireNotNull(draftStore).hold(holdName,currentDraft());heldSales=draftStore.heldSales();resetCurrent();holding=false;reviewNotice="Sale put aside on this computer." }
         catch(e:Exception) {heldError=e.message ?: "Sale could not be put aside."}
     }) {Text("Save & start another sale")}},dismissButton={TextButton({holding=false}) {Text("Cancel")}})
+    if (editingNote) AlertDialog(
+        onDismissRequest = { editingNote = false },
+        title = { Text("Sale note") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text("This note appears on the saved receipt and sales export.")
+                OutlinedTextField(noteEntry, { noteEntry = it; noteError = null },
+                    label = { Text("Note (optional)") }, singleLine = true, modifier = Modifier.fillMaxWidth(),
+                    supportingText = { Text("${noteEntry.length}/300 characters") })
+                noteError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+            }
+        },
+        confirmButton = {
+            TextButton({
+                try {
+                    requireNotNull(draftStore).save(currentDraft().copy(note = noteEntry.trim()))
+                    note = noteEntry.trim()
+                    editingNote = false
+                } catch (e: Exception) {
+                    noteError = e.message ?: "The note could not be saved."
+                }
+            }, enabled = noteEntry.length <= 300 && noteEntry.none { it.isISOControl() }) { Text("Save note") }
+        },
+        dismissButton = { TextButton({ editingNote = false }) { Text("Cancel") } }
+    )
     if(showHeld) AlertDialog(onDismissRequest={showHeld=false},title={Text("Saved sales (${heldSales.size})")},text={Column(Modifier.heightIn(max=520.dp).verticalScroll(rememberScrollState()),verticalArrangement=Arrangement.spacedBy(16.dp)) {
         Text("Saved on this computer only. Stock is not reserved. Resuming uses current prices and availability.")
         if(encodedCart.isNotEmpty()) Text("Put this sale aside first, then resume another.",color=MaterialTheme.colorScheme.error)
@@ -525,7 +564,7 @@ fun SellScreen(
                     TextButton({
                         try {
                             val resumed=requireNotNull(draftStore).resume(held.id)
-                            basketKind=resumed.basketDiscount?.kind.orEmpty();basketValue=resumed.basketDiscount?.value ?: 0;basketReason=resumed.basketDiscount?.reason.orEmpty();basketBasis=resumed.basketBasis.orEmpty();encodedCart=resumed.cart;encodedDiscounts=DraftDiscountCodec.encode(resumed.discounts);operationId=resumed.operationId;cashText=resumed.cashText;selectedCustomer=resumed.customerId;method=resumed.method;dueDateText=resumed.dueDateText;externalMethod=resumed.externalMethod;externalAmountText=resumed.externalAmountText;externalReference=resumed.externalReference;externalAccount=resumed.externalAccount;stage="items";error=null;heldSales=draftStore.heldSales();showHeld=false;showSaleOnly=true
+                            basketKind=resumed.basketDiscount?.kind.orEmpty();basketValue=resumed.basketDiscount?.value ?: 0;basketReason=resumed.basketDiscount?.reason.orEmpty();basketBasis=resumed.basketBasis.orEmpty();encodedCart=resumed.cart;encodedDiscounts=DraftDiscountCodec.encode(resumed.discounts);operationId=resumed.operationId;cashText=resumed.cashText;selectedCustomer=resumed.customerId;method=resumed.method;dueDateText=resumed.dueDateText;externalMethod=resumed.externalMethod;externalAmountText=resumed.externalAmountText;externalReference=resumed.externalReference;externalAccount=resumed.externalAccount;note=resumed.note;stage="items";error=null;heldSales=draftStore.heldSales();showHeld=false;showSaleOnly=true
                             reviewNotice="Resumed sale: check current prices, quantities and payment before finishing."
                         }catch(e:Exception) {heldError=e.message ?: "Sale could not be resumed."}
                     },enabled=encodedCart.isEmpty()) {Text("Resume sale")}
