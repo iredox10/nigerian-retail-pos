@@ -31,3 +31,13 @@ Online transport, cloud sync/backend enrollment and live provider/messaging inte
 The four local slices above are integrated, with 555 tests passing (77 shared + 478 desktop) and a rebuilt Linux application image. Selected actual Linux Compose keyboard/pointer checks ran with sample records in an isolated display and loopback-only network namespace: below-minimum checkout rejection, owner contribution review/save, expense receipt import/save/preview and two-batch repacking. BUILD_STATUS.md records screenshots and unperformed broader checks. No cloud transport or sync implementation was added.
 
 The following dependency list remains unfinished; completing this batch does not complete the full local specification.
+
+## 20 November local implementation wave
+
+- [ ] Product variant families with independently identified and stocked catalogue items.
+- [ ] Supplier returns with reviewed stock removal and a reduction to unpaid purchase debt.
+- [ ] Local customer repayment follow-ups with dated action history.
+- [ ] Cash tender and change on completed sales, reprinted receipts and CSV exports.
+- [ ] Integrate and verify the new workflows, including encrypted recovery and native practice checks.
+
+Four specialists are scheduled across the available agent slots. The remaining local requirements above continue to apply.
