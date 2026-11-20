@@ -16,8 +16,8 @@
 
 1. Exchanges, customer advances/store credit/change owed, repayment reversals and disputes with complete account/history integration.
 2. Customer write-offs/reinstatement/disputes/merge and separately authenticated manager approvals.
-3. Supplier returns/credits, damaged-delivery discrepancies, landed-cost allocations and purchase cost history.
-4. Product variants/nested unit definitions, promotions/bundles/open-price goods and advanced replenishment.
+3. Supplier reimbursements and unapplied credits, damaged-delivery discrepancies, landed-cost allocations and purchase cost history.
+4. Structured variant options and nested unit definitions, promotions/bundles/open-price goods and advanced replenishment.
 5. Orders/deposits/layaway/reservations, partial fulfilment and collection/dispatch; remaining invoice/delivery/credit-note documents.
 6. Per-cashier/register custody, handover/sign-off, historical costing/valuation/COGS, journals and accounting periods.
 7. Local lots/expiry/serial/warranty/service/container/loyalty modules where their requirements are defined.
@@ -34,10 +34,12 @@ The following dependency list remains unfinished; completing this batch does not
 
 ## 20 November local implementation wave
 
-- [ ] Product variant families with independently identified and stocked catalogue items.
-- [ ] Supplier returns with reviewed stock removal and a reduction to unpaid purchase debt.
-- [ ] Local customer repayment follow-ups with dated action history.
-- [ ] Cash tender and change on completed sales, reprinted receipts and CSV exports.
-- [ ] Integrate and verify the new workflows, including encrypted recovery and native practice checks.
+- [x] Product variant families with independently identified and stocked catalogue items.
+- [x] Supplier returns with reviewed stock removal and a reduction to unpaid purchase debt.
+- [x] Local customer repayment follow-ups with dated action history.
+- [x] Cash tender and change on completed sales, reprinted receipts and CSV exports.
+- [x] Optional basket notes through held-sale recovery, completion, receipts and CSV.
+- [x] Frequent items in Sell, ranked by recent retained receipts.
+- [x] Integrate and verify the new workflows, including encrypted recovery and disconnected native practice checks.
 
-Four specialists are scheduled across the available agent slots. The remaining local requirements above continue to apply.
+Four subagents were launched across the available slots. The supplier return subagent implemented the return, statement and screen changes. Root resumed the remaining assignments after three subagents stalled and integrated, tested and committed the batch. The open items above are the remaining local backlog.

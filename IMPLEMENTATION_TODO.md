@@ -74,12 +74,13 @@ Work is ordered by dependencies, not by hiding any part of the full specificatio
 - [ ] Nested package definitions, multi-input assembly and repacking costing/yield-loss reconciliation.
 - [x] SKU/category/brand/alias editing, immutable metadata history, CSV snapshots and checkout search/category filters; integrated automated coverage passes.
 - [ ] Complete rendered keyboard/failure acceptance for catalogue metadata/filter workflows.
-- [ ] Product variants and unique variant barcodes.
+- [x] Group separate catalogue items in variant families. Each item has its own stock, price, SKU and barcode. Search by the family or label in Sell and Stock.
+- [ ] Structured size/colour options and matrix-based variant creation and editing.
 - [x] Product photo and shop logo imports, bounded raster copies in SQLite, replacement/removal history, Stock/Sell/workspace rendering and encrypted backup/restore.
 - [x] Historical receipt logo capture and first-page PDF rendering.
 - [ ] Image galleries/crop/orientation controls, bulk image import and broader media acceptance.
 - [x] Checkout Favourites filter.
-- [ ] Automatic frequently-sold selection.
+- [x] Sell filter for frequently sold items ranked by retained sales in the last 30 WAT days.
 - [x] Code128 current-product/selling-pack label PNG output and native print submission, with saved barcode/unit/price snapshots and local decoding tests.
 - [ ] Additional label layouts/symbologies and real printer/scanner verification; print submission does not prove paper delivery.
 - [x] Reviewed bulk CSV update with row errors, stale checks, atomic application, identifier swaps and immutable before/after history.
@@ -103,9 +104,11 @@ Work is ordered by dependencies, not by hiding any part of the full specificatio
 - [x] Bulk catalogue repricing via reviewed CSV with stale checks and change history.
 - [ ] Described unlisted/open-price sale items with permissions.
 - [x] Separate quotations with frozen agreed goods/units/prices, notes, expiry, revisions, acceptance/cancellation and reviewed full-cash sale conversion.
-- [ ] General basket/sale notes and quotation conversion to orders/credit/electronic payment.
+- [x] Sale notes retained in current and held baskets, completed receipts and CSV.
+- [ ] Quotation conversion to orders, credit or electronic payment.
 - [ ] Sale backdating with effective and recorded timestamps and permissions.
-- [ ] Historical tender/change snapshots and receipt-number policy.
+- [x] Historical cash given and change kept on saved receipt text, PDF and CSV.
+- [ ] Receipt-number policy beyond the existing receipt identifier.
 
 ## Payments and returns
 
@@ -139,7 +142,8 @@ Work is ordered by dependencies, not by hiding any part of the full specificatio
 - [ ] Complete dated customer statement desktop/keyboard/failure acceptance.
 - [x] Offline dated customer PDF statements with current-contact labels, WAT opening/activity/closing debt, embedded naira font and paginated identity; targeted tests pass.
 - [ ] Full native PDF export/overwrite/cancel acceptance, sharing and server document delivery.
-- [ ] Consented repayment reminders and delivery status.
+- [x] Local repayment follow-ups with due dates, current debt and reasoned completion or cancellation history.
+- [ ] Consented repayment message delivery and delivery status.
 
 ## Purchasing and suppliers
 
@@ -152,11 +156,13 @@ Work is ordered by dependencies, not by hiding any part of the full specificatio
 - [x] Managed supplier PDF/PNG/JPEG attachment bytes and historical versions in encrypted backups, with current/historical image preview and file export.
 - [ ] Broader invoice native/keyboard acceptance.
 - [ ] Landed-cost allocation and purchase-cost history/comparisons.
-- [ ] Purchase returns, supplier credit notes and account adjustments.
+- [x] Reviewed purchase returns with exact removal from stock and receipt-linked credit up to the amount owed, with no drawer movement.
+- [ ] Supplier cash reimbursements, credit notes, unapplied credits and account adjustments.
 - [x] Dated receipt-name supplier statements and CSV, including paid receipts, opening/closing debt and current debt; integrated automated coverage passes.
 - [ ] Complete supplier statement desktop/keyboard/failure acceptance.
 - [x] Extend dated statements to explicit stable supplier accounts, preserving historical supplier names on linked receipt activities.
-- [ ] Extend supplier accounts/statements to credits, adjustments and attachments after those source workflows exist; PDF native-dialog acceptance remains pending.
+- [x] Include purchase return credits in name-based and linked-account statements and exports.
+- [ ] Extend statements to additional credits, adjustments and attachments as their source workflows are implemented. Broader PDF native-dialog acceptance remains pending.
 - [ ] Reorder suggestions and supplier order export.
 
 ## Inventory

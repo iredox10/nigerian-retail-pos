@@ -6,6 +6,8 @@ Started 14 November 2026. Scope: the local desktop gaps listed in the conversati
 
 - [x] Manual transfer/card payment portions with references and explicit unverified status; split with cash and named-customer credit; draft recovery and receipt/report/export history.
 - [x] Credit-sale returns with explicit debt reduction versus refund, repayment allocation reconciliation and immutable correction history.
+- [x] Cash given and change retained on saved receipts, PDFs and CSV. Optional sale notes survive held baskets and are saved to receipt history.
+- [x] Frequent items filter in Sell ranked by recent retained sale receipts.
 - [ ] Exchanges linked to original return and replacement sale, explicit price difference.
 - [ ] Customer advances, unapplied credit, change-owed liabilities and authorized settlement.
 - [ ] Payment reversals/disputes that preserve original entries.
@@ -23,7 +25,8 @@ Started 14 November 2026. Scope: the local desktop gaps listed in the conversati
 ## 3. Purchasing and catalogue
 
 - [x] Supplier invoice metadata, duplicate detection/review and preserved source history.
-- [ ] Purchase returns, supplier credit notes, account adjustments and damaged-delivery discrepancies.
+- [x] Reviewed purchase returns against unpaid receipt debt, with exact stock removal, recorded credit and reconciled statements.
+- [ ] Supplier cash reimbursements, unapplied credits, supplier credit notes, account adjustments and damaged-delivery discrepancies.
 - [ ] Landed costs with explicit allocation and historical purchase cost comparison.
 - [x] Reviewed bulk CSV catalogue update/repricing with row errors, stale checks and atomic application.
 - [x] Retail/wholesale/customer price lists and quantity breaks with historical sale snapshots.
@@ -32,7 +35,8 @@ Started 14 November 2026. Scope: the local desktop gaps listed in the conversati
 - [x] Shop logo and one product photo with offline database bytes, reasoned replacement/removal history, Stock/Sell thumbnails, captured receipt logos and encrypted backup/restore.
 - [x] On-demand PNG/JPEG preview of current/historical supplier invoice evidence.
 - [x] Expense receipt PDF/PNG/JPEG attachments, retained historical bytes, preview/export and encrypted recovery.
-- [ ] Product variants/variant barcodes and image galleries/cropping/EXIF orientation.
+- [x] Independently stocked product variants, grouped by searchable family and label. Each item retains its own SKU and barcode.
+- [ ] Structured size/colour options and matrix editing. Image galleries, cropping and EXIF orientation.
 - [x] Versioned explicit input/output repacking recipes between two products, reviewed whole-batch execution, atomic paired stock changes and history.
 - [ ] Nested package definitions, multi-input assembly, costing and repacking yield/loss accounting.
 
@@ -40,6 +44,8 @@ Started 14 November 2026. Scope: the local desktop gaps listed in the conversati
 
 - [ ] Per-cashier/register drawers, handover/sign-off and custody transfers.
 - [ ] Authorized customer debt adjustments/write-offs/reinstatement/disputes; duplicate customer merge.
+- [x] Local repayment follow-ups with a due date and reasoned closure history.
+- [ ] Consented outbound repayment messages and delivery status.
 - [x] Classified owner cash contributions/drawings, reviewed current drawer balance, linked opposite cash corrections and CSV history.
 - [ ] Formal owner equity/loan accounts and non-cash/accrued expenses.
 - [ ] Document costing/backdating policy; historical cost layers, COGS, stock valuation and reliable profit.
@@ -68,3 +74,7 @@ Scope limits: checkout currently exposes one external portion plus cash and opti
 ## 17 November local trading checkpoint
 
 Minimum prices, explicit repacking recipes, managed expense evidence and classified owner cash are implemented and integrated. **555 tests pass** (77 shared + 478 desktop); Linux image rebuild and selected actual disconnected native workflows pass. See LOCAL_EXECUTION_TODO.md for delivery order and BUILD_STATUS.md for exact evidence. Broader native/hardware/Windows/merchant acceptance remains pending. Cloud sync is excluded by the current user instruction.
+
+## 20 November local trading checkpoint
+
+Cash given and change, sale notes, Frequent items, searchable variant families, local repayment follow-ups and debt-only supplier returns are integrated. **570 tests pass** (77 shared and 493 desktop), including encrypted backup recovery into another database. The Linux image and selected disconnected journeys pass. See BUILD_STATUS.md for screenshots and remaining acceptance checks.

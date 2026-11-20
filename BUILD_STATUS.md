@@ -1,8 +1,32 @@
 # Desktop build status
 
-17 November 2026 · Local minimum prices, repacking, expense receipts and owner money
+20 November 2026 · Offline checkout, catalogue, customer follow-ups and supplier returns
 
-## Current integrated checkpoint — local trading controls
+## Current integrated checkpoint
+
+**570 tests pass** (77 shared and 493 desktop). Ran `gradle :shared:jvmTest :desktopApp:jvmTest :desktopApp:createDistributable --offline` with Gradle 8.13 and JDK 17. The rebuilt Linux image is at `desktopApp/build/compose/binaries/main/app/RetailPOS`.
+
+- Checkout preserves cash tender and change on completed sales. Receipts and CSV distinguish cash applied to the sale from cash handed over. Optional sale notes survive active and held baskets and appear on completed receipts and exports.
+- Sell ranks its Frequent items filter by the number of receipts in the last 30 shop days that still retain each item. Fully returned items do not count toward that receipt's ranking.
+- Stock → Manage → Variant groups individual catalogue items with a family and label. Each item keeps its own stock, price, SKU, barcode and photo. Family and label are searchable in Stock and Sell. Reasoned variant changes have revision history.
+- Customers → Repayment follow-ups records local contact dates and dated completion or cancellation reasons. It shows the customer’s current debt. Scheduling and closing a follow-up leave money owed and drawer balances intact.
+- Suppliers → Receipts & payments reviews returns against the original buying quantity and price. A saved return removes the exact stock quantity and reduces the amount owed on the linked receipt. Dated statements and exports record the credit separately from cash. Reimbursements and excess supplier credits remain pending.
+
+An automated encrypted-file round trip restores the new records to another database and checks the resulting stock, drawer balance, sale receipt, customer debt, supplier debt and Frequent items ranking. Additional tests cover stale reviews, permissions, write rollback, missing history and mixed selling-unit ranking.
+
+### Disconnected desktop checks
+
+Used actual Linux Compose with sample records in an isolated 1440 × 1000 display and a loopback-only network namespace. Exercised typing, Tab/Enter and selected pointer actions.
+
+- Submitted a short cash payment, corrected it to ₦15,000 for a ₦14,000 sale, and reopened the record. The successful checkout showed ₦1,000 change and the receipt retained both amounts. [Sale saved](artifacts/desktop-tender-change-saved.png), [saved receipt](artifacts/desktop-tender-change-receipt.png).
+- Added a counter collection note and found it on the reopened receipt. The held-basket note recovery check was automated. [Receipt with note](artifacts/desktop-sale-note-receipt.png).
+- Opened Frequent items and saw the malt drink from the sample sales. Assigned the sample soap to a family using the keyboard and found it in Sell using only the family name. [Frequent items](artifacts/desktop-frequent-items.png), [saved variant](artifacts/desktop-product-variant-saved.png), [variant search](artifacts/desktop-product-variant-search.png).
+- Scheduled and completed a same-day repayment follow-up for the sample customer. Both the open and completed views showed ₦750 owed. [Due follow-up](artifacts/desktop-repayment-followup-due.png), [completed history](artifacts/desktop-repayment-followup-completed.png).
+- Returned one bag of rice. Stock changed from 34 to 33 bags. The ₦10,000 credit reduced the receipt debt from ₦18,000 to ₦8,000. Exported a receipt-name CSV and a linked supplier account PDF through the native chooser and checked the totals in both files. [Review](artifacts/desktop-purchase-return-review.png), [saved return](artifacts/desktop-purchase-return-saved.png), [stock history](artifacts/desktop-purchase-return-stock.png), [statement](artifacts/desktop-purchase-return-statement.png).
+
+Windows, physical peripherals, comprehensive keyboard and accessibility acceptance, replacement-machine recovery, and merchant usability testing remain pending. Cloud synchronization is outside the current scope.
+
+## 17 November checkpoint — local trading controls
 
 **555 tests pass**: 77 shared + 478 desktop, zero failures/errors/skips. Ran `gradle :shared:jvmTest :desktopApp:jvmTest :desktopApp:createDistributable --offline` using installed Gradle 8.13/JDK 17; successful in 1 minute 14 seconds. Linux image rebuilt at `desktopApp/build/compose/binaries/main/app/RetailPOS`. This supersedes the 519-test checkpoint below. `git diff --check` passes.
 

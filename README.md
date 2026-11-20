@@ -39,17 +39,19 @@ Desktop distributions are built for the host operating system. Build and test th
 - Single-item stock counts with the item's configured precision, previous/count/difference history, reason and stale-count rejection.
 - Source-linked stock history for opening counts, purchases in converted base units, sales, restocked returns and count corrections. Older goods without saved opening counts remain explicitly unknown.
 - Optional per-item reorder levels and a Low stock filter; archived goods are excluded. Product/low-stock snapshots and dated stock movements can be exported as CSV.
-- Cash checkout, exact amount/change, and explicit named-customer partial credit.
+- Cash checkout with cash given and change retained on completed receipts, and explicit named-customer partial credit.
 - Atomic stock/debt/sale writes and retry deduplication with stable operation identifiers.
-- Tenant-scoped active and named held basket recovery after restart, including payment-entry text/customer/method; screen-state retention across navigation.
+- Tenant-scoped active and named held basket recovery after restart, including payment details and an optional note that appears on the completed receipt and sales export.
 - Keyboard barcode entry with Enter adds one item; physical scanner testing remains outstanding.
 - Searchable sales and receipt details, customer repayments/history, reconciled CSV statements, and clearly scoped money summaries.
 - Customer phone/address and credit limits, with live transaction checks against new debt. Blank limit means unlimited; zero prevents new credit. Profile edits preserve change history.
 - Explicit repayment assignment to credit receipts, with immutable history, over-assignment protection and CSV export; assignment does not collect cash or reduce debt again.
 - Optional agreed repayment due dates on credit sales, retained in active/held baskets, receipts and exports. More → Review customer credit shows receipt balances and recorded-date overdue totals after explicit payment assignments. Unassigned payments keep overdue totals unavailable.
+- Customers → Repayment follow-ups schedules local contact dates and records completed or cancelled actions. Staff contact the customer directly.
 - Linked cash-sale returns with explicit restocking choice and duplicate-refund protection.
 - Receipt text/PDF export (A4, 58 mm, 80 mm) and operating-system print dialog with pagination. Versioned shop/contact/footer settings are captured on each new sale; later edits preserve saved receipt identity.
 - Supplier profiles with contact/terms/change history, explicit stable-account purchase links, receipt balances, later cash payments and dated CSV/PDF statements. Legacy name-only receipts stay unlinked until explicitly selected.
+- More → Suppliers & payments → Receipts & payments supports reviewed returns against unpaid purchases. Saving removes the goods and applies a credit to the original receipt. Statements show the credit separately from cash payments.
 - Supplier purchase orders with editable drafts, approval, cancellation and atomic multi-line partial receiving. Approval creates no stock, payment or debt; actual deliveries retain receipt costs and remaining quantities.
 - Durable multi-item stock-count sessions with draft recovery, conservative movement cutoffs and atomic posting.
 - Reasoned immutable stock removals for damage, spoilage/expiry, loss, samples, donations and owner use; no sale, cash or expense is fabricated.
@@ -67,6 +69,7 @@ Desktop distributions are built for the host operating system. Build and test th
 - Per-product quantity precision from zero to six decimal places, chosen when creating an item. Exact scaled stock supports measured checkout, receiving, counts and cash returns; whole selling/buying packs retain explicit conversions. Enter a quantity and choose Apply quantity before payment.
 - Physical note/coin count sheets saved with opening/closing cash, retained in encrypted backups. Closing can hide expected cash in the form; the dashboard may already have shown it. Handover and per-register drawers remain pending.
 - SKU, category, brand, alternative search names, favourites and category filters with preserved metadata history.
+- Stock → Manage → Variant groups separately stocked goods under a searchable family and label. Sell also offers a Frequent items filter based on sales retained in the last 30 shop days.
 - Percentage item discounts and fixed/percentage whole-basket discounts with exact allocation, explicit re-review after basket changes, saved drafts and conserved partial refunds.
 - Dated customer and supplier CSV/PDF statements with reconciled opening/closing debt.
 - Searchable bundled help under More → Help & practice. Practice opens a separate process with sample goods, an in-memory database and temporary drafts, without opening shop records.
@@ -76,7 +79,7 @@ Desktop distributions are built for the host operating system. Build and test th
 
 - Local tenant isolation, owner/staff passwords and local role permissions are implemented. Online identity/memberships, server authorization, remote tenant administration, and encrypted local storage are not yet implemented. This is not ready for untrusted shared-computer or multi-user SaaS production deployment.
 - No cloud sync transport, Heroku backend, bank/card verification, or external messages are connected. Native print submission is implemented; real printer output remains unverified. Manual encrypted backups are local files, not cloud backups. The status bar explicitly says so.
-- Stock uses one fixed base unit and precision per product. Measured transaction quantities use at most 2,147,483,647 scaled increments (for example, 2,147.483647 at six decimal places); stored stock also enforces exact supported bounds. Buying/selling pack counts remain whole. Historical transactions preserve their precision and conversion. Nested conversions/repacking, credit-sale returns/exchanges and full supplier accounting remain pending. Stable supplier accounts include only explicitly linked purchases; legacy receipt-name statements remain separate. Supplier credits, landed costs and complete supplier accounting remain pending.
+- Stock uses one fixed base unit and precision per product. Measured transaction quantities use at most 2,147,483,647 scaled increments (for example, 2,147.483647 at six decimal places). Stored stock also enforces exact supported bounds. Buying and selling pack counts remain whole. Historical transactions preserve their precision and conversion. Nested conversions, exchanges, supplier reimbursements and unapplied credits, landed costs and complete supplier accounting remain pending. Stable supplier accounts include explicitly linked purchases. Legacy receipt-name statements remain separate.
 - Backups exclude unfinished baskets, owner credentials and device settings. Restore creates a separate shop and preserves historical cash counts; verify physical cash before trading. Backup encryption does not encrypt the working database.
 - Only one cash shift per shop is supported in this build. Open Money → Today's cash and enter the cash physically counted. Cash paid out for expenses or stock requires that open drawer and sufficient recorded cash. Sales/repayments made without an open drawer remain unassigned and are not automatically added to a later shift's opening count.
 - Active and held baskets retain item IDs/quantities and payment-entry text/customer/method, without a frozen price snapshot. Holding reserves no stock. Checkout revalidates current price and stock. Review restored goods before payment. A held basket is not an order, a completed sale or a payment record.
