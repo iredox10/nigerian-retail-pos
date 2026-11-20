@@ -210,8 +210,8 @@ fun main(args: Array<String>) {
                 Box(Modifier.weight(1f).padding(24.dp)) {
                     if (!routeAllowed(route)) Text("Your role cannot open this workspace. Lock the shop to sign in with another account.")
                     else when (route) {
-                        "Sell" -> saleStates.SaveableStateProvider(current.id) { SellScreen(current.id, products, customers, remember(current.id, revision) { repo.sellingUnits(current.id) }, allowCredit = allowed(StaffPermission.SELL_CREDIT), allowDiscounts = allowed(StaffPermission.DISCOUNT),repository=repo,imageRevision=revision) { lines, cash, customer, operationId, dueDate, basketDiscount, externalPayments ->
-                            try { repo.checkout(current.id, lines, cash, customer, operationId,dueDate,basketDiscount,externalPayments); revision++; null } catch (e: Exception) { e.message ?: "Sale not saved" }
+                        "Sell" -> saleStates.SaveableStateProvider(current.id) { SellScreen(current.id, products, customers, remember(current.id, revision) { repo.sellingUnits(current.id) }, allowCredit = allowed(StaffPermission.SELL_CREDIT), allowDiscounts = allowed(StaffPermission.DISCOUNT),repository=repo,imageRevision=revision) { lines, cash, customer, operationId, dueDate, basketDiscount, externalPayments, cashGiven ->
+                            try { repo.checkout(current.id, lines, cash, customer, operationId,dueDate,basketDiscount,externalPayments,cashGiven); revision++; null } catch (e: Exception) { e.message ?: "Sale not saved" }
                         } }
                         "Stock" -> StockScreen(repo, current.id, onChanged={ revision++ }, onImport={ route="Import" }, onCounts={route="Stock counts"}, onDispositions={route="Stock removed"}, onBulkUpdate={route="Bulk update"}, onPriceLists={route="Price lists"}, onMinimumPrices=if(allowed(StaffPermission.MANAGE_SETTINGS)) ({route="Minimum prices"}) else null, onRepacking={route="Repacking"})
                         "Stock counts" -> StockCountSessionsScreen(repo,current.id) {revision++}

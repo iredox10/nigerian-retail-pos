@@ -36,7 +36,7 @@ fun SellScreen(
     allowDiscounts: Boolean = true,
     repository:pos.data.PosRepository?=null,
     imageRevision:Int=0,
-    onCheckout: (List<CartLine>, Long, String?, String, String?, BasketDiscount?, List<ExternalPayment>) -> String?,
+    onCheckout: (List<CartLine>, Long, String?, String, String?, BasketDiscount?, List<ExternalPayment>, Long) -> String?,
 ) {
     val draftStoreResult = remember(tenantId) { runCatching { DraftStore(tenantId) } }
     val draftStore = draftStoreResult.getOrNull()
@@ -259,6 +259,7 @@ fun SellScreen(
                             Text(if (savedCredit > 0) "Customer owes ${money(savedCredit)}" else if(savedExternal>0) "External payment recorded · not confirmed" else "Paid in cash", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold)
                             if(savedCredit>0 && savedExternal>0) Text("External payment recorded · not confirmed",color=MaterialTheme.colorScheme.error)
                             Text(money(savedTotal), fontSize = 40.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(vertical = 24.dp))
+                            Text("Receipt ${operationId.take(8)}", style = MaterialTheme.typography.bodySmall)
                             if (savedChange > 0) {
                                 Text("Change to give", style = MaterialTheme.typography.titleMedium)
                                 Text(money(savedChange), fontSize = 28.sp, fontWeight = FontWeight.SemiBold)
@@ -402,7 +403,7 @@ fun SellScreen(
                                     method in setOf("credit","split_credit") && credit>0 && dueDateText.isNotBlank() && runCatching { val date=java.time.LocalDate.parse(dueDateText.trim()); require(date.toString()==dueDateText.trim() && !date.isBefore(java.time.LocalDate.now(java.time.ZoneId.of("Africa/Lagos")))) }.isFailure -> error="Use YYYY-MM-DD for a due date today or later."
                                     else -> {
                                         committing = true
-                                        val result = try { onCheckout(lines, appliedCash, customer?.id, operationId, if(credit>0) dueDateText.trim().ifBlank { null } else null,basketRule,externalPayments) } catch (e: Exception) { e.message ?: "Sale not saved" }
+                                        val result = try { onCheckout(lines, appliedCash, customer?.id, operationId, if(credit>0) dueDateText.trim().ifBlank { null } else null,basketRule,externalPayments,cash) } catch (e: Exception) { e.message ?: "Sale not saved" }
                                         committing = false
                                         if (result == null) {
                                             savedTotal = total; savedChange = maxOf(0, cash - cashNeeded); savedCredit = credit;savedExternal=externalAmount; stage = "saved"

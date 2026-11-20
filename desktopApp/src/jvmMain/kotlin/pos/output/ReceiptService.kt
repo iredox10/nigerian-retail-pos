@@ -71,7 +71,10 @@ object ReceiptService {
             } else if(sale.externalPayments.isEmpty()) appendLine("Paid in cash")
             sale.externalPayments.forEach {p ->appendLine("${p.label}: ${money(p.amountMinor)}");appendLine("Reference: ${p.reference}");appendLine("Receiving account / terminal: ${p.receivingAccount}")}
             if(sale.externalPayments.isNotEmpty()) appendLine("Manually recorded. This app has not confirmed bank receipt or settlement.")
-            // Tender/change are not stored by the initial sale model; never invent them.
+            sale.cashGivenMinor?.let { tender ->
+                appendLine("Cash given by customer: ${money(tender)}")
+                appendLine("Change at sale: ${money(requireNotNull(sale.changeMinor))}")
+            }
             if (returns.isNotEmpty()) {
                 appendLine()
                 appendLine("RETURNS AND REFUNDS")
