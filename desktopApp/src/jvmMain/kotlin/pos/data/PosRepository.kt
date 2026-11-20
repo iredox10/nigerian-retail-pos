@@ -153,6 +153,7 @@ class PosRepository(path: String = File(System.getProperty("user.home"), ".niger
         initializeExpenseAttachments()
         initializeSaleTender()
         initializeSaleNotes()
+        initializeFrequentItems()
         execute("CREATE TRIGGER IF NOT EXISTS activity_audit_no_update BEFORE UPDATE ON activity_audit BEGIN SELECT RAISE(ABORT,'Activity history cannot be edited'); END")
         execute("CREATE TRIGGER IF NOT EXISTS activity_audit_no_delete BEFORE DELETE ON activity_audit BEGIN SELECT RAISE(ABORT,'Activity history cannot be removed'); END")
     }
