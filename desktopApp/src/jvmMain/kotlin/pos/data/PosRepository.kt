@@ -156,6 +156,7 @@ class PosRepository(path: String = File(System.getProperty("user.home"), ".niger
         initializeFrequentItems()
         initializeRepaymentReminders()
         initializeProductVariants()
+        initializePurchaseReturns()
         execute("CREATE TRIGGER IF NOT EXISTS activity_audit_no_update BEFORE UPDATE ON activity_audit BEGIN SELECT RAISE(ABORT,'Activity history cannot be edited'); END")
         execute("CREATE TRIGGER IF NOT EXISTS activity_audit_no_delete BEFORE DELETE ON activity_audit BEGIN SELECT RAISE(ABORT,'Activity history cannot be removed'); END")
     }
@@ -297,6 +298,7 @@ class PosRepository(path: String = File(System.getProperty("user.home"), ".niger
         stockAdjustments(tenantId,productId).forEach { count -> movements+=InventoryMovement("count:${count.id}",tenantId,productId,"count",count.difference,count.id,count.createdAt,"Count ${count.previousStock} → ${count.countedStockLabel}: ${count.reason}") }
         movements+=inventoryDispositionMovements(tenantId,productId)
         movements+=repackingMovements(tenantId,productId)
+        movements+=purchaseReturnMovements(tenantId,productId)
         return movements.sortedWith(compareBy<InventoryMovement> { Instant.parse(it.createdAt) }.thenBy { it.id })
     }
     @Synchronized fun productByBarcode(tenantId:String,barcode:String):Product? {
@@ -898,7 +900,10 @@ class PosRepository(path: String = File(System.getProperty("user.home"), ".niger
     @Synchronized fun supplierOutstanding(tenantId:String,receiptId:String):Long {
         val receipt=requireStockReceipt(tenantId,receiptId)
         val paid=supplierPayments(tenantId,receiptId).fold(0L) { total,payment -> Math.addExact(total,payment.amountMinor) }
-        return Math.subtractExact(receipt.unpaidMinor,paid).also { require(it>=0) { "Supplier payment history exceeds the receipt balance." } }
+        val credited=purchaseReturnCredits(tenantId,receiptId)
+        return Math.subtractExact(Math.subtractExact(receipt.unpaidMinor,paid),credited).also {
+            require(it>=0) { "Supplier payments and returns exceed the receipt balance." }
+        }
     }
     @Synchronized fun paySupplierReceipt(tenantId:String,receiptId:String,amountMinor:Long,operationId:String?=null):SupplierPayment = transaction {
         requirePermission(tenantId, StaffPermission.MANAGE_SUPPLIERS)
@@ -916,7 +921,11 @@ class PosRepository(path: String = File(System.getProperty("user.home"), ".niger
         require(amountMinor<=supplierOutstanding(tenantId,receiptId)) { "Payment exceeds what is still owed on this stock receipt." }
         val shift=requireCashShift(tenantId)
         requireCashAvailable(tenantId,shift.id,amountMinor)
-        val result=SupplierPayment(operationId?:id(),tenantId,receiptId,receipt.supplierName,amountMinor,Instant.now().toString())
+        val now=Instant.now()
+        purchaseReturnLatestTime(tenantId,receiptId)?.let {
+            require(now>it) { "Correct the computer clock before paying this receipt." }
+        }
+        val result=SupplierPayment(operationId?:id(),tenantId,receiptId,receipt.supplierName,amountMinor,now.toString())
         execute("INSERT INTO supplier_payments VALUES(?,?,?,?,?,?)",result.id,tenantId,receiptId,receipt.supplierName,amountMinor,result.createdAt)
         appendCash(tenantId,shift.id,"supplier_payment",-amountMinor,"Payment to ${receipt.supplierName}",result.id)
         enqueue(tenantId,"supplier.payment",result.id)
@@ -946,7 +955,7 @@ class PosRepository(path: String = File(System.getProperty("user.home"), ".niger
     }
     private fun supplierPayment(r:ResultSet)=SupplierPayment(r.getString("id"),r.getString("tenant_id"),r.getString("receipt_id"),r.getString("supplier_name"),r.getLong("amount_minor"),r.getString("created_at"))
 
-    private val snapshotTableOrder get() = listOf("products","product_metadata_changes","selling_units","stock_settings_changes","purchase_units","customers","customer_changes","cash_shifts","sales","sale_lines","repayments","repayment_allocations","allocation_reversals","stock_receipts","expenses","sale_returns","return_lines","supplier_payments","cash_entries","catalogue_changes","stock_adjustments","outbox","activity_audit") + supplierProfileSnapshotTables + purchaseOrderSnapshotTables + inventoryDispositionSnapshotTables + stockCountSessionSnapshotTables + shopProfileSnapshotTables + externalPaymentSnapshotTables + priceListSnapshotTables + bulkCatalogueUpdateSnapshotTables + supplierInvoiceSnapshotTables + creditReturnSnapshotTables + quotationSnapshotTables + localImageSnapshotTables + ownerCashSnapshotTables + minimumPriceSnapshotTables + repackingSnapshotTables + expenseAttachmentSnapshotTables + saleTenderSnapshotTables + reminderSnapshotTables + variantSnapshotTables
+    private val snapshotTableOrder get() = listOf("products","product_metadata_changes","selling_units","stock_settings_changes","purchase_units","customers","customer_changes","cash_shifts","sales","sale_lines","repayments","repayment_allocations","allocation_reversals","stock_receipts","expenses","sale_returns","return_lines","supplier_payments","cash_entries","catalogue_changes","stock_adjustments","outbox","activity_audit") + supplierProfileSnapshotTables + purchaseOrderSnapshotTables + inventoryDispositionSnapshotTables + stockCountSessionSnapshotTables + shopProfileSnapshotTables + externalPaymentSnapshotTables + priceListSnapshotTables + bulkCatalogueUpdateSnapshotTables + supplierInvoiceSnapshotTables + creditReturnSnapshotTables + quotationSnapshotTables + localImageSnapshotTables + ownerCashSnapshotTables + minimumPriceSnapshotTables + repackingSnapshotTables + expenseAttachmentSnapshotTables + saleTenderSnapshotTables + reminderSnapshotTables + variantSnapshotTables + purchaseReturnSnapshotTables
     @Synchronized fun exportTenantSnapshot(tenantId:String):TenantSnapshot = transaction {
         requirePermission(tenantId, StaffPermission.BACKUP)
         requireTenant(tenantId)
@@ -1139,6 +1148,7 @@ class PosRepository(path: String = File(System.getProperty("user.home"), ".niger
         validateSaleNotes(tenant.id)
         validateRepaymentReminders(tenant.id)
         validateProductVariants(tenant.id)
+        validatePurchaseReturns(tenant.id)
         provisionOwner(tenant)
         tenant
     }
