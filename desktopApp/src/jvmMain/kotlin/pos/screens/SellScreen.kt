@@ -19,6 +19,7 @@ import pos.domain.*
 import pos.ui.components.SavedImage
 import pos.data.DraftDiscountCodec
 import pos.data.DraftStore
+import pos.data.frequentItemIds
 import pos.data.SaleDraft
 import pos.data.HeldSale
 import androidx.compose.ui.input.key.*
@@ -175,6 +176,13 @@ fun SellScreen(
     val appliedCash = minOf(cashGiven ?: 0, cashNeeded)
     val credit = if (method in setOf("credit","split_credit")) cashNeeded - appliedCash else 0
     val customer = customers.find { it.id == selectedCustomer }
+    var frequentOnly by rememberSaveable { mutableStateOf(false) }
+    val frequentResult = remember(tenantId, repository, frequentOnly, imageRevision) {
+        runCatching { if (frequentOnly) repository?.frequentItemIds(tenantId).orEmpty() else emptyList() }
+    }
+    val frequentRank = remember(frequentResult) {
+        frequentResult.getOrDefault(emptyList()).withIndex().associate { it.value to it.index }
+    }
 
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val compact = maxWidth < 760.dp
@@ -202,8 +210,9 @@ fun SellScreen(
                         label = { Text("Search for an item") }, placeholder = { Text("Type a name or scan a barcode, then Enter") }, shape = MaterialTheme.shapes.small)
                     if(compact && !showSaleOnly) error?.let { Text(it,color=MaterialTheme.colorScheme.error) }
                     Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), verticalAlignment = Alignment.CenterVertically, horizontalArrangement=Arrangement.spacedBy(8.dp)) {
-                        FilterChip(!favouritesOnly,{favouritesOnly=false},label={Text("All items")})
-                        FilterChip(favouritesOnly,{favouritesOnly=true},label={Text("Favourites")})
+                        FilterChip(!favouritesOnly && !frequentOnly,{favouritesOnly=false; frequentOnly=false},label={Text("All items")})
+                        FilterChip(favouritesOnly,{favouritesOnly=true; frequentOnly=false},label={Text("Favourites")})
+                        if (repository != null) FilterChip(frequentOnly,{frequentOnly=true; favouritesOnly=false},label={Text("Frequent items")})
                         Box {
                             OutlinedButton({categoryMenu=true},shape=MaterialTheme.shapes.small) {Text(selectedCategory ?: "All categories")}
                             DropdownMenu(categoryMenu,{categoryMenu=false}) {
@@ -212,12 +221,17 @@ fun SellScreen(
                             }
                         }
                     }
-                    val filtered = products.filter { product -> (!favouritesOnly || product.favourite) && (selectedCategory==null || product.category==selectedCategory) && (product.matchesCatalogueSearch(search) || sellingUnits.any { unit -> unit.productId==product.id && !unit.archived && (unit.name.contains(search,true) || unit.barcode?.contains(search.trim())==true) }) }
+                    if (frequentOnly) {
+                        Text(frequentResult.exceptionOrNull()?.let { "Could not load frequent items. Use All items to keep selling." }
+                            ?: "Ranked by sales in the last 30 shop days.", style = MaterialTheme.typography.bodySmall)
+                    }
+                    val matches = products.filter { product -> (!favouritesOnly || product.favourite) && (!frequentOnly || product.id in frequentRank) && (selectedCategory==null || product.category==selectedCategory) && (product.matchesCatalogueSearch(search) || sellingUnits.any { unit -> unit.productId==product.id && !unit.archived && (unit.name.contains(search,true) || unit.barcode?.contains(search.trim())==true) }) }
+                    val filtered = if (frequentOnly) matches.sortedBy { frequentRank[it.id] } else matches
                     if (filtered.isEmpty()) Surface(Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.medium) {
                         Column(Modifier.padding(28.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             Text(if (products.isEmpty()) "Add your first item" else "No matching items", style = MaterialTheme.typography.titleLarge)
                             Text(if (products.isEmpty()) "Open Stock → Add item to enter goods, selling prices and opening quantities." else "Try another name or code, or clear the search and filters.")
-                            if (search.isNotEmpty() || favouritesOnly || selectedCategory!=null) TextButton(shape = MaterialTheme.shapes.small, onClick = { search = ""; favouritesOnly=false; selectedCategory=null }) { Text("Clear search and filters") }
+                            if (search.isNotEmpty() || favouritesOnly || frequentOnly || selectedCategory!=null) TextButton(shape = MaterialTheme.shapes.small, onClick = { search = ""; favouritesOnly=false; frequentOnly=false; selectedCategory=null }) { Text("Clear search and filters") }
                         }
                     }
                     LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
