@@ -95,7 +95,12 @@ fun SellScreen(
     var heldError by remember { mutableStateOf<String?>(heldResult.exceptionOrNull()?.message) }
     var discard by remember { mutableStateOf<HeldSale?>(null) }
     var reviewNotice by remember { mutableStateOf<String?>(null) }
-    fun currentDraft() = SaleDraft(encodedCart,operationId,cashText,selectedCustomer,method,dueDateText,discounts,basketRule,if(basketRule==null) null else basketBasis,externalMethod,externalAmountText,externalReference,externalAccount,note)
+    fun currentDraft(): SaleDraft {
+        val currentBasket = if (basketKind.isEmpty()) null else BasketDiscount(basketKind, basketValue, basketReason)
+        return SaleDraft(encodedCart, operationId, cashText, selectedCustomer, method, dueDateText,
+            DraftDiscountCodec.decode(encodedDiscounts), currentBasket, basketBasis.takeIf { currentBasket != null },
+            externalMethod, externalAmountText, externalReference, externalAccount, note)
+    }
     fun persistPayment(cash:String=cashText,customerId:String?=selectedCustomer,paymentMethod:String=method,due:String=dueDateText) {
         try {
             require(draftStore!=null && restoredDraft.isSuccess) { "Draft storage is unavailable." }
@@ -177,6 +182,7 @@ fun SellScreen(
     val appliedCash = minOf(cashGiven ?: 0, cashNeeded)
     val credit = if (method in setOf("credit","split_credit")) cashNeeded - appliedCash else 0
     val customer = customers.find { it.id == selectedCustomer }
+    val reviewedPayment = if (stage == "payment") currentDraft() else null
     var frequentOnly by rememberSaveable { mutableStateOf(false) }
     val frequentResult = remember(tenantId, repository, frequentOnly, imageRevision) {
         runCatching { if (frequentOnly) repository?.frequentItemIds(tenantId).orEmpty() else emptyList() }
@@ -429,6 +435,7 @@ fun SellScreen(
                             Text(money(total), fontSize = 40.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(bottom = 16.dp))
                             Button(shape = MaterialTheme.shapes.small, onClick = {
                                 if (stage == "items") { stage = "payment"; return@Button }
+                                if (stage != "payment" || currentDraft() != reviewedPayment) return@Button
                                 val cash = cashGiven
                                 when {
                                     isSplit && externalResult.isFailure -> error=externalResult.exceptionOrNull()?.message
@@ -443,6 +450,7 @@ fun SellScreen(
                                         val result = try { onCheckout(lines, appliedCash, customer?.id, operationId, if(credit>0) dueDateText.trim().ifBlank { null } else null,basketRule,externalPayments,cash,note.ifEmpty { null }) } catch (e: Exception) { e.message ?: "Sale not saved" }
                                         committing = false
                                         if (result == null) {
+                                            error = null
                                             savedTotal = total; savedChange = maxOf(0, cash - cashNeeded); savedCredit = credit;savedExternal=externalAmount; stage = "saved"
                                             try { draftStore?.clear(operationId) } catch(e: Exception) { error = "Sale saved, but the old draft could not be removed. Its operation reference prevents a duplicate checkout." }
                                         } else error = result
