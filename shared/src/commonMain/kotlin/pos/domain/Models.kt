@@ -109,6 +109,7 @@ data class Sale(
     val basketDiscount: BasketDiscount? = null,
     val externalPayments: List<ExternalPayment> = emptyList(),
     val cashGivenMinor: Long? = null,
+    val note: String? = null,
 ) {
     val externalRecordedMinor:Long get()=externalPaymentTotal(externalPayments)
     val changeMinor: Long? get() = cashGivenMinor?.minus(cashMinor)
@@ -130,6 +131,9 @@ data class Sale(
             require(tender == cashMinor || creditMinor == 0L) {
                 "Review payment. A sale giving change cannot leave customer debt."
             }
+        }
+        require(note == null || (note == note.trim() && note.length in 1..300 && note.none { it.isISOControl() })) {
+            "Use up to 300 printable characters for the sale note."
         }
         require(customerId == null || customerId.isNotBlank())
         require(creditMinor == 0L || customerId != null) { "Choose a customer for money owed." }

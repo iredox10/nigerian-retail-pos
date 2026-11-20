@@ -152,6 +152,7 @@ class PosRepository(path: String = File(System.getProperty("user.home"), ".niger
         initializeRepacking()
         initializeExpenseAttachments()
         initializeSaleTender()
+        initializeSaleNotes()
         execute("CREATE TRIGGER IF NOT EXISTS activity_audit_no_update BEFORE UPDATE ON activity_audit BEGIN SELECT RAISE(ABORT,'Activity history cannot be edited'); END")
         execute("CREATE TRIGGER IF NOT EXISTS activity_audit_no_delete BEFORE DELETE ON activity_audit BEGIN SELECT RAISE(ABORT,'Activity history cannot be removed'); END")
     }
@@ -499,7 +500,7 @@ class PosRepository(path: String = File(System.getProperty("user.home"), ".niger
         return query("SELECT * FROM sales WHERE tenant_id=? ORDER BY created_at DESC",tenantId,map=::sale)
     }
     /** cashMinor is applied cash, excluding change. Caller must explicitly choose a customer for credit. */
-    @Synchronized fun checkout(tenantId: String, lines: List<CartLine>, cashMinor: Long, customerId: String? = null, operationId: String? = null, dueDate: String? = null,basketDiscount:BasketDiscount?=null,externalPayments:List<ExternalPayment> = emptyList(), cashGivenMinor: Long? = null): Sale = transaction {
+    @Synchronized fun checkout(tenantId: String, lines: List<CartLine>, cashMinor: Long, customerId: String? = null, operationId: String? = null, dueDate: String? = null,basketDiscount:BasketDiscount?=null,externalPayments:List<ExternalPayment> = emptyList(), cashGivenMinor: Long? = null, note: String? = null): Sale = transaction {
         requirePermission(tenantId, StaffPermission.SELL)
         if (basketDiscount!=null || lines.any { it.discountPerUnitMinor > 0 || it.basketDiscountMinor>0 }) requirePermission(tenantId, StaffPermission.DISCOUNT)
         val externalRecorded=externalPaymentTotal(externalPayments)
@@ -518,7 +519,7 @@ class PosRepository(path: String = File(System.getProperty("user.home"), ".niger
         if (operationId != null) {
             val existing=sales(tenantId).find { it.id==operationId }
             if (existing!=null) {
-                require(existing.cashMinor==cashMinor && existing.cashGivenMinor==cashGivenMinor && existing.customerId==customerId && existing.dueDate==dueDate && existing.basketDiscount==basketDiscount && existing.externalPayments==externalPayments && existing.lines.sortedBy { it.key }.map(::lineDetails)==requested.sortedBy { it.key }.map(::lineDetails)) { "This operation was already saved with different details." }
+                require(existing.cashMinor==cashMinor && existing.cashGivenMinor==cashGivenMinor && existing.note==note && existing.customerId==customerId && existing.dueDate==dueDate && existing.basketDiscount==basketDiscount && existing.externalPayments==externalPayments && existing.lines.sortedBy { it.key }.map(::lineDetails)==requested.sortedBy { it.key }.map(::lineDetails)) { "This operation was already saved with different details." }
                 return@transaction existing
             }
         }
@@ -554,8 +555,8 @@ class PosRepository(path: String = File(System.getProperty("user.home"), ".niger
                 require(customer.creditLimitMinor?.let { debt<=it } != false) { "This sale would exceed the customer's credit limit of ${customer.creditLimitMinor?.let(::money)}. Reduce the credit or review the customer limit." }
             }
         } else null
-        val sale=Sale(operationId ?: id(),tenantId,normalized,total,cashMinor,credit,customerId,Instant.now().toString(),dueDate,basketDiscount,externalPayments,cashGivenMinor)
-        execute("INSERT INTO sales(id,tenant_id,total_minor,cash_minor,credit_minor,customer_id,created_at,due_date,basket_discount_kind,basket_discount_value,basket_discount_reason) VALUES(?,?,?,?,?,?,?,?,?,?,?)",sale.id,tenantId,total,cashMinor,credit,customerId,sale.createdAt,dueDate,basketDiscount?.kind,basketDiscount?.value,basketDiscount?.reason)
+        val sale=Sale(operationId ?: id(),tenantId,normalized,total,cashMinor,credit,customerId,Instant.now().toString(),dueDate,basketDiscount,externalPayments,cashGivenMinor,note)
+        execute("INSERT INTO sales(id,tenant_id,total_minor,cash_minor,credit_minor,customer_id,created_at,due_date,basket_discount_kind,basket_discount_value,basket_discount_reason,sale_note) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)",sale.id,tenantId,total,cashMinor,credit,customerId,sale.createdAt,dueDate,basketDiscount?.kind,basketDiscount?.value,basketDiscount?.reason,note)
         normalized.forEach { l ->
             execute("INSERT INTO sale_lines(sale_id,tenant_id,product_id,name,unit,price_minor,quantity,selling_unit_id,selling_unit,unit_price_minor,base_units_per_unit,discount_per_unit_minor,discount_reason,quantity_precision,base_precision,basket_discount_minor) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",sale.id,tenantId,l.product.id,l.product.name,l.product.unit,l.product.priceMinor,l.quantity,l.sellingUnitId,l.sellingUnit,l.unitPriceMinor,l.baseUnitsPerUnit,l.discountPerUnitMinor,l.discountReason,l.quantityPrecision,l.product.quantityPrecision,l.basketDiscountMinor)
         }
@@ -564,6 +565,7 @@ class PosRepository(path: String = File(System.getProperty("user.home"), ".niger
         if (cashMinor>0) appendCash(tenantId,activeCashShift(tenantId)?.id,"sale",cashMinor,"Cash sale ${sale.id.take(8)}",sale.id)
         saveExternalPayments(tenantId,sale.id,externalPayments)
         captureSaleTender(sale)
+        if (sale.note != null) featureEvent(tenantId, "sale.note_captured", sale.id)
         captureReceiptProfile(tenantId,sale.id)
         captureReceiptImage(tenantId,sale.id)
         captureMinimumPriceChecks(tenantId,sale.id,normalized)
@@ -923,7 +925,7 @@ class PosRepository(path: String = File(System.getProperty("user.home"), ".niger
         val lines=query("SELECT * FROM sale_lines WHERE tenant_id=? AND sale_id=? ORDER BY id",tenantId,saleId) { line ->
             CartLine(Product(line.getString("product_id"),tenantId,line.getString("name"),line.getString("unit"),line.getLong("price_minor"),0.0,quantityPrecision=line.getInt("base_precision")),line.getInt("quantity"),line.getString("selling_unit_id"),line.getString("selling_unit") ?: line.getString("unit"),(line.getObject("unit_price_minor") as? Number)?.toLong() ?: line.getLong("price_minor"),line.getInt("base_units_per_unit"),line.getLong("discount_per_unit_minor"),line.getString("discount_reason"),line.getInt("quantity_precision"),line.getLong("basket_discount_minor"))
         }
-        return Sale(saleId,tenantId,lines,r.getLong("total_minor"),r.getLong("cash_minor"),r.getLong("credit_minor"),r.getString("customer_id"),r.getString("created_at"),r.getString("due_date"),r.getString("basket_discount_kind")?.let {BasketDiscount(it,r.getLong("basket_discount_value"),requireNotNull(r.getString("basket_discount_reason")))},externalPaymentsUnchecked(tenantId,saleId),saleTenderUnchecked(tenantId,saleId))
+        return Sale(saleId,tenantId,lines,r.getLong("total_minor"),r.getLong("cash_minor"),r.getLong("credit_minor"),r.getString("customer_id"),r.getString("created_at"),r.getString("due_date"),r.getString("basket_discount_kind")?.let {BasketDiscount(it,r.getLong("basket_discount_value"),requireNotNull(r.getString("basket_discount_reason")))},externalPaymentsUnchecked(tenantId,saleId),saleTenderUnchecked(tenantId,saleId),r.getString("sale_note"))
     }
     private fun requireSale(tenantId:String,saleId:String):Sale {
         requireTenant(tenantId)
@@ -1131,6 +1133,7 @@ class PosRepository(path: String = File(System.getProperty("user.home"), ".niger
         validateRepacking(tenant.id)
         validateExpenseAttachments(tenant.id)
         validateSaleTender(tenant.id)
+        validateSaleNotes(tenant.id)
         provisionOwner(tenant)
         tenant
     }
