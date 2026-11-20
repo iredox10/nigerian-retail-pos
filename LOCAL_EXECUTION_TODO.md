@@ -43,3 +43,12 @@ The following dependency list remains unfinished; completing this batch does not
 - [x] Integrate and verify the new workflows, including encrypted recovery and disconnected native practice checks.
 
 Four subagents were launched across the available slots. The supplier return subagent implemented the return, statement and screen changes. Root resumed the remaining assignments after three subagents stalled and integrated, tested and committed the batch. The open items above are the remaining local backlog.
+
+## Next local implementation wave
+
+- [ ] Reorder suggestions from current stock, recent retained sales and open approved purchase quantities. Show the calculation basis and export a reviewable CSV.
+- [ ] Sales invoice, delivery note and credit note output from saved local transactions.
+- [ ] Local image crop and rotation, with gallery support where the editor and history are integrated.
+- [ ] Make and reinstate authorized customer debt write-offs with reconciled history.
+- [ ] Add the next independent workflow when a subagent slot opens.
+- [ ] Verify completed workflows with supported backups, regression tests, Linux packaging and disconnected native checks. Reconcile open items against the implementation checklist.
