@@ -104,6 +104,7 @@ private fun activityLabel(kind: String): String = when (kind) {
     "stock_count.draft_saved" -> "Unfinished stock count saved"
     "stock_count.posted" -> "Stock counts posted"
     "stock_count.cancelled" -> "Stock count cancelled"
+    "product.variant_changed" -> "Product variant changed"
     "customer.followup_open" -> "Repayment follow-up scheduled"
     "customer.followup_completed" -> "Repayment follow-up completed"
     "customer.followup_cancelled" -> "Repayment follow-up cancelled"

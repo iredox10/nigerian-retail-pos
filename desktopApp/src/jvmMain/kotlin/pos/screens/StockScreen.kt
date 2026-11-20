@@ -40,6 +40,8 @@ private fun TenantStockScreen(repo: PosRepository, tenantId: String, onChanged: 
     var revision by remember { mutableStateOf(0) }
     val allProducts = remember(tenantId, revision) { repo.products(tenantId, includeArchived = true) }
     val products = allProducts.filterNot { it.archived }
+    val variantResult = remember(tenantId, revision) { runCatching { repo.productVariants(tenantId) } }
+    val variants = variantResult.getOrDefault(emptyMap())
     val receipts = remember(tenantId, revision) { repo.stockReceipts(tenantId) }
     var search by remember { mutableStateOf("") }
     var history by remember { mutableStateOf(false) }
@@ -118,7 +120,7 @@ private fun TenantStockScreen(repo: PosRepository, tenantId: String, onChanged: 
                     FilterChip(selected = history, onClick = { history = true; lowStock = false }, label = { Text("Stock received (${receipts.size})") })
                 }
                 PosTextField(search, { search = it }, if (history) "Search stock received" else "Search for an item",
-                    Modifier.fillMaxWidth(), hint = if (history) "Item name or supplier" else "Name, SKU, category, brand, search name or barcode")
+                    Modifier.fillMaxWidth(), hint = if (history) "Item name or supplier" else "Name, variant, SKU, category, brand or barcode")
                 if (history) {
                     val matching = receipts.filter {
                         it.productName.contains(search, true) || it.supplierName.contains(search, true)
@@ -152,8 +154,9 @@ private fun TenantStockScreen(repo: PosRepository, tenantId: String, onChanged: 
                         }
                     }
                 } else {
+                    if (variantResult.isFailure) Text("Product variant labels unavailable.", style = MaterialTheme.typography.bodySmall)
                     val visible = allProducts.filter { it.archived == archived && (!lowStock || it.reorderLevel?.let { level -> it.stock <= level } == true) }
-                    val matching = visible.filter { it.matchesCatalogueSearch(search) && (!favouritesOnly || it.favourite) && (selectedCategory==null || it.category==selectedCategory) }
+                    val matching = visible.filter { (it.matchesCatalogueSearch(search) || variants[it.id]?.description?.contains(search.trim(), true)==true) && (!favouritesOnly || it.favourite) && (selectedCategory==null || it.category==selectedCategory) }
                     if (lowStock) Text("Active items at or below the reorder level set for them. Set or change a level under Manage → Details.", style = MaterialTheme.typography.bodySmall, color = PosPalette.Secondary)
                     if (archived) Text("Archived items stay in saved sales and stock history. Restore an item to sell or receive it again.", style = MaterialTheme.typography.bodySmall, color = PosPalette.Secondary)
                     if (matching.isEmpty()) {
@@ -177,6 +180,7 @@ private fun TenantStockScreen(repo: PosRepository, tenantId: String, onChanged: 
                                                 SavedImage(repo,tenantId,"product",product.id,"Photo of ${product.name}",revision,Modifier.size(48.dp))
                                                 Column(Modifier.weight(1f)) {
                                                     Text(product.name, fontWeight = FontWeight.Medium)
+                                                    variants[product.id]?.let { Text(it.description, style = MaterialTheme.typography.bodySmall) }
                                                     listOfNotNull(product.sku?.let {"SKU $it"},product.category,product.brand,if(product.favourite) "Favourite" else null).takeIf {it.isNotEmpty()}?.let { Text(it.joinToString(" · "),style=MaterialTheme.typography.bodySmall,color=PosPalette.Secondary) }
                                                     product.barcode?.let { Text("Barcode $it", style = MaterialTheme.typography.bodySmall, color = PosPalette.Secondary) }
                                                     if (!product.archived && product.reorderLevel?.let { product.stock <= it } == true)

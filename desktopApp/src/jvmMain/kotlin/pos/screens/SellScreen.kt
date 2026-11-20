@@ -20,6 +20,7 @@ import pos.ui.components.SavedImage
 import pos.data.DraftDiscountCodec
 import pos.data.DraftStore
 import pos.data.frequentItemIds
+import pos.data.productVariants
 import pos.data.SaleDraft
 import pos.data.HeldSale
 import androidx.compose.ui.input.key.*
@@ -180,6 +181,10 @@ fun SellScreen(
     val frequentResult = remember(tenantId, repository, frequentOnly, imageRevision) {
         runCatching { if (frequentOnly) repository?.frequentItemIds(tenantId).orEmpty() else emptyList() }
     }
+    val variantResult = remember(tenantId, repository, imageRevision) {
+        runCatching { repository?.productVariants(tenantId).orEmpty() }
+    }
+    val variants = variantResult.getOrDefault(emptyMap())
     val frequentRank = remember(frequentResult) {
         frequentResult.getOrDefault(emptyList()).withIndex().associate { it.value to it.index }
     }
@@ -225,7 +230,8 @@ fun SellScreen(
                         Text(frequentResult.exceptionOrNull()?.let { "Could not load frequent items. Use All items to keep selling." }
                             ?: "Ranked by sales in the last 30 shop days.", style = MaterialTheme.typography.bodySmall)
                     }
-                    val matches = products.filter { product -> (!favouritesOnly || product.favourite) && (!frequentOnly || product.id in frequentRank) && (selectedCategory==null || product.category==selectedCategory) && (product.matchesCatalogueSearch(search) || sellingUnits.any { unit -> unit.productId==product.id && !unit.archived && (unit.name.contains(search,true) || unit.barcode?.contains(search.trim())==true) }) }
+                    if (variantResult.isFailure) Text("Product variant labels unavailable.", style = MaterialTheme.typography.bodySmall)
+                    val matches = products.filter { product -> (!favouritesOnly || product.favourite) && (!frequentOnly || product.id in frequentRank) && (selectedCategory==null || product.category==selectedCategory) && (product.matchesCatalogueSearch(search) || variants[product.id]?.description?.contains(search.trim(), true)==true || sellingUnits.any { unit -> unit.productId==product.id && !unit.archived && (unit.name.contains(search,true) || unit.barcode?.contains(search.trim())==true) }) }
                     val filtered = if (frequentOnly) matches.sortedBy { frequentRank[it.id] } else matches
                     if (filtered.isEmpty()) Surface(Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.medium) {
                         Column(Modifier.padding(28.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -244,6 +250,7 @@ fun SellScreen(
                                     SavedImage(repository,tenantId,"product",product.id,"Photo of ${product.name}",imageRevision,Modifier.size(52.dp))
                                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                                         Text(product.name, fontWeight = FontWeight.Medium, fontSize = 16.sp)
+                                        variants[product.id]?.let { Text(it.description, style = MaterialTheme.typography.bodySmall) }
                                         Text("${money(choice.unitPriceMinor)} / ${choice.sellingUnit}", style = MaterialTheme.typography.bodyMedium)
                                         if (choices.size > 1) Box {
                                             TextButton({ choosingUnit = true }, contentPadding = PaddingValues(0.dp)) { Text("Sell as: ${choice.sellingUnit} ▾") }
