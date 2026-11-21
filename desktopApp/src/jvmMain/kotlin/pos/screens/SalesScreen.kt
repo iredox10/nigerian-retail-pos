@@ -23,10 +23,13 @@ import pos.data.receiptProfile
 import pos.data.creditReturnAllowance
 import pos.data.returnCreditItemsReviewed
 import pos.output.BrandedReceiptService
+import pos.output.PdfDocumentKind
+import pos.output.PdfDocumentService
 import pos.output.PdfReceiptService
 import pos.domain.Sale
 import pos.domain.money
 import pos.output.ReceiptService
+import pos.output.SaleDocumentService
 import pos.output.receiptDate
 import pos.ui.components.*
 import pos.ui.theme.PosPalette
@@ -45,6 +48,7 @@ private fun TenantSalesScreen(repo: PosRepository, tenantId: String, allowReturn
     var search by remember { mutableStateOf("") }
     var selectedId by remember { mutableStateOf<String?>(null) }
     var returning by remember { mutableStateOf(false) }
+    var showingDocuments by remember { mutableStateOf(false) }
     var notice by remember { mutableStateOf<String?>(null) }
     var noticeError by remember { mutableStateOf(false) }
     var outputBusy by remember { mutableStateOf(false) }
@@ -164,6 +168,7 @@ private fun TenantSalesScreen(repo: PosRepository, tenantId: String, allowReturn
                                     } finally { outputBusy = false }
                                 }
                             }, Modifier.fillMaxWidth(), enabled = !outputBusy)
+                            NeutralButton("Sale documents", { showingDocuments = true }, Modifier.fillMaxWidth(), enabled = !outputBusy)
                             if (selected.externalPayments.isNotEmpty()) {
                                 Text("Returns involving external payment portions are not available until original-method refund reconciliation is implemented.",
                                     style = MaterialTheme.typography.bodySmall, color = PosPalette.Secondary)
@@ -186,6 +191,13 @@ private fun TenantSalesScreen(repo: PosRepository, tenantId: String, allowReturn
             }
         }
     }
+    if (showingDocuments && selected != null) {
+        SaleDocumentsDialog(
+            repo, tenant, selected, profileResult.getOrNull(), returns,
+            canPrepareDelivery = returnable.values.any { it > 0 },
+            dismiss = { showingDocuments = false },
+        )
+    }
     if (allowReturns && returning && selected != null) {
         ReturnItemsDialog(selected, returnable, creditAllowance?.getOrNull(), { returning = false }) { quantities, restock, reason, operation ->
             val saved=if(selected.creditMinor>0) repo.returnCreditItemsReviewed(tenantId,selected.id,quantities,restock,reason,operation,requireNotNull(creditAllowance?.getOrNull()))
@@ -197,6 +209,104 @@ private fun TenantSalesScreen(repo: PosRepository, tenantId: String, allowReturn
             onChanged()
         }
     }
+}
+
+@Composable
+private fun SaleDocumentsDialog(
+    repo: PosRepository,
+    tenant: Tenant,
+    sale: Sale,
+    profile: ReceiptProfileSnapshot?,
+    returns: List<SaleReturn>,
+    canPrepareDelivery: Boolean,
+    dismiss: () -> Unit,
+) {
+    var selection by remember(sale.id) { mutableStateOf<Pair<PdfDocumentKind, String>?>(null) }
+    var error by remember(sale.id) { mutableStateOf<String?>(null) }
+    var exported by remember(sale.id) { mutableStateOf<String?>(null) }
+    var busy by remember(sale.id) { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
+    val customerResult = remember(sale.id) {
+        runCatching {
+            sale.customerId?.let { customerId -> repo.customers(tenant.id).find { it.id == customerId } }
+        }
+    }
+    fun preview(kind: PdfDocumentKind, format: (Customer?) -> String) {
+        error = null
+        exported = null
+        runCatching { format(customerResult.getOrThrow()) }
+            .onSuccess { selection = kind to it }
+            .onFailure { error = it.message ?: "The document could not be loaded." }
+    }
+    val document = selection
+    AlertDialog(
+        onDismissRequest = { if (!busy) dismiss() },
+        title = { Text(document?.first?.label?.replaceFirstChar { it.uppercaseChar() } ?: "Sale documents") },
+        text = {
+            Column(Modifier.heightIn(max = 480.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                if (document == null) {
+                    Text("Choose a document for receipt ${sale.id.take(8)}.")
+                    LazyColumn(Modifier.weight(1f, fill = false), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        item {
+                            NeutralButton("Sales invoice", {
+                                preview(PdfDocumentKind.SALES_INVOICE) { SaleDocumentService.invoice(tenant, sale, profile, it) }
+                            }, Modifier.fillMaxWidth())
+                        }
+                        if (canPrepareDelivery) item {
+                            NeutralButton("Delivery note", {
+                                preview(PdfDocumentKind.DELIVERY_NOTE) { SaleDocumentService.deliveryNote(tenant, sale, returns, profile, it) }
+                            }, Modifier.fillMaxWidth())
+                        }
+                        if (returns.isNotEmpty()) item {
+                            Text("Credit notes for saved returns", style = MaterialTheme.typography.titleSmall)
+                        }
+                        items(returns, key = { it.id }) { returned ->
+                            NeutralButton("Return ${returned.id.take(8)} · ${money(returned.returnedValueMinor)}", {
+                                preview(PdfDocumentKind.CREDIT_NOTE) { SaleDocumentService.creditNote(tenant, sale, returned, profile, it) }
+                            }, Modifier.fillMaxWidth())
+                        }
+                    }
+                } else {
+                    SelectionContainer(Modifier.weight(1f, fill = false).fillMaxWidth().verticalScroll(rememberScrollState())) {
+                        Text(document.second, style = MaterialTheme.typography.bodySmall)
+                    }
+                }
+                error?.let { InlineNotice("Document unavailable", it, NoticeTone.Danger) }
+                exported?.let { InlineNotice("Document export", it, NoticeTone.Neutral) }
+            }
+        },
+        confirmButton = {
+            if (document == null) TextButton(dismiss) { Text("Close") }
+            else PosButton(if (busy) "Saving PDF…" else "Save PDF", {
+                if (!busy) {
+                    busy = true
+                    error = null
+                    exported = null
+                    scope.launch {
+                        try {
+                            val file = withContext(Dispatchers.IO) {
+                                PdfDocumentService.export(
+                                    document.second, document.first, logoPng = repo.receiptImageBytes(tenant.id, sale.id),
+                                )
+                            }
+                            exported = file?.let { "PDF saved to ${it.absolutePath}" } ?: "Export cancelled."
+                        } catch (e: Exception) {
+                            error = e.message ?: "The PDF could not be saved."
+                        } finally {
+                            busy = false
+                        }
+                    }
+                }
+            }, enabled = !busy)
+        },
+        dismissButton = {
+            if (document != null) TextButton({
+                selection = null
+                error = null
+                exported = null
+            }, enabled = !busy) { Text("Back to documents") }
+        },
+    )
 }
 
 @Composable
