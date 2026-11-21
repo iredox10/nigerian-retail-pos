@@ -6,7 +6,7 @@ import java.util.Base64
 import java.util.UUID
 
 private const val IMAGE_BUDGET=16_777_216L
-internal val localImageSnapshotTables=listOf("local_image_assets","local_image_selections","local_image_changes","sale_image_snapshots")
+internal val localImageSnapshotTables=listOf("local_image_assets","local_image_selections","local_image_changes","sale_image_snapshots","product_gallery_events")
 data class LocalImageSelection(val ownerKind:String,val ownerId:String,val assetId:String?,val version:Long)
 data class LocalImageChange(val id:String,val assetId:String?,val version:Long,val reason:String,val createdAt:String)
 
@@ -17,6 +17,7 @@ internal fun PosRepository.initializeLocalImages() {
     featureSchema("CREATE TABLE IF NOT EXISTS local_image_changes(tenant_id TEXT NOT NULL REFERENCES tenants(id),id TEXT NOT NULL,owner_kind TEXT NOT NULL CHECK(owner_kind IN('shop','product')),owner_id TEXT NOT NULL,previous_asset TEXT,asset_id TEXT,version INTEGER NOT NULL CHECK(version>0),reason TEXT NOT NULL,created_at TEXT NOT NULL,PRIMARY KEY(tenant_id,id),UNIQUE(tenant_id,owner_kind,owner_id,version),FOREIGN KEY(tenant_id,asset_id) REFERENCES local_image_assets(tenant_id,id),FOREIGN KEY(tenant_id,previous_asset) REFERENCES local_image_assets(tenant_id,id))")
     featureSchema("CREATE TABLE IF NOT EXISTS sale_image_snapshots(tenant_id TEXT NOT NULL,sale_id TEXT NOT NULL,asset_id TEXT,PRIMARY KEY(tenant_id,sale_id),FOREIGN KEY(tenant_id,sale_id) REFERENCES sales(tenant_id,id),FOREIGN KEY(tenant_id,asset_id) REFERENCES local_image_assets(tenant_id,id))")
     listOf("local_image_assets","local_image_changes","sale_image_snapshots").forEach {table ->listOf("UPDATE","DELETE").forEach {action ->featureSchema("CREATE TRIGGER IF NOT EXISTS ${table}_no_${action.lowercase()} BEFORE $action ON $table BEGIN SELECT RAISE(ABORT,'Saved image history cannot be changed'); END")}}
+    initializeProductGallery()
 }
 private fun imagePermission(kind:String)=when(kind) {"shop" ->StaffPermission.MANAGE_SETTINGS;"product" ->StaffPermission.MANAGE_STOCK;else ->error("Unsupported image location.")}
 private fun PosRepository.validateImageOwner(tenantId:String,kind:String,owner:String) {
@@ -54,20 +55,22 @@ fun PosRepository.saveImage(tenantId:String,ownerKind:String,ownerId:String,uplo
     val now=Instant.now()
     val lastTime=featureQuery("SELECT created_at FROM local_image_changes WHERE tenant_id=? AND owner_kind=? AND owner_id=? ORDER BY version DESC LIMIT 1",tenantId,ownerKind,ownerId) {Instant.parse(it.getString(1))}.singleOrNull()
     require(lastTime==null || !now.isBefore(lastTime)) {"Correct the computer clock before changing this image."}
-    if(upload!=null) {
-        val bytes=upload.bytes;validateStoredImage(bytes)
-        val exists=featureQuery("SELECT id FROM local_image_assets WHERE tenant_id=? AND id=?",tenantId,asset) {it.getString(1)}.isNotEmpty()
-        if(!exists) {
-            val total=featureQuery("SELECT COALESCE(SUM(byte_size),0) FROM local_image_assets WHERE tenant_id=?",tenantId) {it.getLong(1)}.single()
-            require(total+bytes.size<=IMAGE_BUDGET) {"This shop has reached its 16 MB image-history limit. No image was changed."}
-            featureExecute("INSERT INTO local_image_assets VALUES(?,?,?,?)",tenantId,asset,Base64.getEncoder().encodeToString(bytes),bytes.size)
-        }
-    }
+    if(upload!=null) saveLocalImageAsset(tenantId,upload)
     val version=Math.addExact(expectedVersion,1)
     featureExecute("INSERT INTO local_image_selections VALUES(?,?,?,?,?) ON CONFLICT(tenant_id,owner_kind,owner_id) DO UPDATE SET asset_id=excluded.asset_id,version=excluded.version",tenantId,ownerKind,ownerId,asset,version)
     featureExecute("INSERT INTO local_image_changes VALUES(?,?,?,?,?,?,?,?,?)",tenantId,operationId,ownerKind,ownerId,previous.assetId,asset,version,reason,now.toString())
     featureEvent(tenantId,"image.changed",operationId)
     LocalImageSelection(ownerKind,ownerId,asset,version)
+}
+internal fun PosRepository.saveLocalImageAsset(tenantId:String,upload:ImageUpload) {
+    val asset=upload.assetId
+    val exists=featureQuery("SELECT id FROM local_image_assets WHERE tenant_id=? AND id=?",tenantId,asset) {it.getString(1)}.isNotEmpty()
+    if(exists) return
+    val bytes=upload.bytes
+    validateStoredImage(bytes)
+    val total=featureQuery("SELECT COALESCE(SUM(byte_size),0) FROM local_image_assets WHERE tenant_id=?",tenantId) {it.getLong(1)}.single()
+    require(total+bytes.size<=IMAGE_BUDGET) {"This shop has reached its 16 MB image-history limit. No image was changed."}
+    featureExecute("INSERT INTO local_image_assets VALUES(?,?,?,?)",tenantId,asset,Base64.getEncoder().encodeToString(bytes),bytes.size)
 }
 internal fun PosRepository.captureReceiptImage(tenantId:String,saleId:String) {
     val saleTime=featureQuery("SELECT created_at FROM sales WHERE tenant_id=? AND id=?",tenantId,saleId) {Instant.parse(it.getString(1))}.single()
@@ -99,7 +102,7 @@ internal fun PosRepository.validateLocalImages(tenantId:String) {
     }
     val witnesses=featureQuery("SELECT entity_id FROM outbox WHERE tenant_id=? AND kind='image.changed'",tenantId) {it.getString(1)}
     require(witnesses.size==history.size && witnesses.toSet()==history.map {it[0]}.toSet()) {"Backup image activity is incomplete."}
-    require(ids.toSet()==history.mapNotNull {it[4]}.toSet()) {"Backup contains image bytes without source history."}
+    require(ids.toSet()==history.mapNotNull {it[4]}.toSet()+validateProductGallery(tenantId)) {"Backup contains image bytes without source history."}
     val captured=featureQuery("SELECT id FROM sales WHERE tenant_id=? AND receipt_image_captured=1",tenantId) {it.getString(1)}.toSet()
     val snapshots=featureQuery("SELECT sale_id FROM sale_image_snapshots WHERE tenant_id=?",tenantId) {it.getString(1)}.toSet()
     require(captured==snapshots) {"Backup receipt image snapshots are incomplete."}
