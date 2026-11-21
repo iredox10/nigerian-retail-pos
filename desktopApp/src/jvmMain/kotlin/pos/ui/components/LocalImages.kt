@@ -51,6 +51,7 @@ fun LocalImageEditor(
         var error by remember {mutableStateOf<String?>(null)}
         var message by remember {mutableStateOf<String?>(null)}
         var showHistory by remember {mutableStateOf(false)}
+        var adjusting by remember {mutableStateOf<ImageUpload?>(null)}
         val operationId=remember(pending,removing,reason,revision) {UUID.randomUUID().toString()}
         val selection=loaded.getOrNull()?.first
         val preview=if(removing) null else pending?.bytes ?: loaded.getOrNull()?.second
@@ -65,12 +66,16 @@ fun LocalImageEditor(
                 Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),horizontalArrangement=Arrangement.spacedBy(12.dp)) {
                     NeutralButton(if(selection?.assetId==null && pending==null) "Choose image" else "Choose another image",{
                         try {
-                            val chooser=JFileChooser().apply {dialogTitle=if(ownerKind=="shop") "Choose shop logo" else "Choose product photo";fileFilter=FileNameExtensionFilter("PNG or JPEG images","png","jpg","jpeg")}
-                            if(chooser.showOpenDialog(null)==JFileChooser.APPROVE_OPTION) {
-                                val upload=ImageUpload.fromFile(chooser.selectedFile.toPath())
-                                pending=upload;removing=false;filename=chooser.selectedFile.name;error=null;message=null
+                            val chosen=choosePhotoFile(if(ownerKind=="shop") "Choose shop logo" else "Choose product photo")
+                            if(chosen!=null) {
+                                pending=chosen.second;removing=false;filename=chosen.first;error=null;message=null
                             } else {message="Image selection cancelled. Saved image is unchanged.";error=null}
                         } catch(e:Exception) {error=e.message ?: "The image could not be opened. Saved image is unchanged."}
+                    },enabled=enabled && loaded.isSuccess)
+                    if(preview!=null && !removing) NeutralButton("Crop or rotate",{
+                        runCatching {pending ?: ImageUpload.fromStoredBytes(preview)}
+                            .onSuccess {adjusting=it;error=null;message=null}
+                            .onFailure {error=it.message ?: "The image could not be opened."}
                     },enabled=enabled && loaded.isSuccess)
                     if(selection?.assetId!=null) NeutralButton("Remove image",{pending=null;removing=true;filename="";error=null;message=null},enabled=enabled && !removing)
                     if(edited) NeutralButton("Discard image change",{pending=null;removing=false;filename="";reason="";error=null;message=null})
@@ -103,7 +108,27 @@ fun LocalImageEditor(
                     }
                 }
                 NeutralButton("Reload saved image",{pending=null;removing=false;filename="";reason="";revision++;error=null;message=null})
+                if(ownerKind=="product") {
+                    HorizontalDivider()
+                    ProductPhotoGallery(repo,tenantId,ownerId,enabled)
+                }
+            }
+        }
+        adjusting?.let { source ->
+            PhotoAdjustDialog(source,{adjusting=null}) {
+                pending=it
+                if(filename.isBlank()) filename="Adjusted saved image"
+                adjusting=null
             }
         }
     }
+}
+
+internal fun choosePhotoFile(title: String): Pair<String, ImageUpload>? {
+    val chooser = JFileChooser().apply {
+        dialogTitle = title
+        fileFilter = FileNameExtensionFilter("PNG or JPEG images", "png", "jpg", "jpeg")
+    }
+    if (chooser.showOpenDialog(null) != JFileChooser.APPROVE_OPTION) return null
+    return chooser.selectedFile.name to ImageUpload.fromFile(chooser.selectedFile.toPath())
 }
