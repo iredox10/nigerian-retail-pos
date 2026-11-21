@@ -50,6 +50,7 @@ Desktop distributions are built for the host operating system. Build and test th
 - Customers → Repayment follow-ups schedules local contact dates and records completed or cancelled actions. Staff contact the customer directly.
 - Linked cash-sale returns with explicit restocking choice and duplicate-refund protection.
 - Receipt text/PDF export (A4, 58 mm, 80 mm) and operating-system print dialog with pagination. Versioned shop/contact/footer settings are captured on each new sale; later edits preserve saved receipt identity.
+- Sales → Sale documents previews and exports A4 invoices, delivery notes for handover, and credit notes for recorded returns.
 - Supplier profiles with contact/terms/change history, explicit stable-account purchase links, receipt balances, later cash payments and dated CSV/PDF statements. Legacy name-only receipts stay unlinked until explicitly selected.
 - More → Suppliers & payments → Receipts & payments supports reviewed returns against unpaid purchases. Saving removes the goods and applies a credit to the original receipt. Statements show the credit separately from cash payments.
 - Supplier purchase orders with editable drafts, approval, cancellation and atomic multi-line partial receiving. Approval creates no stock, payment or debt; actual deliveries retain receipt costs and remaining quantities.
@@ -70,6 +71,9 @@ Desktop distributions are built for the host operating system. Build and test th
 - Physical note/coin count sheets saved with opening/closing cash, retained in encrypted backups. Closing can hide expected cash in the form; the dashboard may already have shown it. Handover and per-register drawers remain pending.
 - SKU, category, brand, alternative search names, favourites and category filters with preserved metadata history.
 - Stock → Manage → Variant groups separately stocked goods under a searchable family and label. Sell also offers a Frequent items filter based on sales retained in the last 30 shop days.
+- Stock → Manage → Photo supports crop, rotation and up to six additional gallery photos. The main photo appears in Stock and Sell.
+- Stock tools includes Reorder suggestions and Purchase cost history. Reorder suggestions use local sales and open approved orders. Purchase comparisons use original receipt prices and saved buying unit conversions.
+- An owner can write off debt from a linked credit receipt and restore that write-off under Customers → View history. Both actions keep a reason and appear in statements and credit ageing.
 - Percentage item discounts and fixed/percentage whole-basket discounts with exact allocation, explicit re-review after basket changes, saved drafts and conserved partial refunds.
 - Dated customer and supplier CSV/PDF statements with reconciled opening/closing debt.
 - Searchable bundled help under More → Help & practice. Practice opens a separate process with sample goods, an in-memory database and temporary drafts, without opening shop records.

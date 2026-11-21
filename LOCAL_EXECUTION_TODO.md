@@ -15,8 +15,8 @@
 ## Following local dependency work
 
 1. Exchanges, customer advances/store credit/change owed, repayment reversals and disputes with complete account/history integration.
-2. Customer write-offs/reinstatement/disputes/merge and separately authenticated manager approvals.
-3. Supplier reimbursements and unapplied credits, damaged-delivery discrepancies, landed-cost allocations and purchase cost history.
+2. Customer disputes and merge, additional authorized account adjustments, and separately authenticated manager approvals.
+3. Supplier reimbursements and unapplied credits, damaged-delivery discrepancies, and landed-cost allocations.
 4. Structured variant options and nested unit definitions, promotions/bundles/open-price goods and advanced replenishment.
 5. Orders/deposits/layaway/reservations, partial fulfilment and collection/dispatch; remaining invoice/delivery/credit-note documents.
 6. Per-cashier/register custody, handover/sign-off, historical costing/valuation/COGS, journals and accounting periods.
@@ -44,11 +44,13 @@ The following dependency list remains unfinished; completing this batch does not
 
 Four subagents were launched across the available slots. The supplier return subagent implemented the return, statement and screen changes. Root resumed the remaining assignments after three subagents stalled and integrated, tested and committed the batch. The open items above are the remaining local backlog.
 
-## Next local implementation wave
+## 21 November local implementation wave
 
-- [ ] Reorder suggestions from current stock, recent retained sales and open approved purchase quantities. Show the calculation basis and export a reviewable CSV.
-- [ ] Sales invoice, delivery note and credit note output from saved local transactions.
-- [ ] Local image crop and rotation, with gallery support where the editor and history are integrated.
-- [ ] Make and reinstate authorized customer debt write-offs with reconciled history.
-- [ ] Add the next independent workflow when a subagent slot opens.
-- [ ] Verify completed workflows with supported backups, regression tests, Linux packaging and disconnected native checks. Reconcile open items against the implementation checklist.
+- [x] Reorder suggestions from current stock, recent retained sales and open approved purchase quantities, with a reviewable CSV.
+- [x] Sales invoice, delivery note and credit note PDFs from saved local transactions.
+- [x] Local image crop, rotation and automatic JPEG orientation, with an additional product photo gallery and revision history.
+- [x] Purchase cost history and latest linked supplier comparison, with prices normalized to the saved stock unit and CSV export.
+- [x] Record and reinstate owner-authorized, receipt-linked customer debt write-offs with reconciled history.
+- [x] Verify completed workflows with encrypted backup recovery, regression tests, Linux packaging and disconnected native checks. Reconcile open items against the implementation checklist.
+
+Four subagents contributed sales documents, photo tools, debt corrections and purchase cost history. The reorder feature and repository integration were completed alongside their work. The checkpoint is 585 passing tests. [Build evidence](BUILD_STATUS.md)

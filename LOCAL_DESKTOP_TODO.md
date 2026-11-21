@@ -27,7 +27,9 @@ Started 14 November 2026. Scope: the local desktop gaps listed in the conversati
 - [x] Supplier invoice metadata, duplicate detection/review and preserved source history.
 - [x] Reviewed purchase returns against unpaid receipt debt, with exact stock removal, recorded credit and reconciled statements.
 - [ ] Supplier cash reimbursements, unapplied credits, supplier credit notes, account adjustments and damaged-delivery discrepancies.
-- [ ] Landed costs with explicit allocation and historical purchase cost comparison.
+- [x] Purchase cost history and latest explicitly linked supplier comparison, normalized by saved buying units with CSV export.
+- [ ] Landed costs with explicit allocation.
+- [x] Stock reorder suggestions with a configurable coverage period, saved sales, approved incoming quantities and export.
 - [x] Reviewed bulk CSV catalogue update/repricing with row errors, stale checks and atomic application.
 - [x] Retail/wholesale/customer price lists and quantity breaks with historical sale snapshots.
 - [x] Versioned base/selling-pack minimum prices, strict final-line enforcement after discounts and historical sale checks.
@@ -36,14 +38,17 @@ Started 14 November 2026. Scope: the local desktop gaps listed in the conversati
 - [x] On-demand PNG/JPEG preview of current/historical supplier invoice evidence.
 - [x] Expense receipt PDF/PNG/JPEG attachments, retained historical bytes, preview/export and encrypted recovery.
 - [x] Independently stocked product variants, grouped by searchable family and label. Each item retains its own SKU and barcode.
-- [ ] Structured size/colour options and matrix editing. Image galleries, cropping and EXIF orientation.
+- [ ] Structured size/colour options and matrix editing.
+- [x] Additional product photo galleries, crop and rotation controls and automatic JPEG orientation.
+- [ ] Bulk image import and full gallery/keyboard acceptance.
 - [x] Versioned explicit input/output repacking recipes between two products, reviewed whole-batch execution, atomic paired stock changes and history.
 - [ ] Nested package definitions, multi-input assembly, costing and repacking yield/loss accounting.
 
 ## 4. Cash, customer accounts and accounting
 
 - [ ] Per-cashier/register drawers, handover/sign-off and custody transfers.
-- [ ] Authorized customer debt adjustments/write-offs/reinstatement/disputes; duplicate customer merge.
+- [x] Owner-reviewed credit receipt write-offs and linked reinstatement, with preserved history and reconciled statements and ageing.
+- [ ] Other debt adjustments, disputes and duplicate customer merge.
 - [x] Local repayment follow-ups with a due date and reasoned closure history.
 - [ ] Consented outbound repayment messages and delivery status.
 - [x] Classified owner cash contributions/drawings, reviewed current drawer balance, linked opposite cash corrections and CSV history.
@@ -54,7 +59,8 @@ Started 14 November 2026. Scope: the local desktop gaps listed in the conversati
 ## 5. Documents and optional local trade modules
 
 - [x] Quotations with fixed terms/expiry, immutable revisions, PDF/text and explicitly reviewed full-cash conversion.
-- [ ] Invoice, delivery-note and credit-note documents; quotation conversion to credit/electronic payment/orders.
+- [x] Sales invoice, pre-handover delivery note and credit note PDF copies from saved records.
+- [ ] Quotation conversion to credit/electronic payment or orders, and sales document sharing.
 - [ ] Orders, deposits/layaway, reservations/expiry, partial fulfilment and collection/dispatch.
 - [ ] Optional lots/expiry, serials/warranty/repair, container deposits and loyalty according to enabled business modules.
 - [ ] Optional restaurant recipes/tickets/tables; specialist features remain gated by requirements validation.

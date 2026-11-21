@@ -1,8 +1,30 @@
 # Desktop build status
 
-20 November 2026 · Offline checkout, catalogue, customer follow-ups and supplier returns
+21 November 2026 · Reordering, purchase costs, sales documents, photos and debt corrections
 
 ## Current integrated checkpoint
+
+**585 tests pass** (77 shared and 508 desktop) with zero failures, errors or skips. Ran `gradle :shared:jvmTest :desktopApp:jvmTest :desktopApp:createDistributable --offline`. The Linux image is at `desktopApp/build/compose/binaries/main/app/RetailPOS`.
+
+- Stock tools now shows reorder suggestions using exact stock units, 30 WAT days of sales after returns, the approved quantities still due, and a configurable coverage period. It exports the visible review to CSV.
+- Stock tools shows historical buying prices and compares the latest saved receipt for each explicitly linked supplier. It sorts exact price ratios using the original buying conversion and marks rounded stock-unit prices.
+- Sales exports A4 invoices, delivery notes for handover and credit notes for saved returns. Invoices retain original amounts and show manually recorded external payments with their unconfirmed status. Delivery notes leave handover confirmation to the recipient.
+- The photo editor applies JPEG orientation from the file and supports cropping and rotation. Each product can hold six additional photos with reasoned revision history. Encrypted backups include the revisions, and saved receipts retain the logo they captured.
+- Owners can review, write off and restore linked receipt debt. Credit ageing, receipt allocation, statements and exports reconcile both recorded events. A return against an affected receipt requires restoring active write-offs first.
+
+### Disconnected desktop checks
+
+Ran actual Linux Compose at 1440 × 1000 with sample records in a loopback-only network namespace. Used text entry, Tab/Enter and selected pointer actions.
+
+- Updated the reorder review to 14 days of coverage and inspected its saved CSV. The file showed four malt bottles and one rice bag suggested. [Reorder suggestions](artifacts/desktop-reorder-suggestions.png)
+- Opened the linked sample supplier comparison and inspected the exported receipt reference, base-unit conversion and ₦10,000 per bag price. Exact comparisons between different buying units have automated coverage. [Supplier price comparison](artifacts/desktop-purchase-cost-comparison.png)
+- Opened and exported all three PDFs through the native file chooser and checked the resulting file text. The invoice retained ₦1,500 total and ₦1,000 owed at sale. The delivery note listed three bottles and blank handover fields. The credit note tied ₦1,000 in returned goods to a ₦750 debt reduction and ₦250 cash refund. [Invoice](artifacts/desktop-sales-invoice-preview.png), [delivery note](artifacts/desktop-delivery-note-preview.png), [credit note](artifacts/desktop-credit-note-preview.png)
+- Rotated a sample product photo and cropped its left edge by 8 percent. Saved it as the main photo and added the original image as a gallery photo. [Crop and rotation](artifacts/desktop-product-photo-crop-rotate.png), [gallery](artifacts/desktop-product-photo-gallery.png)
+- Reviewed and saved a ₦250 write-off against a ₦750 sample balance, then restored it. The saved balance was ₦500 after write-off and ₦750 after reinstatement. The exported customer CSV recorded both signed amounts with the same receipt reference. [Review](artifacts/desktop-debt-writeoff-review.png), [saved write-off](artifacts/desktop-debt-written-off.png), [reinstated history](artifacts/desktop-debt-reinstated.png)
+
+Automated coverage includes encrypted recovery, financial rollbacks, WAT statement cutoffs, purchase-unit conversion, historical logo preservation and JPEG orientation. Windows, physical peripherals, comprehensive keyboard and accessibility acceptance, replacement-machine recovery, and merchant trials remain pending.
+
+## 20 November checkpoint — checkout and local account workflows
 
 **570 tests pass** (77 shared and 493 desktop). Ran `gradle :shared:jvmTest :desktopApp:jvmTest :desktopApp:createDistributable --offline` with Gradle 8.13 and JDK 17. The rebuilt Linux image is at `desktopApp/build/compose/binaries/main/app/RetailPOS`.
 

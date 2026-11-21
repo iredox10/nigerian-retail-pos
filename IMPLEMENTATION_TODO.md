@@ -78,7 +78,8 @@ Work is ordered by dependencies, not by hiding any part of the full specificatio
 - [ ] Structured size/colour options and matrix-based variant creation and editing.
 - [x] Product photo and shop logo imports, bounded raster copies in SQLite, replacement/removal history, Stock/Sell/workspace rendering and encrypted backup/restore.
 - [x] Historical receipt logo capture and first-page PDF rendering.
-- [ ] Image galleries/crop/orientation controls, bulk image import and broader media acceptance.
+- [x] Product photo gallery with reasoned revision history, crop and rotation, and automatic JPEG orientation. Main photos and logos use the same adjustment controls.
+- [ ] Bulk photo import and broader media acceptance.
 - [x] Checkout Favourites filter.
 - [x] Sell filter for frequently sold items ranked by retained sales in the last 30 WAT days.
 - [x] Code128 current-product/selling-pack label PNG output and native print submission, with saved barcode/unit/price snapshots and local decoding tests.
@@ -136,7 +137,8 @@ Work is ordered by dependencies, not by hiding any part of the full specificatio
 - [x] Recorded-date historical debt/assignment reconstruction and configurable report ageing bands.
 - [ ] Persist shop-wide default ageing preferences and historical customer profile snapshots.
 - [ ] Customer advance/unapplied-credit accounts and merchant-owed balances.
-- [ ] Debt adjustments, write-offs, reinstatement and disputes with authorization.
+- [x] Owner-authorized partial and full receipt-linked write-offs and linked reinstatement, with reconciled dated statements and credit ageing.
+- [ ] Customer disputes and additional authorized account adjustments.
 - [ ] Duplicate customer merge with review and immutable source links.
 - [x] Dated customer CSV statements with reconciled opening/closing debt and WAT cutoffs; integrated automated coverage passes.
 - [ ] Complete dated customer statement desktop/keyboard/failure acceptance.
@@ -155,7 +157,8 @@ Work is ordered by dependencies, not by hiding any part of the full specificatio
 - [x] Supplier invoice metadata, normalized duplicate review, immutable reasoned corrections and managed local evidence history.
 - [x] Managed supplier PDF/PNG/JPEG attachment bytes and historical versions in encrypted backups, with current/historical image preview and file export.
 - [ ] Broader invoice native/keyboard acceptance.
-- [ ] Landed-cost allocation and purchase-cost history/comparisons.
+- [x] Purchase-cost history and linked supplier comparisons using saved buying-unit conversions, with CSV export.
+- [ ] Landed-cost allocation.
 - [x] Reviewed purchase returns with exact removal from stock and receipt-linked credit up to the amount owed, with no drawer movement.
 - [ ] Supplier cash reimbursements, credit notes, unapplied credits and account adjustments.
 - [x] Dated receipt-name supplier statements and CSV, including paid receipts, opening/closing debt and current debt; integrated automated coverage passes.
@@ -163,7 +166,8 @@ Work is ordered by dependencies, not by hiding any part of the full specificatio
 - [x] Extend dated statements to explicit stable supplier accounts, preserving historical supplier names on linked receipt activities.
 - [x] Include purchase return credits in name-based and linked-account statements and exports.
 - [ ] Extend statements to additional credits, adjustments and attachments as their source workflows are implemented. Broader PDF native-dialog acceptance remains pending.
-- [ ] Reorder suggestions and supplier order export.
+- [x] Local reorder suggestions from recent retained sales, physical stock and outstanding approved purchases, with export.
+- [ ] Lead-time, safety-stock and broader replenishment policies.
 
 ## Inventory
 
@@ -199,7 +203,8 @@ Work is ordered by dependencies, not by hiding any part of the full specificatio
 - [ ] Broader templates, branded quotations/statements and historical tax/contact requirements beyond captured receipt identity.
 - [x] Branded offline PDF sales receipts and dated customer/supplier statements with embedded fonts, wrapping, pagination and guarded file replacement.
 - [x] Frozen quotation PDF/text including historical revision output.
-- [ ] Invoices, delivery notes, credit notes and document sharing/delivery.
+- [x] PDF copies of saved sales invoices, pre-handover delivery notes and credit notes for recorded sale returns.
+- [ ] Fulfilment and dispatch records, tax-invoice requirements, and document sharing/delivery.
 - [x] A4/58/80 mm PDF receipt layouts with automated extraction, font and pagination checks.
 - [ ] Real thermal-printer delivery/size/scanner compatibility, Windows native dialogs and comprehensive native export acceptance.
 - [ ] Orders, deposits, layaway and reservation expiry.
