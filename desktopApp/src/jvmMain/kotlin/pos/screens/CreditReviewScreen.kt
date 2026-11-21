@@ -11,6 +11,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import pos.data.PosRepository
 import pos.data.creditReturnReductions
+import pos.data.debtAdjustments
 import pos.domain.money
 import pos.output.DebtAgeingService
 import pos.output.HistoricalCreditService
@@ -44,8 +45,9 @@ fun CreditReviewScreen(repo:PosRepository,tenantId:String) {
         val reviewDate=dateResult.getOrNull() ?: today
         val loaded=remember(revision,historical,throughText) {runCatching {
             dateResult.getOrThrow()
-            if(historical) HistoricalCreditService.build(tenantId,repo.customers(tenantId),repo.sales(tenantId),repo.repayments(tenantId),repo.repaymentAllocations(tenantId,includeReversed=true),repo.allocationReversals(tenantId),reviewDate,repo.creditReturnReductions(tenantId)).rows
-            else DebtAgeingService.build(tenantId,repo.customers(tenantId),repo.sales(tenantId),repo.repayments(tenantId),today,repo.repaymentAllocations(tenantId),repo.creditReturnReductions(tenantId))
+            val adjustments = repo.debtAdjustments(tenantId)
+            if(historical) HistoricalCreditService.build(tenantId,repo.customers(tenantId),repo.sales(tenantId),repo.repayments(tenantId),repo.repaymentAllocations(tenantId,includeReversed=true),repo.allocationReversals(tenantId),reviewDate,repo.creditReturnReductions(tenantId),adjustments).rows
+            else DebtAgeingService.build(tenantId,repo.customers(tenantId),repo.sales(tenantId),repo.repayments(tenantId),today,repo.repaymentAllocations(tenantId),repo.creditReturnReductions(tenantId),adjustments)
         }}
         LazyColumn(Modifier.fillMaxSize(),verticalArrangement=Arrangement.spacedBy(16.dp)) {
             item { Column(verticalArrangement=Arrangement.spacedBy(16.dp)) {

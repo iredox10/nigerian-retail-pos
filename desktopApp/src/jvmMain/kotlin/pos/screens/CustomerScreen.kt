@@ -13,7 +13,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import pos.data.PosRepository
+import pos.data.DebtAdjustment
+import pos.data.canAdjustCustomerDebt
 import pos.data.creditReturnReductions
+import pos.data.debtAdjustments
 import pos.domain.Customer
 import pos.domain.money
 import pos.domain.parseNaira
@@ -46,6 +49,7 @@ private fun TenantCustomers(repo: PosRepository, tenantId: String, onFollowUps: 
     var adding by remember { mutableStateOf(false) }
     var paying by remember { mutableStateOf<Customer?>(null) }
     var editing by remember { mutableStateOf<Customer?>(null) }
+    var adjusting by remember { mutableStateOf<Pair<String, DebtAdjustment?>?>(null) }
     var assigning by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf<String?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
@@ -105,16 +109,24 @@ private fun TenantCustomers(repo: PosRepository, tenantId: String, onFollowUps: 
                 CustomerAllocationPanel(repo, tenantId, customer) { changed() }
             } else {
                 val statement = remember(customer, revision) { runCatching {
-                    CustomerStatementService.build(tenantId, customer, repo.sales(tenantId), repo.repayments(tenantId),repo.creditReturnReductions(tenantId))
+                    CustomerStatementService.build(tenantId, customer, repo.sales(tenantId), repo.repayments(tenantId),
+                        repo.creditReturnReductions(tenantId), repo.debtAdjustments(tenantId, customer.id))
                 } }
                 statement.exceptionOrNull()?.let { InlineNotice("History could not be loaded", it.message ?: "Refresh to try again.", NoticeTone.Danger) }
                 statement.getOrNull()?.let { history ->
+                    val canAdjust = remember(customer.id, revision) { repo.canAdjustCustomerDebt(tenantId) }
+                    val adjustableReceipts = remember(history, canAdjust) { if (canAdjust)
+                        history.events.mapNotNull { it.sale }.filter {
+                            it.creditMinor > 0 && runCatching { repo.unallocatedCredit(tenantId, it.id) > 0 }.getOrDefault(false)
+                        }.map { it.id }.toSet() else emptySet()
+                    }
                     CustomerHistory(history, { paying = customer; message = null }, { editing = customer; message = null }, { assigning = true; message = null; error = null }, {
                         try {
                             val file = CsvService.save(CustomerStatementService.csv(history), "retail-pos-customer-${customer.id.take(8)}-statement.csv")
                             if (file != null) { message = "Customer statement saved to ${file.absolutePath}"; error = null }
                         } catch (e: Exception) { error = e.message ?: "Statement could not be saved. No records changed." }
-                    }, {view -> StatementPdfService.exportCustomer(repo.tenants().single {it.id==tenantId},view)})
+                    }, {view -> StatementPdfService.exportCustomer(repo.tenants().single {it.id==tenantId},view)},
+                        adjustableReceipts, if (canAdjust) { saleId, original -> adjusting = saleId to original } else null)
                 }
             }
         }
@@ -134,11 +146,23 @@ private fun TenantCustomers(repo: PosRepository, tenantId: String, onFollowUps: 
             paying = null; message = "Customer payment saved on this computer"; changed()
         }
     }
+    adjusting?.let { (saleId, original) ->
+        selected?.let { customer ->
+            DebtAdjustmentDialog(repo, customer, saleId, original, { adjusting = null }) {
+                adjusting = null
+                message = "${it.activity} on this computer"
+                changed()
+            }
+        }
+    }
 }
 
 @Composable
-private fun ColumnScope.CustomerHistory(statement: CustomerStatement, pay: () -> Unit, edit: () -> Unit, assign: () -> Unit, export: () -> Unit, exportPdf: (DatedCustomerStatement) -> File?) {
+private fun ColumnScope.CustomerHistory(statement: CustomerStatement, pay: () -> Unit, edit: () -> Unit,
+    assign: () -> Unit, export: () -> Unit, exportPdf: (DatedCustomerStatement) -> File?,
+    adjustableReceipts: Set<String>, adjust: ((String, DebtAdjustment?) -> Unit)?) {
     val customer = statement.customer
+    val restored = remember(statement) { statement.events.mapNotNull { it.debtAdjustment?.review?.writeOffId }.toSet() }
     var dated by remember(customer.id) { mutableStateOf(false) }
     val today=remember {LocalDate.now(ZoneId.of("Africa/Lagos"))}
     var from by remember(customer.id) {mutableStateOf(today.withDayOfMonth(1).toString())}
@@ -204,12 +228,12 @@ private fun ColumnScope.CustomerHistory(statement: CustomerStatement, pay: () ->
                 }
             }
         }
-        item { SectionHeader("Sales and payments", "Oldest first · Times shown in West Africa Time") }
+        item { SectionHeader("Sales and debt activity", "Oldest first · Times shown in West Africa Time") }
         if (statement.events.isEmpty()) item { EmptyState("No sales or payments yet", "Choose this customer during a sale to start their history.") }
-        items(statement.events, key = { "${if (it.sale != null) "sale" else if(it.repayment!=null) "repayment" else "credit-return"}:${it.id}" }) { event ->
+        items(statement.events, key = { "${it.activity}:${it.id}" }) { event ->
             Surface(shape = MaterialTheme.shapes.small) {
                 Column(Modifier.fillMaxWidth().padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Text(if (event.sale != null) "Original sale · Receipt ${event.id.takeLast(8).uppercase()}" else if(event.repayment!=null) "Cash debt repayment · ${event.id.takeLast(8).uppercase()}" else "Credit-sale return · ${event.id.takeLast(8).uppercase()}", fontWeight = FontWeight.SemiBold)
+                    Text("${event.activity} · ${if (event.sale != null) "Receipt " else ""}${event.id.takeLast(8).uppercase()}", fontWeight = FontWeight.SemiBold)
                     Text(customerTime(event.createdAt), style = MaterialTheme.typography.bodySmall)
                     event.sale?.let { sale ->
                         Text(sale.lines.joinToString(" · ") { "${it.quantityLabel} ${it.sellingUnit} ${it.product.name}" }, style = MaterialTheme.typography.bodySmall)
@@ -217,6 +241,7 @@ private fun ColumnScope.CustomerHistory(statement: CustomerStatement, pay: () ->
                         LabelValueRow("Cash applied at sale", money(sale.cashMinor))
                         LabelValueRow("Credit added at sale", money(sale.creditMinor), emphasized = true)
                         if(sale.creditMinor>0) Text(sale.dueDate?.let { "Agreed repayment due date: $it · WAT" } ?: "No repayment due date recorded",style=MaterialTheme.typography.bodySmall)
+                        if (adjust != null && sale.id in adjustableReceipts) NeutralButton("Write off debt", { adjust(sale.id, null) })
                     }
                     event.repayment?.let { LabelValueRow("Cash received against debt", money(it.amountMinor), emphasized = true) }
                     event.creditReturn?.let {
@@ -224,6 +249,16 @@ private fun ColumnScope.CustomerHistory(statement: CustomerStatement, pay: () ->
                         LabelValueRow("Customer debt reduced",money(it.amountMinor),emphasized=true)
                         LabelValueRow("Cash refunded",money(it.cashRefundMinor))
                         Text("Returned goods reduce unpaid credit first. This is not another customer repayment.",style=MaterialTheme.typography.bodySmall)
+                    }
+                    event.debtAdjustment?.let { adjustment ->
+                        val review = adjustment.review
+                        Text("Receipt ${review.saleId.takeLast(8).uppercase()} · ${adjustment.reason}", style = MaterialTheme.typography.bodySmall)
+                        LabelValueRow("Amount", money(review.amountMinor))
+                        LabelValueRow("Total debt after this adjustment", money(review.customerAfterMinor), emphasized = true)
+                        if (adjust != null && review.writeOffId == null && adjustment.id !in restored) {
+                            NeutralButton("Restore debt", { adjust(review.saleId, adjustment) })
+                        }
+                        review.writeOffId?.let { Text("Original write-off ${it.takeLast(8).uppercase()}", style = MaterialTheme.typography.bodySmall) }
                     }
                 }
             }
