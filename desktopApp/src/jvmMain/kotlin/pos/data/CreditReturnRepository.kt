@@ -27,6 +27,7 @@ internal fun PosRepository.planCreditReturn(tenantId:String,saleId:String,amount
     val sale=sales(tenantId).single {it.id==saleId}
     val times=listOf(sale.createdAt)+repayments(tenantId,allowance.customerId).map {it.createdAt}+repaymentAllocations(tenantId,allowance.customerId,true).map {it.createdAt}+allocationReversals(tenantId,allowance.customerId).map {it.createdAt}+saleReturns(tenantId,saleId).map {it.createdAt}
     val now=Instant.now()
+    checkDebtAdjustmentClock(tenantId, allowance.customerId, now)
     require(times.all {!Instant.parse(it).isAfter(now)}) {"The computer clock is earlier than this customer's saved history. Correct it before recording the return."}
     return CreditReturnPlan(allowance,reduction,cashRefund,now.toString())
 }
@@ -34,6 +35,9 @@ private fun PosRepository.creditReturnAllowanceUnchecked(tenantId:String,saleId:
     val sale=requireNotNull(sales(tenantId).find {it.id==saleId}) {"Sale belongs to another shop or is unavailable."}
     require(sale.creditMinor>0 && sale.externalPayments.isEmpty()) {"Choose a credit sale without external payment portions. No debt or payment was changed."}
     val customer=requireNotNull(customers(tenantId).find {it.id==sale.customerId}) {"Credit sale has no customer."}
+    require(netWrittenOffByReceipt(tenantId, saleId) == 0L) {
+        "Restore the written-off amount on this receipt in Customers before returning goods."
+    }
     require(repayments(tenantId,customer.id).all {unallocatedRepayment(tenantId,it.id)==0L}) {"Assign this customer's saved repayments to receipts before returning credit goods. The app will not guess which receipt was paid."}
     val allocated=repaymentAllocations(tenantId,customer.id).filter {it.saleId==sale.id}.fold(0L) {sum,value ->Math.addExact(sum,value.amountMinor)}
     val available=Math.subtractExact(Math.subtractExact(sale.creditMinor,creditReturnedMinor(tenantId,saleId)),allocated)
@@ -87,6 +91,9 @@ private fun PosRepository.validateCreditReturnFunding(tenantId:String,sale:Sale)
     var previousReduction=0L
     creditReturnRows(tenantId,customer).filter {it.saleId==sale.id}.sortedWith(compareBy<CreditReturnReduction> {Instant.parse(it.createdAt)}.thenBy {it.returnId}).forEach {returned ->
         val time=Instant.parse(returned.createdAt)
+        require(netWrittenOffByReceipt(tenantId, sale.id, time) == 0L) {
+            "A saved return overlaps a write-off that had not yet been restored."
+        }
         val assignedAtReturn=assignments.filter {assignment ->
             !Instant.parse(assignment.createdAt).isAfter(time) &&
                 (reversals[assignment.id]?.let {Instant.parse(it.createdAt).isAfter(time)} ?: true)

@@ -157,6 +157,7 @@ class PosRepository(path: String = File(System.getProperty("user.home"), ".niger
         initializeRepaymentReminders()
         initializeProductVariants()
         initializePurchaseReturns()
+        initializeDebtAdjustments()
         execute("CREATE TRIGGER IF NOT EXISTS activity_audit_no_update BEFORE UPDATE ON activity_audit BEGIN SELECT RAISE(ABORT,'Activity history cannot be edited'); END")
         execute("CREATE TRIGGER IF NOT EXISTS activity_audit_no_delete BEFORE DELETE ON activity_audit BEGIN SELECT RAISE(ABORT,'Activity history cannot be removed'); END")
     }
@@ -414,6 +415,7 @@ class PosRepository(path: String = File(System.getProperty("user.home"), ".niger
             "This assignment has already been undone. Refresh its history before continuing."
         }
         require(!now.isBefore(Instant.parse(original.createdAt))) { "This computer's clock is earlier than the saved assignment time. Correct the clock before recording this correction." }
+        checkDebtAdjustmentClock(tenantId, original.customerId, now)
         validateCreditReturnAllocationReversal(tenantId,original)
         execute("INSERT INTO allocation_reversals(id,tenant_id,customer_id,allocation_id,reason,created_at) VALUES(?,?,?,?,?,?)",correction.id,tenantId,correction.customerId,allocationId,correction.reason,correction.createdAt)
         enqueue(tenantId,"repayment.allocation_reversed",correction.id)
@@ -426,10 +428,13 @@ class PosRepository(path: String = File(System.getProperty("user.home"), ".niger
         val allocated=allocationTotal(tenantId,"repayment_id",repaymentId)
         return remainingAllocation(payment.amountMinor,allocated,"Payment allocations exceed the recorded repayment.")
     }
-    /** Original credit minus explicit allocations; unassigned payments may still cover this sale. */
+    /** Original credit after linked deductions and assignments. Unassigned payments may still cover this sale. */
     @Synchronized fun unallocatedCredit(tenantId:String,saleId:String):Long {
         val sale=requireSale(tenantId,saleId)
-        return remainingAllocation(Math.subtractExact(sale.creditMinor,creditReturnedMinor(tenantId,saleId)),allocationTotal(tenantId,"sale_id",saleId),"Payment allocations exceed the receipt credit after returned goods.")
+        val afterReturns = Math.subtractExact(sale.creditMinor, creditReturnedMinor(tenantId, saleId))
+        val remainingCredit = Math.subtractExact(afterReturns, netWrittenOffByReceipt(tenantId, saleId))
+        return remainingAllocation(remainingCredit, allocationTotal(tenantId,"sale_id",saleId),
+            "Payment allocations exceed the receipt credit after returns and debt adjustments.")
     }
     /** Allocation changes the assignment only. The payment already reduced debt and recorded cash. */
     @Synchronized fun allocateRepayment(tenantId:String,repaymentId:String,saleId:String,amountMinor:Long,operationId:String?=null):RepaymentAllocation = transaction {
@@ -449,7 +454,9 @@ class PosRepository(path: String = File(System.getProperty("user.home"), ".niger
         }
         require(amountMinor<=unallocatedRepayment(tenantId,repaymentId)) { "Allocation exceeds the amount of this payment still available to assign." }
         require(amountMinor<=unallocatedCredit(tenantId,saleId)) { "Allocation exceeds the credit on this receipt still available to cover." }
-        val result=RepaymentAllocation(operationId?:id(),tenantId,payment.customerId,repaymentId,saleId,amountMinor,Instant.now().toString())
+        val now = Instant.now()
+        checkDebtAdjustmentClock(tenantId, payment.customerId, now)
+        val result=RepaymentAllocation(operationId?:id(),tenantId,payment.customerId,repaymentId,saleId,amountMinor,now.toString())
         execute("INSERT INTO repayment_allocations VALUES(?,?,?,?,?,?,?)",result.id,tenantId,result.customerId,repaymentId,saleId,amountMinor,result.createdAt)
         enqueue(tenantId,"repayment.allocated",result.id)
         result
@@ -560,7 +567,9 @@ class PosRepository(path: String = File(System.getProperty("user.home"), ".niger
                 require(customer.creditLimitMinor?.let { debt<=it } != false) { "This sale would exceed the customer's credit limit of ${customer.creditLimitMinor?.let(::money)}. Reduce the credit or review the customer limit." }
             }
         } else null
-        val sale=Sale(operationId ?: id(),tenantId,normalized,total,cashMinor,credit,customerId,Instant.now().toString(),dueDate,basketDiscount,externalPayments,cashGivenMinor,note)
+        val now = Instant.now()
+        if (credit > 0) checkDebtAdjustmentClock(tenantId, requireNotNull(customerId), now)
+        val sale=Sale(operationId ?: id(),tenantId,normalized,total,cashMinor,credit,customerId,now.toString(),dueDate,basketDiscount,externalPayments,cashGivenMinor,note)
         execute("INSERT INTO sales(id,tenant_id,total_minor,cash_minor,credit_minor,customer_id,created_at,due_date,basket_discount_kind,basket_discount_value,basket_discount_reason,sale_note) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)",sale.id,tenantId,total,cashMinor,credit,customerId,sale.createdAt,dueDate,basketDiscount?.kind,basketDiscount?.value,basketDiscount?.reason,note)
         normalized.forEach { l ->
             execute("INSERT INTO sale_lines(sale_id,tenant_id,product_id,name,unit,price_minor,quantity,selling_unit_id,selling_unit,unit_price_minor,base_units_per_unit,discount_per_unit_minor,discount_reason,quantity_precision,base_precision,basket_discount_minor) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",sale.id,tenantId,l.product.id,l.product.name,l.product.unit,l.product.priceMinor,l.quantity,l.sellingUnitId,l.sellingUnit,l.unitPriceMinor,l.baseUnitsPerUnit,l.discountPerUnitMinor,l.discountReason,l.quantityPrecision,l.product.quantityPrecision,l.basketDiscountMinor)
@@ -588,9 +597,11 @@ class PosRepository(path: String = File(System.getProperty("user.home"), ".niger
             require(previous.first==customerId && previous.second==amountMinor) { "This repayment was already recorded with different details." }
             return@transaction
         }
+        val now = Instant.now()
+        checkDebtAdjustmentClock(tenantId, customerId, now)
         val changed=execute("UPDATE customers SET balance_minor=balance_minor-? WHERE tenant_id=? AND id=? AND balance_minor>=?",amountMinor,tenantId,customerId,amountMinor)
         require(changed==1) { "Customer not found in this shop, or payment exceeds debt." }
-        execute("INSERT INTO repayments VALUES(?,?,?,?,?)",paymentId,tenantId,customerId,amountMinor,Instant.now().toString())
+        execute("INSERT INTO repayments VALUES(?,?,?,?,?)",paymentId,tenantId,customerId,amountMinor,now.toString())
         appendCash(tenantId,activeCashShift(tenantId)?.id,"repayment",amountMinor,"Customer repayment",paymentId)
         enqueue(tenantId,"customer.repayment",paymentId)
     }
@@ -955,7 +966,7 @@ class PosRepository(path: String = File(System.getProperty("user.home"), ".niger
     }
     private fun supplierPayment(r:ResultSet)=SupplierPayment(r.getString("id"),r.getString("tenant_id"),r.getString("receipt_id"),r.getString("supplier_name"),r.getLong("amount_minor"),r.getString("created_at"))
 
-    private val snapshotTableOrder get() = listOf("products","product_metadata_changes","selling_units","stock_settings_changes","purchase_units","customers","customer_changes","cash_shifts","sales","sale_lines","repayments","repayment_allocations","allocation_reversals","stock_receipts","expenses","sale_returns","return_lines","supplier_payments","cash_entries","catalogue_changes","stock_adjustments","outbox","activity_audit") + supplierProfileSnapshotTables + purchaseOrderSnapshotTables + inventoryDispositionSnapshotTables + stockCountSessionSnapshotTables + shopProfileSnapshotTables + externalPaymentSnapshotTables + priceListSnapshotTables + bulkCatalogueUpdateSnapshotTables + supplierInvoiceSnapshotTables + creditReturnSnapshotTables + quotationSnapshotTables + localImageSnapshotTables + ownerCashSnapshotTables + minimumPriceSnapshotTables + repackingSnapshotTables + expenseAttachmentSnapshotTables + saleTenderSnapshotTables + reminderSnapshotTables + variantSnapshotTables + purchaseReturnSnapshotTables
+    private val snapshotTableOrder get() = listOf("products","product_metadata_changes","selling_units","stock_settings_changes","purchase_units","customers","customer_changes","cash_shifts","sales","sale_lines","repayments","repayment_allocations","allocation_reversals","stock_receipts","expenses","sale_returns","return_lines","supplier_payments","cash_entries","catalogue_changes","stock_adjustments","outbox","activity_audit") + supplierProfileSnapshotTables + purchaseOrderSnapshotTables + inventoryDispositionSnapshotTables + stockCountSessionSnapshotTables + shopProfileSnapshotTables + externalPaymentSnapshotTables + priceListSnapshotTables + bulkCatalogueUpdateSnapshotTables + supplierInvoiceSnapshotTables + creditReturnSnapshotTables + quotationSnapshotTables + localImageSnapshotTables + ownerCashSnapshotTables + minimumPriceSnapshotTables + repackingSnapshotTables + expenseAttachmentSnapshotTables + saleTenderSnapshotTables + reminderSnapshotTables + variantSnapshotTables + purchaseReturnSnapshotTables + debtAdjustmentSnapshotTables
     @Synchronized fun exportTenantSnapshot(tenantId:String):TenantSnapshot = transaction {
         requirePermission(tenantId, StaffPermission.BACKUP)
         requireTenant(tenantId)
@@ -1067,8 +1078,10 @@ class PosRepository(path: String = File(System.getProperty("user.home"), ".niger
             val granted=sales(tenant.id).filter { it.customerId==customer.id }.fold(java.math.BigInteger.ZERO) { sum,sale -> sum.add(java.math.BigInteger.valueOf(sale.creditMinor)) }
             val paid=query("SELECT amount_minor FROM repayments WHERE tenant_id=? AND customer_id=?",tenant.id,customer.id) { it.getLong(1) }.fold(java.math.BigInteger.ZERO) { sum,amount -> sum.add(java.math.BigInteger.valueOf(amount)) }
             val reductions=query("SELECT amount_minor FROM credit_return_reductions WHERE tenant_id=? AND customer_id=?",tenant.id,customer.id) {it.getLong(1)}.fold(java.math.BigInteger.ZERO) {sum,amount ->sum.add(java.math.BigInteger.valueOf(amount))}
-            val expected=granted.subtract(paid).subtract(reductions)
-            require(expected.signum()>=0 && expected==java.math.BigInteger.valueOf(customer.balanceMinor)) { "Backup customer balance does not match credit sales, repayments and credit returns." }
+            val expected=granted.subtract(paid).subtract(reductions).add(debtAdjustmentDelta(tenant.id, customer.id))
+            require(expected.signum()>=0 && expected==java.math.BigInteger.valueOf(customer.balanceMinor)) {
+                "Backup customer balance does not match credit sales, repayments, credit returns and debt adjustments."
+            }
         }
         val restoredAllocations=repaymentAllocations(tenant.id,includeReversed=true)
         restoredAllocations.forEach { allocation ->
@@ -1149,6 +1162,7 @@ class PosRepository(path: String = File(System.getProperty("user.home"), ".niger
         validateRepaymentReminders(tenant.id)
         validateProductVariants(tenant.id)
         validatePurchaseReturns(tenant.id)
+        validateDebtAdjustments(tenant.id)
         provisionOwner(tenant)
         tenant
     }
