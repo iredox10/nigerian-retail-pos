@@ -22,11 +22,19 @@ import javax.swing.SwingUtilities
 import javax.swing.filechooser.FileNameExtensionFilter
 
 /** Explicit document identity is preserved on every page; file output never changes local records. */
-enum class PdfDocumentKind(val heading:String,val label:String,val referencePrefix:String) {
+enum class PdfDocumentKind(
+    val heading: String,
+    val label: String,
+    val referencePrefix: String,
+    val usesSaleBranding: Boolean = false,
+) {
     QUOTATION("QUOTATION","quotation","Quotation: "),
-    RECEIPT("SALES RECEIPT","sales receipt","Receipt: "),
+    RECEIPT("SALES RECEIPT","sales receipt","Receipt: ", usesSaleBranding = true),
     CUSTOMER_STATEMENT("CUSTOMER STATEMENT","customer statement","Customer ID: "),
     SUPPLIER_STATEMENT("SUPPLIER STATEMENT","supplier statement","Supplier account ID: "),
+    SALES_INVOICE("SALES INVOICE", "sales invoice", "Invoice: ", usesSaleBranding = true),
+    DELIVERY_NOTE("DELIVERY NOTE", "delivery note", "Delivery note: ", usesSaleBranding = true),
+    CREDIT_NOTE("CREDIT NOTE", "credit note", "Credit note: ", usesSaleBranding = true),
 }
 
 object PdfDocumentService {
@@ -34,7 +42,7 @@ object PdfDocumentService {
     private const val FONT_ROOT="/composeResources/pos.shared.generated.resources/font/"
 
     fun createPdf(text:String,kind:PdfDocumentKind,paper:String="A4",logoPng:ByteArray?=null):ByteArray {
-        require(logoPng==null || kind==PdfDocumentKind.RECEIPT) {"Shop logos are supported on sales receipts only."}
+        require(logoPng == null || kind.usesSaleBranding) {"This document does not use saved sale branding."}
         require(paper in setOf("A4","58mm","80mm")) {"Choose A4, 58 mm or 80 mm PDF paper."}
         require(text.isNotBlank() && text.length<=1_000_000 && text.lines().size<=20_000) {"Document text is empty or too large."}
         return PDDocument().use {document ->
@@ -54,7 +62,7 @@ object PdfDocumentService {
                 require(line.none {it.isISOControl() && it!='\t'}) {"Document text contains an unsupported control character."}
                 val clean=line.replace('\t',' ')
                 val isTitle=index==0 || clean==kind.heading
-                val isTotal=clean.startsWith("Original sale total:") || clean.startsWith("Sale value after returns:") || clean.startsWith("Opening debt:") || clean.startsWith("Closing debt:") || clean.startsWith("Opening amount owed:") || clean.startsWith("Closing amount owed:") || clean.startsWith("Agreed quotation total:")
+                val isTotal=clean.startsWith("Original sale total:") || clean.startsWith("Sale value after returns:") || clean.startsWith("Opening debt:") || clean.startsWith("Closing debt:") || clean.startsWith("Opening amount owed:") || clean.startsWith("Closing amount owed:") || clean.startsWith("Agreed quotation total:") || clean.startsWith("Invoice total:") || clean.startsWith("Returned goods value:")
                 val size=when {index==0 -> if(thermal) 12f else 16f;isTitle -> if(thermal) 10f else 13f;isTotal -> bodySize+1f;else -> bodySize}
                 val font=if(isTitle || isTotal) bold else regular
                 wrap(clean,font,size,contentWidth,kind).map {Row(it,size,isTitle || isTotal)}
@@ -153,7 +161,13 @@ object PdfDocumentService {
         val points=text.codePoints().toArray().map {String(Character.toChars(it))}
         points.forEach {value ->
             try {font.encode(value)} catch(_:IllegalArgumentException) {
-                throw IllegalArgumentException("A name or message uses a character this PDF font cannot print. ${if(kind==PdfDocumentKind.RECEIPT) "Export a text receipt" else if(kind==PdfDocumentKind.QUOTATION) "Export a text quotation" else "Export a CSV statement"} instead; no PDF was saved.")
+                val fallback = when (kind) {
+                    PdfDocumentKind.RECEIPT -> "Export a text receipt instead."
+                    PdfDocumentKind.QUOTATION -> "Export a text quotation instead."
+                    PdfDocumentKind.CUSTOMER_STATEMENT, PdfDocumentKind.SUPPLIER_STATEMENT -> "Export a CSV statement instead."
+                    else -> "You can copy the text from the preview."
+                }
+                throw IllegalArgumentException("A name or message uses a character this PDF font cannot print. $fallback No PDF was saved.")
             }
         }
         val result=mutableListOf<String>()
