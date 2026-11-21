@@ -27,7 +27,7 @@ object StatementPdfService {
             appendLine("Opening debt: ${money(value.openingMinor)}");appendLine()
             if(value.events.isEmpty()) appendLine("No sales or debt repayments recorded in this period.")
             value.events.forEach { (event,balance) ->
-                appendLine("${date(event.createdAt)} | ${if(event.sale!=null) "Original sale" else if(event.repayment!=null) "Cash debt repayment" else "Credit-sale return"}")
+                appendLine("${date(event.createdAt)} | ${event.activity}")
                 appendLine("Source ID: ${event.id}")
                 event.sale?.let {sale ->
                     appendLine("Original sale total: ${money(sale.totalMinor)}")
@@ -40,6 +40,12 @@ object StatementPdfService {
                     appendLine("Debt reduced for returned goods: ${money(returned.amountMinor)}")
                     appendLine("Cash refunded: ${money(returned.cashRefundMinor)}")
                     appendLine("This return is not a customer repayment.")
+                }
+                event.debtAdjustment?.let { adjustment ->
+                    appendLine("Original sale: ${adjustment.review.saleId}")
+                    appendLine("Adjustment: ${money(adjustment.review.deltaMinor)}")
+                    appendLine("Reason: ${adjustment.reason}")
+                    adjustment.review.writeOffId?.let { appendLine("Original write-off: $it") }
                 }
                 appendLine("Debt after activity: ${money(balance)}");appendLine()
             }

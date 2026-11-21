@@ -1,5 +1,7 @@
 package pos.output
 
+import pos.data.DebtAdjustment
+import pos.data.netWrittenOff
 import pos.domain.*
 import java.math.BigInteger
 import java.time.Instant
@@ -14,6 +16,7 @@ object HistoricalCreditService {
         tenantId: String, customers: List<Customer>, sales: List<Sale>, payments: List<CustomerRepayment>,
         assignments: List<RepaymentAllocation>, corrections: List<AllocationReversal>, through: LocalDate,
         creditReturns:List<CreditReturnReduction> = emptyList(),
+        debtAdjustments: List<DebtAdjustment> = emptyList(),
     ): HistoricalCreditReview {
         require(assignments.all {it.tenantId==tenantId} && assignments.map {it.id}.distinct().size==assignments.size) { "Foreign or repeated assignment." }
         require(corrections.all { it.tenantId==tenantId }) { "Correction belongs to another shop." }
@@ -34,21 +37,23 @@ object HistoricalCreditService {
         }
         val undone=corrections.map {it.allocationId}.toSet()
         // Validate the complete current history before reconstructing a subset of it.
-        DebtAgeingService.build(tenantId,customers,sales,payments,through,assignments.filter {it.id !in undone},creditReturns)
+        DebtAgeingService.build(tenantId,customers,sales,payments,through,assignments.filter {it.id !in undone},creditReturns,debtAdjustments)
         val cutoff=through.plusDays(1).atStartOfDay(ZoneId.of("Africa/Lagos")).toInstant()
         fun included(time:String)=Instant.parse(time)<cutoff
         val datedSales=sales.filter {included(it.createdAt)}
         val datedPayments=payments.filter {included(it.createdAt)}
         val datedReturns=creditReturns.filter {included(it.createdAt)}
+        val datedAdjustments=debtAdjustments.filter { included(it.createdAt) }
         val datedUndone=corrections.filter {included(it.createdAt)}.map {it.allocationId}.toSet()
         val datedAssignments=assignments.filter {included(it.createdAt) && it.id !in datedUndone}
         val historicalCustomers=customers.map { customer ->
             val credit=datedSales.filter {it.customerId==customer.id}.fold(BigInteger.ZERO) {sum,sale -> sum+BigInteger.valueOf(sale.creditMinor)}
             val repaid=datedPayments.filter {it.customerId==customer.id}.fold(BigInteger.ZERO) {sum,payment -> sum+BigInteger.valueOf(payment.amountMinor)}
             val reduced=datedReturns.filter {it.customerId==customer.id}.fold(BigInteger.ZERO) {sum,row ->sum+BigInteger.valueOf(row.amountMinor)}
-            customer.copy(balanceMinor=(credit-repaid-reduced).longValueExact())
+            val writtenOff = datedAdjustments.filter { it.review.customerId == customer.id }.netWrittenOff()
+            customer.copy(balanceMinor=(credit-repaid-reduced-BigInteger.valueOf(writtenOff)).longValueExact())
         }
-        return HistoricalCreditReview(tenantId,through,DebtAgeingService.build(tenantId,historicalCustomers,datedSales,datedPayments,through,datedAssignments,datedReturns))
+        return HistoricalCreditReview(tenantId,through,DebtAgeingService.build(tenantId,historicalCustomers,datedSales,datedPayments,through,datedAssignments,datedReturns,datedAdjustments))
     }
 
     fun csv(review:HistoricalCreditReview):String {
