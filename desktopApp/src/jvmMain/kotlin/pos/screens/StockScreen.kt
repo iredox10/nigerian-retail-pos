@@ -31,12 +31,12 @@ import java.util.UUID
 
 /** Every read and write remains scoped to the selected business, including editor state. */
 @Composable
-fun StockScreen(repo: PosRepository, tenantId: String, onChanged: () -> Unit, onImport: (() -> Unit)? = null, onCounts: (() -> Unit)? = null, onDispositions: (() -> Unit)? = null, onBulkUpdate:(()->Unit)?=null, onPriceLists:(()->Unit)?=null, onMinimumPrices:(()->Unit)?=null, onRepacking:(()->Unit)?=null) {
-    key(tenantId) { TenantStockScreen(repo, tenantId, onChanged, onImport, onCounts, onDispositions, onBulkUpdate, onPriceLists, onMinimumPrices, onRepacking) }
+fun StockScreen(repo: PosRepository, tenantId: String, onChanged: () -> Unit, onImport: (() -> Unit)? = null, onCounts: (() -> Unit)? = null, onDispositions: (() -> Unit)? = null, onBulkUpdate:(()->Unit)?=null, onPriceLists:(()->Unit)?=null, onMinimumPrices:(()->Unit)?=null, onRepacking:(()->Unit)?=null, onReorder:(()->Unit)?=null) {
+    key(tenantId) { TenantStockScreen(repo, tenantId, onChanged, onImport, onCounts, onDispositions, onBulkUpdate, onPriceLists, onMinimumPrices, onRepacking, onReorder) }
 }
 
 @Composable
-private fun TenantStockScreen(repo: PosRepository, tenantId: String, onChanged: () -> Unit, onImport: (() -> Unit)?, onCounts: (() -> Unit)?, onDispositions: (() -> Unit)?, onBulkUpdate:(()->Unit)?,onPriceLists:(()->Unit)?, onMinimumPrices:(()->Unit)?, onRepacking:(()->Unit)?) {
+private fun TenantStockScreen(repo: PosRepository, tenantId: String, onChanged: () -> Unit, onImport: (() -> Unit)?, onCounts: (() -> Unit)?, onDispositions: (() -> Unit)?, onBulkUpdate:(()->Unit)?,onPriceLists:(()->Unit)?, onMinimumPrices:(()->Unit)?, onRepacking:(()->Unit)?, onReorder:(()->Unit)?) {
     var revision by remember { mutableStateOf(0) }
     val allProducts = remember(tenantId, revision) { repo.products(tenantId, includeArchived = true) }
     val products = allProducts.filterNot { it.archived }
@@ -69,7 +69,7 @@ private fun TenantStockScreen(repo: PosRepository, tenantId: String, onChanged: 
                         Box {
                             NeutralButton("Stock tools ▾",{toolsOpen=true})
                             DropdownMenu(toolsOpen,{toolsOpen=false}) {
-                                listOf("Count several items" to onCounts,"Stock removed" to onDispositions,
+                                listOf("Reorder suggestions" to onReorder,"Count several items" to onCounts,"Stock removed" to onDispositions,
                                     "Price lists" to onPriceLists,"Minimum selling prices" to onMinimumPrices,
                                     "Repack goods" to onRepacking,"Update existing goods from CSV" to onBulkUpdate,
                                     "Import new items from CSV" to onImport).forEach {(label,action) ->
