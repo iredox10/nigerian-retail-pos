@@ -67,9 +67,10 @@ private fun AddAndroidItem(repo: PosRepository, tenantId: String, dismiss: () ->
     var price by rememberSaveable { mutableStateOf("") }
     var opening by rememberSaveable { mutableStateOf("0") }
     var precision by rememberSaveable { mutableStateOf("0") }
+    var precisionMenu by remember { mutableStateOf(false) }
     var barcode by rememberSaveable { mutableStateOf("") }
     OperationsDialog("Add item", dismiss, "Save item", action = {
-        val places = requireNotNull(precision.toIntOrNull()?.takeIf { it in 0..6 }) { "Choose zero to six quantity decimal places." }
+        val places = requireNotNull(precision.toIntOrNull()?.takeIf { it in 0..6 }) { "Choose how this item is counted from the quantity selector." }
         val quantity = requireNotNull(parseQuantity(opening, places)) { "Enter the opening count in the displayed precision." }
         val amount = requireNotNull(parseNaira(price)) { "Enter an exact selling price." }
         withContext(Dispatchers.IO) { repo.addProduct(tenantId, name, unit, amount, projectedQuantity(quantity.scaledUnits, places), barcode.trim().ifBlank { null }, places) }
@@ -78,11 +79,35 @@ private fun AddAndroidItem(repo: PosRepository, tenantId: String, dismiss: () ->
         Text("Each item has its own stock unit. Enter the opening quantity you actually counted.")
         PosTextField(name, { name = it }, "Item name")
         PosTextField(unit, { unit = it }, "Stock and selling unit", hint = "piece, kg, metre…")
-        PosTextField(precision, { precision = it }, "Quantity decimal places", hint = "0 for pieces; up to 6 for measured goods")
+        Text("How is this item counted?", style = MaterialTheme.typography.bodyMedium)
+        Box {
+            OutlinedButton({ precisionMenu = true }, Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
+                Text(quantityPrecisionChoiceLabel(precision.toIntOrNull()))
+            }
+            DropdownMenu(precisionMenu, { precisionMenu = false }, Modifier.heightIn(max = 360.dp)) {
+                (0..6).forEach { places ->
+                    DropdownMenuItem(text = { Text(quantityPrecisionChoiceLabel(places)) }, onClick = {
+                        precision = places.toString(); precisionMenu = false
+                    })
+                }
+            }
+        }
+        Text("Choose whole quantities for pieces or full bags. For measured goods, 3 decimal places allows 1.250 kg. This choice is fixed after saving.", style = MaterialTheme.typography.bodySmall)
         PosTextField(price, { price = it }, "Selling price per unit (₦)")
         PosTextField(opening, { opening = it }, "Counted opening quantity")
         PosTextField(barcode, { barcode = it }, "Barcode (optional)")
     }
+}
+
+internal fun quantityPrecisionChoiceLabel(places: Int?): String = when (places) {
+    0 -> "Whole quantities (0 decimal places)"
+    1 -> "1 decimal place · e.g. 1.5"
+    2 -> "2 decimal places · e.g. 1.25"
+    3 -> "3 decimal places · e.g. 1.250"
+    4 -> "4 decimal places · e.g. 1.2500"
+    5 -> "5 decimal places · e.g. 1.25000"
+    6 -> "6 decimal places · e.g. 1.250000"
+    else -> "Choose how quantities are counted"
 }
 
 @Composable
