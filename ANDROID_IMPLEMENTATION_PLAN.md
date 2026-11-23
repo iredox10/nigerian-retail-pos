@@ -4,7 +4,7 @@ Requested 23 November 2026. Cloud synchronization remains excluded. Android is a
 
 ## Architecture and reference lock
 
-Retain Kotlin 2.2.20 / Compose 1.9.1 and shared domain/design components. Add an Android application and Android shared target using AGP 8.11, compatible with the existing Gradle 8.14.3/JDK17 toolchain. Android API28+ initially: actual SQLite must support repository upserts/window functions; verify on emulator rather than assume compatibility. Compile/target API35 initially with edge-to-edge/IME handling. Use app-private files and native SQLite. Reuse business repositories and security source with explicit platform connection/media adapters, never duplicate financial rules. Android resources/components use the existing IBM Plex Sans, teal, semantic money roles and labeled navigation. Shared JVM code stays tested for desktop.
+Retain Kotlin 2.2.20 / Compose 1.9.1 and shared domain/design components. Add an Android application and Android shared target using AGP 8.11, compatible with the existing Gradle 8.14.3/JDK17 toolchain. Android API30+ initially (Android 11): the native SQLite version must support repository upserts; verify on emulator rather than assume compatibility. Compile/target API35 initially with edge-to-edge/IME handling. Use app-private files and native SQLite. Reuse business repositories and security source with explicit platform connection/media adapters, never duplicate financial rules. Android resources/components use the existing IBM Plex Sans, teal, semantic money roles and labeled navigation. Shared JVM code stays tested for desktop.
 
 Phone reference: project DESIGN_BRIEF and DESIGN_GUIDE hierarchy, Android adaptive layout/navigation and system Print/Storage Access Framework contracts. Phone flows retain Choose items → This sale → Take payment in one persistent sale. Tablets expose a larger work area. No icon-only destinations. Platform screen decisions follow existing reference lock and Refero bundled typography/component/copy craft; no live Refero tools available. Merchant research remains pending.
 
@@ -19,8 +19,8 @@ Root integrates build, onboarding/owner/staff sessions, lifecycle permissions, n
 
 ## Delivery checklist
 
-- [ ] Android Gradle target, manifest, app-private records, no Internet dependency or implicit Android cloud backup.
-- [ ] Native SQLite adapter: exact integer binds/results, null/blob/metadata, atomic commit/rollback, constraints, persistent reopen.
+- [x] Android Gradle target, manifest and debug APK, app-private records, no Internet permission or implicit Android cloud backup; built and installed on API 37.
+- [x] Native SQLite adapter: exact integer binds/results, null/blob/metadata, atomic commit/rollback, constraints, persistent reopen and missing-parameter rejection; actual API 37 instrumentation passes.
 - [ ] Shop creation, owner/staff sign-in, role guards, lock/background/session timeout and back navigation.
 - [ ] Sell: search/keyboard barcode, quantities/packs, review, cash tender/change, explicit customer credit, notes, retry/draft recovery and saved receipt actions.
 - [ ] Sales history/details, receipt export/Android print/share and explicit returns.
@@ -28,9 +28,9 @@ Root integrates build, onboarding/owner/staff sessions, lifecycle permissions, n
 - [ ] Android native image import and managed historical image bytes.
 - [ ] Merchant-controlled encrypted backup create/restore via system document picker; process/session interruptions must not report success.
 - [ ] More/contextual advanced workflows: supplier accounts/credits/purchases, customer advances/disputes, quotations/orders/dispatch, variants/bundles/promotions/replenishment, FIFO/reports, staff/recovery/approvals/handover and shop settings.
-- [ ] Map every existing desktop and still-planned feature into an explicit Android parity matrix; shared repository availability does not mean Android UI completion.
+- [x] Map desktop and planned feature groups into ANDROID_FEATURE_PARITY.md; shared repository availability does not mean Android UI completion.
 - [ ] Assemble installable debug APK and meaningful native instrumentation tests, verify offline emulator journeys and screenshots in phone/tablet sizes.
-- [ ] Desktop regression tests remain green; record platform limitations, pending physical-device/merchant/security/release work honestly.
+- [x] Desktop regression tests remain green (680 shared/desktop); platform/device/merchant/security/release limits recorded in BUILD_STATUS.md.
 
 ## Beyond initial Android build
 
@@ -38,4 +38,6 @@ Camera scanning, Bluetooth/USB thermal printers, scales/cash drawers, keystore-b
 
 ## Evidence
 
-Build/test counts, APK path and actual device screenshots will be recorded after verification. Installing a debug APK is not production release acceptance.
+Verified on 23 November 2026: 680 shared/desktop tests, 6 Android JVM tests and 16 native API 37 instrumentation tests pass, zero failures/errors/skips. Debug APK and Linux application image built with installed Gradle 8.13/JDK17; wrapper Gradle 8.14.3 was not used. Actual isolated emulator shop creation, counted stock, drawer opening, two-piece cash checkout/change, receipt view and unfinished-basket restart recovery were exercised while disconnected. Final sale/stock/drawer persistence was checked after restart. Screenshots and detailed limits are in BUILD_STATUS.md. Installing a debug APK is not production release acceptance.
+
+The unchecked journey rows above remain broader parity/acceptance work, even where parts of their source are present. In particular, native backup picker cancellation/overwrite, staff lifecycle UI, credit/external/return journeys, adaptive tablet/large-font/TalkBack, API 30–36 and physical hardware need independent verification.

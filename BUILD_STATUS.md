@@ -2,6 +2,28 @@
 
 23 November 2026 · Orders, stock holds, promotions and purchasing
 
+## Android build, native storage and offline phone checks — 23 November 2026
+
+**680 shared/desktop tests pass** (79 shared + 601 desktop), together with **6 Android JVM checkout tests** and **16 native Android instrumentation tests**, all without failures, errors or skips. The final build ran `:shared:jvmTest :desktopApp:jvmTest :desktopApp:createDistributable :androidApp:testDebugUnitTest :androidApp:assembleDebug :androidApp:assembleDebugAndroidTest --offline` using installed Gradle 8.13 and JDK 17, successful in 61 seconds. The wrapper declares Gradle 8.14.3 but its distribution was not locally cached; it was not used for this checkpoint. Native instrumentation ran separately in 17.306 seconds on the API 37 `sdk_gphone16k_x86_64` emulator.
+
+The debug APK is `androidApp/build/outputs/apk/debug/androidApp-debug.apk` (approximately 31 MB), signed with the development key. It has no Internet permission and disables automatic Android app-data backup. Android records are independent of desktop; no sync, external bank confirmation or production release is claimed. The declared minimum is API 30; API 30–36, physical devices and release signing remain unverified. Manager price approvals are currently exposed only on API 33+.
+
+### Verified changes
+
+- Native SQLite retains exact integer money/quantities, blobs/nulls, foreign keys, rollback and reopen behavior. Missing prepared parameters now fail before queries/writes instead of becoming NULL; explicit NULL and quoted/commented question marks are covered. A first attempt exposed an Android-version exception difference; the corrected implementation passed the full native suite.
+- Shared stock movement queries now use exact integer CASE factors for supported precision rather than an optional SQL POWER function. A real native test sells measured and packaged goods together, restores a measured return, and checks stock, movement deltas and cash.
+- Native tests exercise real owner/staff credentials, denied cashier writes, revocation, separately authenticated manager signatures, customer advances/disputes/bundles, managed images, encrypted snapshot recovery and receipt PDF pagination/bounds. Restore rechecks the source owner's authority after document decryption and again before provisioning the recovered owner; denied or revoked imports leave the original records and tenant list unchanged.
+- Checkout retains a selected customer on a fully paid sale. Adding quantities to a line rejects conflicting agreed prices/reasons rather than silently discarding new terms. Unit tests cover these cases and exact quantity/overflow behavior.
+- Actual phone review exposed a scroll-hidden total and a checkbox label that was not selectable. Total and final change/debt/unconfirmed status now remain beside the save action; payment focuses on payment fields, and cash-confirmation rows have one labeled, selectable checkbox target. This is targeted usability correction, not full accessibility certification.
+
+### Actual disconnected phone evidence
+
+Created a separate `Offline QA 23Nov` shop on the emulator with Wi-Fi and mobile data disabled. Used touch and keyboard/Tab entry to add 10 counted soap pieces at ₦1,250 each and open a counted ₦1,000 drawer. Tapping the confirmation label selected its checkbox and saved the count. Added two pieces, restarted the updated application and recovered the unfinished ₦2,500 basket. Entered ₦3,000 cash, reviewed ₦500 change, saved once and opened the captured receipt. The drawer showed ₦3,500 and stock showed 8 pieces. A later force-stop/relaunch and owner sign-in checked the saved sale and these balances again.
+
+[Count review](artifacts/android-offline-drawer-reviewed.png), [basket](artifacts/android-offline-basket.png), [payment review](artifacts/android-offline-cash-review.png), [saved sale](artifacts/android-offline-sale-saved.png), [receipt](artifacts/android-offline-saved-receipt.png), [sales after restart](artifacts/android-offline-sales-after-restart.png), [drawer after restart](artifacts/android-offline-cash-after-sale.png), [stock after restart](artifacts/android-offline-stock-after-sale.png).
+
+Print/share actions were present; this walkthrough did not submit a physical print or send a document. Tablet/foldable/rotation, large fonts/TalkBack, background expiry, broad Android credit/return/external payment/backup picker journeys, minimum-API runtime checks, physical peripherals, another-device restore and merchant research remain pending. Many advanced Android tools currently read shared records rather than edit them. [ANDROID_FEATURE_PARITY.md](ANDROID_FEATURE_PARITY.md) distinguishes source implementation from missing UI and acceptance.
+
 ## Local accounts, stock and authorization — 23 November 2026
 
 **680 tests pass** (79 shared and 601 desktop), with zero failures, errors or skips. Ran `gradle :shared:jvmTest :desktopApp:jvmTest :desktopApp:createDistributable --offline` and rebuilt the Linux application. This checkpoint adds 59 tests over the receipt-printing checkpoint. Five subagents contributed in dependency waves within the available concurrency limit; root integrated permissions, cash, statements, recovery and routes. Source and UI were recorded in separate commits.

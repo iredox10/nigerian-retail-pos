@@ -252,7 +252,8 @@ Work is ordered by dependencies, not by hiding any part of the full specificatio
 - [ ] Offline stock/credit/refund conflict resolution with visible freshness.
 - [ ] Attachments, stale device/authorization alerts and optional LAN sync.
 - [ ] Heroku staging deployment, restore drills and production deployment.
-- [ ] Android app and local persistence/secure storage/hardware adapters.
+- [x] Android debug application foundation with shared rules/native SQLite, app-private credentials, basic checkout/operations and native document/image/backup adapters; 6 JVM + 16 API 37 native tests and selected actual disconnected phone workflows pass.
+- [ ] Remaining Android editing/platform/API/device/accessibility/hardware/release parity: see ANDROID_FEATURE_PARITY.md; working database encryption and full desktop parity remain unfinished.
 - [ ] iOS app and platform adapters.
 - [ ] React/TypeScript/TanStack web app with explicit offline capabilities.
 - [ ] Windows installer, upgrades and packaging checks.

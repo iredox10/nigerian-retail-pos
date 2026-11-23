@@ -1,6 +1,6 @@
 # Nigerian Retail POS
 
-An offline-first Kotlin desktop retail POS for Nigerian merchants, with reusable shared domain and Compose design-system modules. The working local app covers the scope below. The full specification remains tracked in IMPLEMENTATION_TODO.md; online deployment and wider platform support remain unfinished.
+An offline-first Kotlin desktop retail POS for Nigerian merchants, with an Android app sharing the domain, design system and local transaction repositories. The working local app covers the scope below. The full specification remains tracked in IMPLEMENTATION_TODO.md; online deployment and wider platform support remain unfinished.
 
 ## Run
 
@@ -30,6 +30,19 @@ To review a particular screen, set `POS_PREVIEW_SCREEN=Stock`, `Money`, `Sales`,
 ```
 
 Desktop distributions are built for the host operating system. Build and test the Windows distribution on Windows; the current environment validates Linux/JVM desktop execution.
+
+## Android development build
+
+Requires JDK 17 and Android SDK platform 35/build tools, configured through Android Studio or an untracked `local.properties`. The initial minimum is Android 11 (API 30). Manager price-approval signing is currently available on API 33+ only. The APK is signed with the development debug key; it is not a production release or physical-hardware compatibility claim.
+
+```sh
+./gradlew :androidApp:testDebugUnitTest :androidApp:assembleDebug :androidApp:assembleDebugAndroidTest
+adb install -r androidApp/build/outputs/apk/debug/androidApp-debug.apk
+adb install -r androidApp/build/outputs/apk/androidTest/debug/androidApp-debug-androidTest.apk
+adb shell am instrument -w ng.retailpos.android.test/androidx.test.runner.AndroidJUnitRunner
+```
+
+The APK is at `androidApp/build/outputs/apk/debug/androidApp-debug.apk`. Records stay in Android app-private storage; they do not synchronize with desktop. The app declares no internet permission and disables Android automatic app-data backup. Explicit encrypted document export/restore is available to the owner. Working records are not encrypted. See [Android plan](ANDROID_IMPLEMENTATION_PLAN.md), [coverage](ANDROID_FEATURE_PARITY.md) and [build evidence](BUILD_STATUS.md) for implementation and acceptance limits.
 
 ## Implemented
 
@@ -114,7 +127,7 @@ desktopApp/src/jvmMain/kotlin/pos/screens/     Checkout, stock, and cash workspa
 desktopApp/src/jvmMain/kotlin/pos/Main.kt      Desktop shell and shop tools
 ```
 
-The shared module currently declares a JVM target while keeping domain/UI code in common source sets. Add and test Android/iOS targets and platform persistence adapters in their implementation phases; mobile apps have not been built yet. SQLite JDBC is the first desktop persistence adapter; Room Multiplatform migration/evaluation remains open.
+The shared module declares JVM and Android targets. Desktop uses SQLite JDBC; Android uses a native SQLite adapter for the same repository rules. Android editing and document support cover a subset of desktop workflows; see [Android feature coverage](ANDROID_FEATURE_PARITY.md). iOS and web applications remain unfinished.
 
 ## Design and planning
 
