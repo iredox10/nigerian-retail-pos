@@ -19,6 +19,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import pos.domain.*
+import pos.ui.components.MoneyInputTransformation
 import pos.ui.components.SavedImage
 import pos.ui.components.PosIcon
 import pos.ui.components.PosIcons
@@ -419,13 +420,13 @@ fun SellScreen(
                                         try {requireNotNull(draftStore).save(currentDraft().copy(externalMethod=m,externalAmountText=a,externalReference=r,externalAccount=b));externalMethod=m;externalAmountText=a;externalReference=r;externalAccount=b;error=null} catch(e:Exception) {error="Payment details not saved: ${e.message}"}
                                     }
                                     Row(horizontalArrangement=Arrangement.spacedBy(8.dp)) {FilterChip(externalMethod=="transfer",{saveExternal(m="transfer")},label={Text("Bank transfer")});FilterChip(externalMethod=="card",{saveExternal(m="card")},label={Text("Card terminal")})}
-                                    OutlinedTextField(externalAmountText,{saveExternal(a=it)},label={Text("External amount recorded (₦)")},modifier=Modifier.fillMaxWidth(),singleLine=true)
+                                    OutlinedTextField(externalAmountText,{saveExternal(a=it)},visualTransformation=MoneyInputTransformation, prefix={Text("₦ ")}, label={Text("External amount recorded (₦)")},modifier=Modifier.fillMaxWidth(),singleLine=true)
                                     OutlinedTextField(externalReference,{saveExternal(r=it)},label={Text("Payment reference")},modifier=Modifier.fillMaxWidth(),singleLine=true)
                                     OutlinedTextField(externalAccount,{saveExternal(b=it)},label={Text("Receiving account / terminal")},modifier=Modifier.fillMaxWidth(),singleLine=true)
                                     if(allowCredit) Row(verticalAlignment=Alignment.CenterVertically) {Checkbox(method=="split_credit",{persistPayment(paymentMethod=if(it) "split_credit" else "split")});Text("Customer will pay the remaining balance later",Modifier.weight(1f))}
                                     Text(externalResult.exceptionOrNull()?.message ?: "${externalPayments.first().label}: ${money(externalAmount)}",style=MaterialTheme.typography.bodySmall)
                                 }
-                                OutlinedTextField(cashText, { persistPayment(cash=it) }, label = { Text(if (method == "cash") "Cash given by customer" else "Cash paid now (enter 0 if none)") }, prefix = { Text("₦ ") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                                OutlinedTextField(cashText, { persistPayment(cash=it) }, label = { Text(if (method == "cash") "Cash given by customer" else "Cash paid now (enter 0 if none)") }, prefix = { Text("₦ ") }, visualTransformation = MoneyInputTransformation, singleLine = true, modifier = Modifier.fillMaxWidth())
                                 TextButton({ persistPayment(cash=BigDecimal(cashNeeded).movePointLeft(2).toPlainString()) }) { Text("Exact amount") }
                                 if (method in setOf("credit","split_credit")) {
                                     Text("Who will pay the balance?", fontWeight = FontWeight.Medium)
@@ -542,7 +543,7 @@ fun SellScreen(
                     FilterChip(kind=="fixed",{kind="fixed";valueText=""},label={Text("Amount off")})
                     FilterChip(kind=="percentage",{kind="percentage";valueText=""},label={Text("Percentage off")})
                 }
-                OutlinedTextField(valueText,{valueText=it;basketError=null},label={Text(if(kind=="fixed") "Amount off (₦)" else "Percentage off (0–100%)")},singleLine=true,modifier=Modifier.fillMaxWidth())
+                OutlinedTextField(valueText,{valueText=it;basketError=null},visualTransformation=if(kind=="fixed") MoneyInputTransformation else androidx.compose.ui.text.input.VisualTransformation.None, prefix=if(kind=="fixed") ({Text("₦ ")}) else null, label={Text(if(kind=="fixed") "Amount off (₦)" else "Percentage off (0–100%)")},singleLine=true,modifier=Modifier.fillMaxWidth())
                 OutlinedTextField(reasonText,{reasonText=it;basketError=null},label={Text("Reason for basket discount")},modifier=Modifier.fillMaxWidth())
                 preview.getOrNull()?.let {(_,allocated) ->
                     Text("Basket saves ${money(allocated.sumOf {it.basketDiscountMinor})} · Customer pays ${money(cartTotal(allocated))}",fontWeight=FontWeight.Medium)
@@ -576,7 +577,7 @@ fun SellScreen(
                         Text("Save ${money(reduction)} per ${line.sellingUnit} · Customer pays ${money(line.unitPriceMinor-reduction)} per ${line.sellingUnit}", fontWeight = FontWeight.Medium)
                     }
                     Text("The discount is rounded to the nearest kobo for each selling unit; half a kobo rounds up. It replaces any discount already on this line.", style = MaterialTheme.typography.bodySmall)
-                } else OutlinedTextField(agreedPrice, { agreedPrice = it; priceError = null }, label = { Text("Customer pays per ${line.sellingUnit} (₦)") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                } else OutlinedTextField(agreedPrice, { agreedPrice = it; priceError = null }, visualTransformation = MoneyInputTransformation, prefix = { Text("₦ ") }, label = { Text("Customer pays per ${line.sellingUnit} (₦)") }, singleLine = true, modifier = Modifier.fillMaxWidth())
                 OutlinedTextField(discountReason, { discountReason = it; priceError = null }, label = { Text("Reason for discount") }, placeholder = { Text("For example, agreed market price") }, modifier = Modifier.fillMaxWidth())
                 Text("The catalogue price stays unchanged. The saved receipt keeps the discount and reason. Returns refund the price actually paid.", style = MaterialTheme.typography.bodySmall)
                 priceError?.let { Text(it, color = MaterialTheme.colorScheme.error) }

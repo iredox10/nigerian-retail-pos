@@ -135,6 +135,7 @@ fun PosTextField(
     error: String? = null,
     enabled: Boolean = true,
     singleLine: Boolean = true,
+    moneyInput: Boolean = label.contains("(₦)") || label.contains("in naira", ignoreCase = true),
 ) {
     Column(modifier, verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Text(label, style = MaterialTheme.typography.labelMedium)
@@ -147,6 +148,8 @@ fun PosTextField(
             textStyle = MaterialTheme.typography.bodyLarge,
             placeholder = if (hint.isBlank()) null else ({ Text(hint, color = PosPalette.Secondary) }),
             leadingIcon = if (label.contains("search", true) || label.contains("find", true)) ({ PosIcon(PosIcons.Search) }) else null,
+            prefix = if (moneyInput) ({ Text("₦ ") }) else null,
+            visualTransformation = if (moneyInput) MoneyInputTransformation else androidx.compose.ui.text.input.VisualTransformation.None,
             isError = error != null,
             shape = RoundedCornerShape(8.dp),
             colors = OutlinedTextFieldDefaults.colors(
