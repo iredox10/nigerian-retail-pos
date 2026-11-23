@@ -1,6 +1,6 @@
 # Nigerian Retail POS
 
-An offline-first Kotlin desktop retail POS for Nigerian merchants, with reusable shared domain and Compose design-system modules. This is an initial working desktop foundation, not the complete feature specification or a production SaaS deployment.
+An offline-first Kotlin desktop retail POS for Nigerian merchants, with reusable shared domain and Compose design-system modules. The working local app covers the scope below. The full specification remains tracked in IMPLEMENTATION_TODO.md; online deployment and wider platform support remain unfinished.
 
 ## Run
 
@@ -32,6 +32,17 @@ To review a particular screen, set `POS_PREVIEW_SCREEN=Stock`, `Money`, `Sales`,
 Desktop distributions are built for the host operating system. Build and test the Windows distribution on Windows; the current environment validates Linux/JVM desktop execution.
 
 ## Implemented
+
+- Customers can receive/refund cash advances and explicitly apply them to existing credit receipts. Statements distinguish this funding from new cash repayments. Store-credit checkout and change owed remain unfinished.
+- Receipt-linked customer debt disputes and reasoned resolution retain the original debt and cash history.
+- Supplier credit notes retain unapplied balances, reviewed receipt allocations/reversals and reconciled dated statements.
+- One/two-axis variant matrices create separately stocked options with explicit identifiers, prices and opening counts. Saved bundles support reviewed whole-bundle cash sales and component deductions.
+- Buying rules include lead times, safety stock and buying multiples; suggestions account for reserved stock. Reports compare current catalogue categories with the preceding equal-length period.
+- FIFO stock valuation and COGS use saved buying costs, declared opening costs and original-cost return/repacking sources. Missing cost coverage is unavailable; the app does not claim complete profit.
+- Manager price approvals require a separate full-password identity and bind to the exact cart/operation/policy. Shared-drawer handover requires recipient full-password consent and preserves the counted shortage/excess. Multiple-register custody remains unfinished.
+- Owner recovery uses an enrolled single-use code with throttling, audit and session revocation. Business backups do not contain credential/recovery secrets.
+- Accepted quotations can create frozen-price customer orders with an optional actual cash deposit. Sold order goods can retain local dispatch and merchant-recorded delivery proof/status.
+- More → Local app checks previews and exports allowlisted diagnostics. It reports unavailable/not-checked states accurately and sends nothing.
 
 - Local shop creation and password-gated workspace selection.
 - Tenant-scoped SQLite products, customers, sales, repayments, and outbox entries.

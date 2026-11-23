@@ -101,14 +101,17 @@ Work is ordered by dependencies, not by hiding any part of the full specificatio
 - [ ] Automatic pricing/markups and broader price-list UI/keyboard acceptance.
 - [x] Explicitly reviewed fixed or percentage line promotions with WAT validity dates, qualifying units and quantities, optional usage caps and revision history. Promotion use is checked again when the sale saves.
 - [ ] Automatic and basket-wide promotions, stacking policies and broader offline clock acceptance.
-- [ ] Bundles with component stock movements.
+- [x] Versioned component-stock bundles with reviewed whole-bundle cash checkout, exact discounts, stock movements, tender/change and receipt printing.
+- [ ] Mixed-basket bundles, non-cash bundle checkout and additional bundle pricing policies.
 - [x] Versioned base/selling-pack minimum prices and final-line enforcement after every discount, including measured whole-line ceilings; preserved historical checks.
-- [ ] Cost/margin warnings and separately authenticated price approvals/overrides.
+- [x] Separately authenticated manager price approvals bound to one cart, operation and minimum-price policy, with expiry, revocation and immutable signed sale evidence.
+- [ ] Cost/margin warnings and broader approval policies.
 - [x] Bulk catalogue repricing via reviewed CSV with stale checks and change history.
 - [ ] Described unlisted/open-price sale items with permissions.
 - [x] Separate quotations with frozen agreed goods/units/prices, notes, expiry, revisions, acceptance/cancellation and reviewed full-cash sale conversion.
 - [x] Sale notes retained in current and held baskets, completed receipts and CSV.
-- [ ] Quotation conversion to orders, credit or electronic payment.
+- [x] Reviewed accepted quotation conversion to an order preserving agreed goods/prices, an existing customer and an optional actual cash deposit.
+- [ ] Quotation conversion to credit or electronic payment.
 - [ ] Sale backdating with effective and recorded timestamps and permissions.
 - [x] Historical cash given and change kept on saved receipt text, PDF and CSV.
 - [ ] Receipt-number policy beyond the existing receipt identifier.
@@ -118,7 +121,8 @@ Work is ordered by dependencies, not by hiding any part of the full specificatio
 - [x] Manual transfer/card portions with explicit unverified status, reference/account, immutable storage and receipt/CSV history.
 - [x] Checkout split of one external portion, cash and optional explicit named-customer credit; draft recovery and reference search.
 - [ ] Multiple external portions in checkout UI and allocation across invoices.
-- [ ] Underpayment/overpayment, customer advances and change-owed liabilities.
+- [x] Reviewed cash advances, unused-advance refunds and explicit application to existing credit receipts.
+- [ ] Wider underpayment/overpayment settlement and change-owed liabilities.
 - [ ] Payment reversal and dispute workflows preserving the ledger.
 - [ ] Provider adapter, authenticated webhook verification and idempotent processing.
 - [ ] Recheck/retry state machine and verified payment UI.
@@ -139,9 +143,11 @@ Work is ordered by dependencies, not by hiding any part of the full specificatio
 - [x] Reasoned assignment undo and explicit reassignment with original history retained.
 - [x] Recorded-date historical debt/assignment reconstruction and configurable report ageing bands.
 - [ ] Persist shop-wide default ageing preferences and historical customer profile snapshots.
-- [ ] Customer advance/unapplied-credit accounts and merchant-owed balances.
+- [x] Cash customer advance liability accounts, reviewed cash refunds and explicit application to existing credit receipts; statements distinguish advance funding from cash repayments.
+- [ ] Store credit, advance-funded new checkout and change-owed liabilities.
 - [x] Owner-authorized partial and full receipt-linked write-offs and linked reinstatement, with reconciled dated statements and credit ageing.
-- [ ] Customer disputes and additional authorized account adjustments.
+- [x] Receipt-linked customer debt disputes with current disputed/undisputed balance and immutable resolution, without changing money or debt.
+- [ ] Additional authorized account adjustments and payment-provider disputes.
 - [ ] Duplicate customer merge with review and immutable source links.
 - [x] Dated customer CSV statements with reconciled opening/closing debt and WAT cutoffs; integrated automated coverage passes.
 - [ ] Complete dated customer statement desktop/keyboard/failure acceptance.
@@ -166,14 +172,16 @@ Work is ordered by dependencies, not by hiding any part of the full specificatio
 - [ ] Feed landed-cost allocations into historical stock valuation and accounting once costing policy is implemented.
 - [x] Reviewed purchase returns with exact removal from stock and receipt-linked credit up to the amount owed, with no drawer movement.
 - [x] Explicit cash reimbursements on supplier returns with receipt debt reduction and drawer reconciliation.
-- [ ] Supplier credit notes, unapplied credits and account adjustments.
+- [x] Merchant-recorded supplier credit notes, unapplied balances, reviewed receipt allocation/reversal and dated CSV/PDF statement reconciliation.
+- [ ] Additional supplier account adjustments and supplier-issued document integrations.
 - [x] Dated receipt-name supplier statements and CSV, including paid receipts, opening/closing debt and current debt; integrated automated coverage passes.
 - [ ] Complete supplier statement desktop/keyboard/failure acceptance.
 - [x] Extend dated statements to explicit stable supplier accounts, preserving historical supplier names on linked receipt activities.
 - [x] Include purchase return credits in name-based and linked-account statements and exports.
 - [ ] Extend statements to additional credits, adjustments and attachments as their source workflows are implemented. Broader PDF native-dialog acceptance remains pending.
 - [x] Local reorder suggestions from recent retained sales, physical stock and outstanding approved purchases, with export.
-- [ ] Lead-time, safety-stock and broader replenishment policies.
+- [x] Saved per-item supplier lead times, safety stock and buying multiples; suggestions deduct reservations and approved incoming goods with exact rounding.
+- [ ] Additional replenishment policies and stockout analysis.
 
 ## Inventory
 
@@ -184,8 +192,10 @@ Work is ordered by dependencies, not by hiding any part of the full specificatio
 - [ ] Locations, bins and in-transit stock.
 - [ ] Lots, expiry dates, serial numbers and stock ageing.
 - [x] Damage/loss/theft/owner-use physical stock removals with reason categories and immutable quantity/history snapshots; no financial valuation.
-- [ ] Advanced replenishment, safety stock and stockout analysis.
-- [ ] Costing method, historical cost layers and stock valuation.
+- [x] Lead-time and safety-stock replenishment with reserved-stock availability and buying multiples.
+- [ ] Stockout analysis and additional forecast methods.
+- [x] FIFO purchase-basis historical layers and stock valuation, owner-declared opening cost, exact original-cost returns and repacking material transfer, with explicit coverage gaps.
+- [ ] Broader costing policies, capitalized landed-cost treatment and unknown stock-source declarations.
 
 ## Cash and accounting
 
@@ -193,13 +203,15 @@ Work is ordered by dependencies, not by hiding any part of the full specificatio
 - [x] Optional denomination sheets persisted atomically with opening/closing cash counts, with typed-total agreement and retry/backup coverage.
 - [x] Hide expected cash inside the closing count form. This is count-entry hiding only: the preceding dashboard can show expected cash.
 - [x] Targeted actual desktop denomination close retained the count sheet and shortage in Past shifts.
-- [ ] Secure blind-accountability policy, cashier handover/sign-off and full denomination UI/keyboard acceptance.
+- [x] Authenticated recipient sign-off and atomic counted close/open handover for the existing shared drawer, preserving shortages and signed history.
+- [ ] Secure blind-accountability policy, per-register custody and full denomination UI/keyboard acceptance.
 - [ ] Cash custody transfers and controlled period corrections.
 - [x] Managed expense PDF/PNG/JPEG receipt files with reasoned replace/remove history, preview/export and encrypted backup/restore.
 - [ ] Accrued/recurring expenses and non-cash funding sources.
 - [x] Classified owner drawer contributions/drawings, stale-balance review, append-only opposite cash corrections and history CSV.
 - [ ] Formal owner equity/loan accounts and accounting postings.
-- [ ] Historical COGS and reliable gross/net profit.
+- [x] FIFO original-sale and net COGS, restored return cost and non-restocked return losses where source cost coverage is complete.
+- [ ] Reliable gross/net profit and complete cost/expense recognition.
 - [ ] Chart of accounts, double-entry journals and period controls.
 - [ ] Trial balance, balance sheet and accounting exports.
 
@@ -212,15 +224,16 @@ Work is ordered by dependencies, not by hiding any part of the full specificatio
 - [x] Branded offline PDF sales receipts and dated customer/supplier statements with embedded fonts, wrapping, pagination and guarded file replacement.
 - [x] Frozen quotation PDF/text including historical revision output.
 - [x] PDF copies of saved sales invoices, pre-handover delivery notes and credit notes for recorded sale returns.
-- [ ] Fulfilment and dispatch records, tax-invoice requirements, and document sharing/delivery.
+- [x] Local dispatch of already-sold order goods with exact quantities, recipient/address/courier/tracking, merchant-recorded delivery proof and failed/retry/return history.
+- [ ] Proof image attachments, tax-invoice requirements, and document sharing/delivery.
 - [x] A4/58/80 mm PDF receipt layouts with automated extraction, font and pagination checks.
 - [ ] Real thermal-printer delivery/size/scanner compatibility, Windows native dialogs and comprehensive native export acceptance.
 - [x] Local customer orders with agreed quantities and prices, cash deposits, reservation expiry and cancellation with an explicit cash refund.
 - [x] Partial and final counter collection with linked sale receipts and tracked quantities, deposits applied and cash due.
-- [ ] Broader layaway payment and forfeiture terms, backorders, delivery/dispatch and proof of delivery.
+- [ ] Broader layaway payment and forfeiture terms, backorders and additional delivery-proof attachments.
 - [ ] Connected order channels, storefront/payment links and stock buffers.
 - [ ] Beverage container/deposit ledger.
-- [ ] Fashion variants/size-colour workflows.
+- [x] One/two-axis structured size/colour matrices with editable SKU/barcode/price/counted opening quantity per independently stocked combination and immutable creation history.
 - [ ] Serial/warranty/repair jobs.
 - [ ] Contractor/custom-measure dispatch.
 - [ ] Restaurant recipes, kitchen tickets and tables.
@@ -248,7 +261,8 @@ Work is ordered by dependencies, not by hiding any part of the full specificatio
 ## Reporting, communication, tax and product operations
 
 - [x] Product sales/refunds and recorded-staff activity CSV reports with source-date/actor semantics.
-- [ ] Category performance, comparisons, charts and custom reports.
+- [x] Current-category sales/return comparison with the preceding equal-length WAT period, amount bars and CSV.
+- [ ] Custom reports, historical category classification and additional charts.
 - [ ] Shrinkage, stock valuation, supplier performance and settlement reports; receipt-name statement code exists as described above.
 - [ ] Consolidated completeness/freshness indicators.
 - [ ] Loyalty points/stamps, redemption and offline conflicts.
@@ -261,13 +275,15 @@ Work is ordered by dependencies, not by hiding any part of the full specificatio
 - [ ] Regional language translations and broader address/phone support.
 - [x] Searchable in-app offline help and a separately launched, isolated sample practice process.
 - [ ] Full help/practice UI/keyboard acceptance, guided tutorials and expanded practice workflows.
-- [ ] Consented diagnostics, support and peripheral troubleshooting.
+- [x] Merchant-controlled local diagnostics with exact redacted text/JSON preview and export; SQLite structure, actual storage probe and installed print-service counts.
+- [ ] Broader support/peripheral troubleshooting, backup health and fault recovery.
 - [ ] Application updater, subscriptions and grace policies.
 - [ ] Integration authentication, outbound/webhook event logs and retries.
 - Dependencies: actual messaging/fiscal/service access and reviewed applicable rules.
 
 ## Security, recovery and release acceptance
 
+- [x] Owner-enrolled local recovery code with single-use password reset, persistent throttling, session/PIN revocation and audit; secrets excluded from business backups.
 - [ ] Encrypted working database/drafts with protected device keys.
 - [x] Opt-in scheduled versioned encrypted local backups with verified encryption/password checks, guarded retention and bounded session-key lifecycle.
 - [ ] Cloud backups, app-closed scheduling, independent-machine restore drill and broad native backup acceptance.

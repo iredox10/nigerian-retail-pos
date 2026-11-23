@@ -80,11 +80,11 @@ Cloud synchronization stays excluded. Deliver each item through real local stora
 
 ### Five subagent assignments, scheduled across the available slots
 
-- [ ] Customer receipt disputes with outstanding disputed/undisputed balances and resolution history.
-- [ ] Supplier credit notes, unapplied credit, receipt allocation and statement reconciliation.
-- [ ] Order dispatch records and explicit proof/status of delivery.
-- [ ] Owner recovery with locally enrolled recovery proof, credential invalidation and audit.
-- [ ] Structured product options and size/colour matrix editing with independent stock identities.
+- [x] Customer receipt disputes with outstanding disputed/undisputed balances and resolution history.
+- [x] Supplier credit notes, unapplied credit, receipt allocation and statement reconciliation.
+- [x] Order dispatch records and explicit proof/status of delivery.
+- [x] Owner recovery with locally enrolled recovery proof, credential invalidation and audit.
+- [x] Structured product options and size/colour matrix editing with independent stock identities.
 
 ### Remaining delivery dependencies
 
@@ -92,7 +92,7 @@ Cloud synchronization stays excluded. Deliver each item through real local stora
 - [ ] Credit/external/store-credit exchanges and original-method refund recording.
 - [ ] Payment reversals/disputes and additional authorized debt corrections.
 - [ ] Reviewed duplicate customer merge preserving source history.
-- [ ] Separately authenticated, bounded manager approvals and minimum-price overrides.
+- [x] Separately authenticated, bounded manager approvals and minimum-price overrides.
 - [ ] Per-register/cashier drawer custody, handover and sign-off.
 - [ ] Supplier claims, quarantine, locations, lots/expiry, serials and advanced replenishment.
 - [ ] Stock-tracked bundles and nested/multi-input assembly.
@@ -108,3 +108,15 @@ Cloud synchronization stays excluded. Deliver each item through real local stora
 - [ ] Windows packaging/upgrade, real peripheral, accessibility, performance and merchant acceptance.
 
 IMPLEMENTATION_TODO.md retains the detailed full-product checklist. A checked feature requires completed implementation and recorded evidence. Planned work and unavailable environments remain visible.
+
+### Verified local increments in this execution
+
+- [x] Cash customer advances, unused-cash refunds and application to existing credit receipts, with separate statement funding labels. Store-credit checkout and change owed remain open.
+- [x] Authenticated counted handover of the existing shared drawer. Multiple register drawers remain open.
+- [x] Whole-bundle reviewed cash sales with component stock and immutable price/version evidence. Mixed-basket and non-cash bundle sales remain open.
+- [x] FIFO purchase-cost layers, original-cost sale returns and repacking material transfer. Missing opening/correction cost stays unavailable; profit remains open.
+- [x] Per-item lead times, safety stock, buying multiples and reserved-stock-aware replenishment.
+- [x] Category comparison against the preceding equal-length WAT period.
+- [x] Integrate and verify quotation-to-order conversion and redacted local diagnostics.
+
+See BUILD_STATUS.md for counts, actual native evidence and unperformed acceptance. The remaining dependency groups above are intentionally still open where only part of a group has shipped.
