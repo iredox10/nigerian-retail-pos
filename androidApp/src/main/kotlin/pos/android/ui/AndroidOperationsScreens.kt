@@ -1,6 +1,8 @@
 package pos.android.ui
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.selection.toggleable
+import androidx.compose.ui.semantics.Role
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
@@ -285,7 +287,7 @@ fun AndroidMoneyScreen(repo: PosRepository, tenantId: String, onChanged: () -> U
                 OperationsCard {
                     Text("Today's cash", style = MaterialTheme.typography.titleMedium)
                     if (data?.active == null) {
-                        Text("Open the drawer before recording cash sales, receipts or expenses.")
+                        Text("Open the drawer to include new cash sales and repayments in its count. Cash payouts require an open drawer.")
                         PosButton("Open cash drawer", { action = "open" }, modifier = Modifier.fillMaxWidth())
                     } else {
                         LabelValueRow("Cash expected", money(requireNotNull(data.expected)), emphasized = true)
@@ -486,8 +488,8 @@ internal fun OperationsCard(content: @Composable ColumnScope.() -> Unit) {
 
 @Composable
 internal fun OperationsCheck(value: Boolean, change: (Boolean) -> Unit, text: String) {
-    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        Checkbox(value, change)
+    Row(Modifier.fillMaxWidth().heightIn(min = 48.dp).toggleable(value=value,role=Role.Checkbox,onValueChange=change), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Checkbox(value, onCheckedChange=null)
         Text(text, modifier = Modifier.weight(1f).padding(top = 12.dp))
     }
 }

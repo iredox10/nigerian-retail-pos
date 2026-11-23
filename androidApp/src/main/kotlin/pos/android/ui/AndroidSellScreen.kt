@@ -163,7 +163,7 @@ fun AndroidSellScreen(
     }
     BoxWithConstraints(Modifier.fillMaxSize().imePadding()) {
         val tablet = maxWidth >= 720.dp
-        Column(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text(if (stage == "payment") "Take payment" else "Sell", style = MaterialTheme.typography.headlineSmall, modifier = Modifier.weight(1f))
                 TextButton({ heldOpen = true }, enabled = !busy) { Text("Saved sales (${held.getOrDefault(emptyList()).size})") }
@@ -207,6 +207,7 @@ fun AndroidSellScreen(
             val salePanel: @Composable (Modifier) -> Unit = { modifier ->
                 Column(modifier, verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        if(stage != "payment") {
                         item {
                             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                                 Text("This sale", style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
@@ -226,10 +227,6 @@ fun AndroidSellScreen(
                                 }
                             }
                         }
-                        item {
-                            HorizontalDivider()
-                            Text("Total", style = MaterialTheme.typography.labelLarge)
-                            Text(money(total), fontSize = 36.sp, fontWeight = FontWeight.SemiBold)
                         }
                         if (stage == "payment") item {
                             SellPaymentFields(draft, customers.getOrDefault(emptyList()), busy, acknowledged,
@@ -249,6 +246,16 @@ fun AndroidSellScreen(
                                 }
                             }
                         } }
+                    }
+                    HorizontalDivider()
+                    Column {
+                        Text("Total", style = MaterialTheme.typography.labelLarge)
+                        Text(money(total), fontSize = 36.sp, fontWeight = FontWeight.SemiBold)
+                    }
+                    reviewed?.let { review ->
+                        LabelValueRow("Change to give", money(review.changeMinor), emphasized = true)
+                        if(review.creditMinor>0) LabelValueRow("Customer will pay later",money(review.creditMinor))
+                        if(review.external.isNotEmpty()) Text("External payment recorded · not confirmed",color=MaterialTheme.colorScheme.error,style=MaterialTheme.typography.bodySmall)
                     }
                     if (approvalNeeded) {
                         if (onRequestApproval != null) NeutralButton(
