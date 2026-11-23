@@ -52,8 +52,7 @@ class PosRepository(path: String = File(System.getProperty("user.home"), ".niger
     internal fun featureEvent(tenantId:String,kind:String,entityId:String) = enqueue(tenantId,kind,entityId)
     init {
         if (path != ":memory:") File(path).absoluteFile.parentFile?.mkdirs()
-        Class.forName("org.sqlite.JDBC")
-        db = DriverManager.getConnection("jdbc:sqlite:$path")
+        db = LocalSqlite.open(path)
         db.createStatement().use { s ->
             s.execute("PRAGMA foreign_keys=ON")
             s.execute("PRAGMA busy_timeout=5000")

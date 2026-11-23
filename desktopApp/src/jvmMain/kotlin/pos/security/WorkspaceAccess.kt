@@ -118,7 +118,7 @@ class WorkspaceAccess(
         return try {
             val file = credentialFile(tenantId)
             if (!Files.isRegularFile(file) || Files.size(file) > 2048) return null
-            val fields = Files.readString(file, Charsets.UTF_8).split(':')
+            val fields = String(Files.readAllBytes(file), Charsets.UTF_8).split(':')
             if (fields.size !in setOf(4, 8) || fields[1] != ITERATIONS.toString() ||
                 (fields[0] == "1" && fields.size != 4) || (fields[0] == "2" && fields.size != 8) || fields[0] !in setOf("1", "2")) return null
             val salt = Base64.getDecoder().decode(fields[2])

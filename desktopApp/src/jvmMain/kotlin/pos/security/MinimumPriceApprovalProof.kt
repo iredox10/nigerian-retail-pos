@@ -138,7 +138,7 @@ internal class MinimumPriceApprovalSigner(directory: Path) {
                         } finally { Files.deleteIfExists(temp) }
                     }
                     require(Files.isRegularFile(file) && Files.size(file) <= 1024) { "Local approval signing key is unavailable." }
-                    val parts = Files.readString(file, Charsets.US_ASCII).split(':')
+                    val parts = String(Files.readAllBytes(file), Charsets.US_ASCII).split(':')
                     require(parts.size == 3 && parts[0] == "1") { "Local approval signing key is invalid." }
                     val factory = KeyFactory.getInstance("Ed25519")
                     val privateBytes = Base64.getDecoder().decode(parts[2])

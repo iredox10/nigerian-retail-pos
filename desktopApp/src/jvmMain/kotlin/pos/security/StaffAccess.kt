@@ -31,9 +31,8 @@ class StaffAccess(
         require(pinAuthorizationMillis > 0) { "PIN authorization duration must be greater than zero." }
         require(idleTimeoutMillis > 0) { "Session timeout must be greater than zero." }
         Files.createDirectories(directory)
-        Class.forName("org.sqlite.JDBC")
         val file=directory.resolve("staff-access.db")
-        db=DriverManager.getConnection("jdbc:sqlite:$file")
+        db=pos.data.LocalSqlite.open(file.toString())
         db.createStatement().use {
             it.execute("PRAGMA busy_timeout=5000")
             it.execute("PRAGMA synchronous=FULL")

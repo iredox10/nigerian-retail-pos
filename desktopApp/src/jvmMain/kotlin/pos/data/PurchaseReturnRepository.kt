@@ -5,7 +5,6 @@ import java.math.BigDecimal
 import java.security.MessageDigest
 import java.sql.ResultSet
 import java.time.Instant
-import java.util.HexFormat
 import java.util.UUID
 
 internal val purchaseReturnSnapshotTables = listOf("purchase_returns", "purchase_cash_returns")
@@ -273,9 +272,9 @@ private fun PosRepository.purchaseReturnCandidate(
         movements.flatMap { listOf(it.id, it.createdAt, it.quantityDelta.toString()) } +
         payments.sortedBy { it.id }.flatMap { listOf(it.id, it.createdAt, it.amountMinor.toString()) } +
         creditApplications.sortedBy { it.id }.flatMap { listOf(it.id, it.createdAt, it.signedAmountMinor.toString()) }
-    val token = HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(
+    val token = MessageDigest.getInstance("SHA-256").digest(
         fields.joinToString("") { "${it.length}:$it" }.toByteArray(),
-    ))
+    ).joinToString("") { "%02x".format(it) }
     return PurchaseReturnCandidate(PurchaseReturnReview(receipt.id, quantity, credit, owed, stock, after, token, cash, shift?.id), item, latest)
 }
 
