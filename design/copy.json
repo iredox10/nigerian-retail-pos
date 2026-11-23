@@ -48,7 +48,10 @@
     "saved": "Sale saved",
     "newSale": "New sale",
     "print": "Print receipt",
-    "share": "Share receipt"
+    "share": "Share receipt",
+    "requestPriceApproval": "Ask manager to approve price",
+    "refreshPriceApproval": "Request fresh price approval",
+    "priceApprovalReady": "Price approval ready for this sale"
   },
   "payment": {
     "methodQuestion": "How is the customer paying?",
@@ -83,7 +86,9 @@
     "debtList": "Who owes you",
     "customerOwes": "Customer owes you",
     "merchantOwes": "You owe customer",
-    "recordRepayment": "Record payment"
+    "recordRepayment": "Record payment",
+    "advanceApplied": "Customer advance applied to debt",
+    "cashDebtReceived": "Cash received against debt"
   },
   "stock": {
     "add": "Add stock",
@@ -144,7 +149,18 @@
     "ownerTakes": "Owner takes money",
     "ownerCashReview": "Review cash movement",
     "expenseReceipt": "Expense receipt",
-    "repackingRecipe": "New repacking recipe"
+    "repackingRecipe": "New repacking recipe",
+    "customerDisputes": "Customer disputes",
+    "customerAdvances": "Customer advances",
+    "supplierCredits": "Credit notes",
+    "variantMatrix": "Variant matrix",
+    "bundles": "Bundles",
+    "stockCosting": "Stock value & costs",
+    "buyingRules": "Buying rules",
+    "ownerRecovery": "Owner recovery",
+    "cashHandover": "Cash handover",
+    "localDiagnostics": "Local app checks",
+    "orderDispatch": "Order dispatch"
   },
   "receiptDesign": {
     "title": "Receipt design",
