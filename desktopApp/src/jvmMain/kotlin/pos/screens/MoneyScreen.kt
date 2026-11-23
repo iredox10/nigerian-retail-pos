@@ -215,6 +215,8 @@ private fun cashKind(value: String): String = when (value.lowercase()) {
     "repayment", "customer_repayment" -> "Customer payment"
     "expense" -> "Expense"
     "supplier_reimbursement" -> "Supplier cash reimbursement"
+    "customer_advance" -> "Customer advance received"
+    "customer_advance_refund" -> "Customer advance refunded"
     "order_deposit" -> "Cash deposit for order"
     "order_deposit_refund" -> "Order deposit refund"
     "manual", "movement", "cash_movement" -> "Money moved"

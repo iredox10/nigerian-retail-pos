@@ -19,7 +19,7 @@ import pos.output.receiptDate
 import pos.ui.components.*
 
 @Composable
-fun CustomerOrdersScreen(repo: PosRepository, tenantId: String, onChanged: () -> Unit) = key(tenantId) {
+fun CustomerOrdersScreen(repo: PosRepository, tenantId: String, onDispatch: ((String) -> Unit)? = null, onChanged: () -> Unit) = key(tenantId) {
     var revision by remember { mutableIntStateOf(0) }
     var search by remember { mutableStateOf("") }
     var includeClosed by remember { mutableStateOf(false) }
@@ -94,6 +94,9 @@ fun CustomerOrdersScreen(repo: PosRepository, tenantId: String, onChanged: () ->
                                     NeutralButton("Record deposit", { action = "deposit" }, enabled = selected.balanceMinor > 0)
                                     TextButton({ action = "cancel" }) { Text("Cancel remaining order") }
                                 }
+                            }
+                            if (onDispatch != null && selected.history.any { it.kind == "collected" }) {
+                                NeutralButton("Dispatch & delivery", { onDispatch(order.id) })
                             }
                             val holdError = reservationHistory?.exceptionOrNull()
                             if (holdError != null) {

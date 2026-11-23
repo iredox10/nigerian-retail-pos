@@ -183,7 +183,7 @@ private fun SupplierAccountStatementDialog(repo:PosRepository,profile:SupplierPr
         val end=LocalDate.parse(through);require(!end.isAfter(today)) {"Choose today or an earlier end date."}
         SupplierAccountStatementService.build(
             profile,repo.supplierReceiptLinks(profile.tenantId),repo.stockReceipts(profile.tenantId),
-            repo.supplierPayments(profile.tenantId),LocalDate.parse(from),end,repo.purchaseReturns(profile.tenantId),
+            repo.supplierPayments(profile.tenantId),LocalDate.parse(from),end,repo.purchaseReturns(profile.tenantId),repo.supplierCreditAllocations(profile.tenantId),
         )
     }}
     AlertDialog(onDismissRequest=dismiss,title={Text("Supplier account statement")},text={Column(Modifier.widthIn(max=560.dp).heightIn(max=550.dp).verticalScroll(rememberScrollState()),verticalArrangement=Arrangement.spacedBy(12.dp)) {
@@ -204,7 +204,7 @@ private fun SupplierAccountStatementDialog(repo:PosRepository,profile:SupplierPr
             LabelValueRow("Owed now, all dates",money(s.currentOutstandingMinor))
             if(s.events.isEmpty()) Text("No linked purchases, payments or returns were recorded in this period.",style=MaterialTheme.typography.bodySmall)
             s.events.forEach {event ->
-                val amount = if (event.isReturn) Math.addExact(event.returnCreditMinor, event.returnCashMinor)
+                val amount = if (event.creditNoteMinor != 0L) event.creditNoteMinor else if (event.isReturn) Math.addExact(event.returnCreditMinor, event.returnCashMinor)
                     else maxOf(event.laterPaymentMinor, event.purchaseMinor)
                 Text("${event.createdAt} · ${event.receiptId.takeLast(8)} · ${event.activity} ${money(amount)}",style=MaterialTheme.typography.bodySmall)
             }

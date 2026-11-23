@@ -12,6 +12,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import pos.data.advanceFundedRepaymentIds
 import pos.data.PosRepository
 import pos.data.DebtAdjustment
 import pos.data.canAdjustCustomerDebt
@@ -37,12 +38,12 @@ import java.util.UUID
 
 /** Customer history is local to the selected shop; original credit and later cash remain distinct. */
 @Composable
-fun CustomerWorkspace(repo: PosRepository, tenantId: String, onFollowUps: (() -> Unit)? = null, onChanged: () -> Unit) {
-    key(tenantId) { TenantCustomers(repo, tenantId, onFollowUps, onChanged) }
+fun CustomerWorkspace(repo: PosRepository, tenantId: String, onFollowUps: (() -> Unit)? = null, onDisputes: ((String?) -> Unit)? = null, onAdvances: ((String?) -> Unit)? = null, onChanged: () -> Unit) {
+    key(tenantId) { TenantCustomers(repo, tenantId, onFollowUps, onDisputes, onAdvances, onChanged) }
 }
 
 @Composable
-private fun TenantCustomers(repo: PosRepository, tenantId: String, onFollowUps: (() -> Unit)?, onChanged: () -> Unit) {
+private fun TenantCustomers(repo: PosRepository, tenantId: String, onFollowUps: (() -> Unit)?, onDisputes: ((String?) -> Unit)?, onAdvances: ((String?) -> Unit)?, onChanged: () -> Unit) {
     var revision by remember { mutableIntStateOf(0) }
     var search by remember { mutableStateOf("") }
     var selectedId by remember { mutableStateOf<String?>(null) }
@@ -68,12 +69,16 @@ private fun TenantCustomers(repo: PosRepository, tenantId: String, onFollowUps: 
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text("${customers.size} customers · This shop only", Modifier.weight(1f), style = MaterialTheme.typography.bodySmall)
                 if (onFollowUps != null) TextButton(onFollowUps) { PosIcon(PosIcons.History); Spacer(Modifier.width(8.dp)); Text("Repayment follow-ups") }
+                if (onAdvances != null) NeutralButton("Advances", { onAdvances(null) })
+                if (onDisputes != null) NeutralButton("Disputes", { onDisputes(null) })
                 NeutralButton("Refresh", { revision++ })
             }
         } else {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 TextButton({ if (assigning) assigning = false else selectedId = null; error = null; message = null }) { Text(if (assigning) "Back to customer history" else "Back to customers") }
                 Spacer(Modifier.weight(1f))
+                if (onAdvances != null) NeutralButton("Advances", { onAdvances(selected.id) })
+                if (onDisputes != null) NeutralButton("Disputes", { onDisputes(selected.id) })
                 NeutralButton("Refresh", { revision++; error = null; message = null })
             }
         }
@@ -117,7 +122,7 @@ private fun TenantCustomers(repo: PosRepository, tenantId: String, onFollowUps: 
             } else {
                 val statement = remember(customer, revision) { runCatching {
                     CustomerStatementService.build(tenantId, customer, repo.sales(tenantId), repo.repayments(tenantId),
-                        repo.creditReturnReductions(tenantId), repo.debtAdjustments(tenantId, customer.id))
+                        repo.creditReturnReductions(tenantId), repo.debtAdjustments(tenantId, customer.id), repo.advanceFundedRepaymentIds(tenantId))
                 } }
                 statement.exceptionOrNull()?.let { InlineNotice("History could not be loaded", it.message ?: "Refresh to try again.", NoticeTone.Danger) }
                 statement.getOrNull()?.let { history ->

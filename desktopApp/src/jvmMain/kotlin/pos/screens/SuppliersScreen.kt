@@ -12,6 +12,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import pos.data.PosRepository
+import pos.data.supplierCreditAllocations
 import pos.data.purchaseReturns
 import pos.domain.PurchaseReturn
 import pos.domain.StockReceipt
@@ -35,11 +36,12 @@ fun SuppliersScreen(repo: PosRepository, tenantId: String, onChanged: () -> Unit
         var tab by remember {mutableStateOf("Supplier accounts")}
         Column(Modifier.fillMaxSize(),verticalArrangement=Arrangement.spacedBy(16.dp)) {
             Row(horizontalArrangement=Arrangement.spacedBy(8.dp)) {
-                listOf("Supplier accounts","Receipts & payments","Purchase orders").forEach {label -> FilterChip(tab==label,{tab=label},label={Text(label)})}
+                listOf("Supplier accounts","Receipts & payments","Purchase orders","Credit notes").forEach {label -> FilterChip(tab==label,{tab=label},label={Text(label)})}
             }
             Box(Modifier.weight(1f)) {
                 if(tab=="Supplier accounts") SupplierProfilesPanel(repo,tenantId,onChanged)
                 else if(tab=="Purchase orders") PurchaseOrdersScreen(repo,tenantId,onChanged)
+                else if(tab=="Credit notes") SupplierCreditsScreen(repo,tenantId,onChanged)
                 else TenantSuppliers(repo,tenantId,onChanged)
             }
         }
@@ -146,7 +148,7 @@ private fun SupplierStatementDialog(repo:PosRepository,tenantId:String,supplierN
         val through=LocalDate.parse(throughText)
         require(!through.isAfter(today)) {"Choose today or an earlier end date."}
         val records=history.getOrThrow()
-        SupplierStatementService.build(tenantId,supplierName,records.first,records.second,from,through,records.third)
+        SupplierStatementService.build(tenantId,supplierName,records.first,records.second,from,through,records.third,repo.supplierCreditAllocations(tenantId))
     }}
     AlertDialog(
         onDismissRequest=dismiss,
@@ -181,6 +183,7 @@ private fun SupplierStatementDialog(repo:PosRepository,tenantId:String,supplierN
                                 LabelValueRow("Supplier debt reduced", money(event.returnCreditMinor))
                                 if (event.returnCashMinor > 0) LabelValueRow("Cash received from supplier", money(event.returnCashMinor))
                             }
+                            else if(event.creditNoteMinor!=0L) LabelValueRow("Credit note adjustment",money(event.creditNoteMinor))
                             else if(event.laterPaymentMinor>0) LabelValueRow("Cash paid",money(event.laterPaymentMinor))
                             else {
                                 LabelValueRow("Purchase total",money(event.purchaseMinor))
