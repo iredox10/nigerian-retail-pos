@@ -126,10 +126,10 @@ Encrypted backup files can be saved manually or by the opt-in running-app sessio
 ### New output has narrow semantics
 
 - OS print submission does not prove paper delivery or support for a particular thermal printer. Windows/system-dialog and real hardware verification remain required.
-- Text and PDF receipts are local saved-sale copies; neither is a tax invoice or bank-payment verification. PDF statements are dated account summaries, not sales receipts. Sharing/server document delivery remains unavailable.
+- Text and PDF receipts are local saved-sale copies; neither is a tax invoice or bank-payment verification. PDF statements are dated account summaries, not sales receipts. Android can open a system PDF share chooser; that does not prove delivery. Server document delivery remains unavailable.
 - CSV exports are local, selected-tenant datasets. Current product/customer snapshots are explicitly distinct from date-filtered historical transactions.
-- Supplier balances/payments retain original received-stock records and historical supplier-name strings. Stable supplier profiles group only explicitly linked receipts into reconciled dated accounts. This does not implement supplier credit notes, account adjustments or full accounting.
-- Returns currently cover original cash-sale items and cash refunds, with an optional sellable restock flag. They do not cover the full exchange, credit-return, payment-provider, quarantine, or approval scope.
+- Supplier balances/payments retain original received-stock records and historical supplier-name strings. Stable supplier profiles group only explicitly linked receipts into reconciled dated accounts. Stable-account credit notes and reviewed receipt allocations/reversals preserve unapplied credit and dated statement history. Broader supplier account adjustments, claims and full accounting remain incomplete.
+- Desktop supports original cash-sale returns, debt-first credit-sale returns with eligible cash refunds, and linked cash exchanges, with explicit sellable restock decisions. Android currently exposes original cash-sale returns only. Credit/external/store-credit exchanges, original-method provider refunds and quarantine remain unfinished.
 - Reports deliberately do not calculate profit because historical COGS is incomplete. Do not present sales minus stock purchases as profit.
 
 ### Shared code is prepared, not shipped on every platform
