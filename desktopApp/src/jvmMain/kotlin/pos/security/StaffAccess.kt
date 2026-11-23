@@ -22,8 +22,9 @@ class StaffAccess(
 ):AutoCloseable {
     private val owners=WorkspaceAccess(directory)
     private val random=SecureRandom()
+    private val approvalProofs by lazy { MinimumPriceApprovalSigner(directory) }
     private val db:java.sql.Connection
-    private data class Issued(val session:StaffSession,val version:Long?,var lastActivityMillis:Long,val pinAuthorizationId:String?=null,val absoluteExpiryMillis:Long?=null)
+    private data class Issued(val session:StaffSession,val version:Long?,var lastActivityMillis:Long,val pinAuthorizationId:String?=null,val absoluteExpiryMillis:Long?=null,val ownerFingerprint:String)
     private val sessions=mutableMapOf<String,Issued>()
 
     init {
@@ -38,21 +39,229 @@ class StaffAccess(
             it.execute("PRAGMA synchronous=FULL")
             it.execute("CREATE TABLE IF NOT EXISTS login_attempts(tenant_id TEXT NOT NULL,subject TEXT NOT NULL,failures INTEGER NOT NULL CHECK(failures BETWEEN 0 AND 5),last_attempt_ms INTEGER NOT NULL CHECK(last_attempt_ms>=0),locked_until_ms INTEGER NOT NULL CHECK(locked_until_ms>=0),PRIMARY KEY(tenant_id,subject))")
             it.execute("CREATE TABLE IF NOT EXISTS local_staff(id TEXT NOT NULL,tenant_id TEXT NOT NULL,name TEXT NOT NULL,role TEXT NOT NULL CHECK(role IN('MANAGER','CASHIER')),active INTEGER NOT NULL CHECK(active IN(0,1)),created_at TEXT NOT NULL,salt TEXT NOT NULL,password_hash TEXT NOT NULL,version INTEGER NOT NULL CHECK(version>0),creation_fingerprint TEXT NOT NULL,creation_salt TEXT NOT NULL,PRIMARY KEY(tenant_id,id))")
-            it.execute("CREATE TABLE IF NOT EXISTS staff_pins(tenant_id TEXT NOT NULL,staff_id TEXT NOT NULL,salt TEXT NOT NULL,pin_hash TEXT NOT NULL,staff_version INTEGER NOT NULL CHECK(staff_version>0),authorization_id TEXT NOT NULL,authorized_at_ms INTEGER NOT NULL CHECK(authorized_at_ms>=0),expires_at_ms INTEGER NOT NULL CHECK(expires_at_ms>=0),last_used_ms INTEGER NOT NULL CHECK(last_used_ms>=0),PRIMARY KEY(tenant_id,staff_id))")
+            it.execute("CREATE TABLE IF NOT EXISTS staff_pins(tenant_id TEXT NOT NULL,staff_id TEXT NOT NULL,salt TEXT NOT NULL,pin_hash TEXT NOT NULL,staff_version INTEGER NOT NULL CHECK(staff_version>0),authorization_id TEXT NOT NULL,authorized_at_ms INTEGER NOT NULL CHECK(authorized_at_ms>=0),expires_at_ms INTEGER NOT NULL CHECK(expires_at_ms>=0),last_used_ms INTEGER NOT NULL CHECK(last_used_ms>=0),owner_fingerprint TEXT,PRIMARY KEY(tenant_id,staff_id))")
             it.execute("CREATE TABLE IF NOT EXISTS staff_audit(id TEXT NOT NULL,tenant_id TEXT NOT NULL,kind TEXT NOT NULL,entity_id TEXT NOT NULL,created_at TEXT NOT NULL,actor_id TEXT,actor_name TEXT NOT NULL,actor_role TEXT NOT NULL CHECK(actor_role IN('OWNER','MANAGER','CASHIER')),description TEXT CHECK(description IS NULL OR length(description)<=1000),PRIMARY KEY(tenant_id,id))")
+            it.execute("""CREATE TABLE IF NOT EXISTS price_approval_grants(
+                tenant_id TEXT NOT NULL,id TEXT NOT NULL,requester_token_hash TEXT NOT NULL,
+                requester_version INTEGER,approver_version INTEGER,owner_fingerprint TEXT NOT NULL,
+                proof TEXT NOT NULL,created_ms INTEGER NOT NULL CHECK(created_ms>=0),
+                expires_ms INTEGER NOT NULL CHECK(expires_ms>created_ms),PRIMARY KEY(tenant_id,id))""")
+            it.execute("""CREATE TABLE IF NOT EXISTS price_approval_usage(
+                tenant_id TEXT NOT NULL,grant_id TEXT NOT NULL,operation_id TEXT NOT NULL,fingerprint TEXT NOT NULL,
+                first_used_ms INTEGER NOT NULL CHECK(first_used_ms>=0),last_seen_ms INTEGER NOT NULL CHECK(last_seen_ms>=first_used_ms),
+                PRIMARY KEY(tenant_id,grant_id),FOREIGN KEY(tenant_id,grant_id) REFERENCES price_approval_grants(tenant_id,id))""")
+            for (action in listOf("UPDATE", "DELETE")) it.execute("""CREATE TRIGGER IF NOT EXISTS price_grants_no_${action.lowercase()}
+                BEFORE $action ON price_approval_grants BEGIN SELECT RAISE(ABORT,'Approval history cannot be changed'); END""")
+            it.execute("""CREATE TRIGGER IF NOT EXISTS price_usage_no_delete BEFORE DELETE ON price_approval_usage
+                BEGIN SELECT RAISE(ABORT,'Approval use history cannot be removed'); END""")
+            it.execute("""CREATE TRIGGER IF NOT EXISTS price_usage_scope_immutable BEFORE UPDATE ON price_approval_usage
+                WHEN NEW.tenant_id<>OLD.tenant_id OR NEW.grant_id<>OLD.grant_id OR NEW.operation_id<>OLD.operation_id
+                    OR NEW.fingerprint<>OLD.fingerprint OR NEW.first_used_ms<>OLD.first_used_ms OR NEW.last_seen_ms<OLD.last_seen_ms
+                BEGIN SELECT RAISE(ABORT,'Approval use scope cannot be changed'); END""")
+            it.execute("""CREATE TABLE IF NOT EXISTS cash_handover_grants(
+                tenant_id TEXT NOT NULL,id TEXT NOT NULL,sender_token_hash TEXT NOT NULL,sender_version INTEGER,receiver_version INTEGER,
+                owner_fingerprint TEXT NOT NULL,proof TEXT NOT NULL,created_ms INTEGER NOT NULL CHECK(created_ms>=0),expires_ms INTEGER NOT NULL CHECK(expires_ms>created_ms),PRIMARY KEY(tenant_id,id))""")
+            it.execute("""CREATE TABLE IF NOT EXISTS cash_handover_usage(tenant_id TEXT NOT NULL,grant_id TEXT NOT NULL,operation_id TEXT NOT NULL,first_used_ms INTEGER NOT NULL,last_seen_ms INTEGER NOT NULL CHECK(last_seen_ms>=first_used_ms),PRIMARY KEY(tenant_id,grant_id))""")
+            for(action in listOf("UPDATE","DELETE")) it.execute("CREATE TRIGGER IF NOT EXISTS handover_grants_no_${action.lowercase()} BEFORE $action ON cash_handover_grants BEGIN SELECT RAISE(ABORT,'Handover consent cannot be edited'); END")
+            it.execute("CREATE TRIGGER IF NOT EXISTS handover_usage_no_delete BEFORE DELETE ON cash_handover_usage BEGIN SELECT RAISE(ABORT,'Handover consent use cannot be deleted'); END")
+            it.execute("""CREATE TRIGGER IF NOT EXISTS handover_usage_scope_immutable BEFORE UPDATE ON cash_handover_usage
+                WHEN NEW.tenant_id<>OLD.tenant_id OR NEW.grant_id<>OLD.grant_id OR NEW.operation_id<>OLD.operation_id OR NEW.first_used_ms<>OLD.first_used_ms OR NEW.last_seen_ms<OLD.last_seen_ms
+                BEGIN SELECT RAISE(ABORT,'Handover consent scope cannot be changed'); END""")
             it.execute("CREATE TRIGGER IF NOT EXISTS staff_audit_no_update BEFORE UPDATE ON staff_audit BEGIN SELECT RAISE(ABORT,'Staff audit history cannot be edited'); END")
             it.execute("CREATE TRIGGER IF NOT EXISTS staff_audit_no_delete BEFORE DELETE ON staff_audit BEGIN SELECT RAISE(ABORT,'Staff audit history cannot be removed'); END")
+        }
+        if (rows("PRAGMA table_info(staff_pins)").none { it["name"] == "owner_fingerprint" }) {
+            execute("ALTER TABLE staff_pins ADD COLUMN owner_fingerprint TEXT")
+        }
+        rows("SELECT DISTINCT tenant_id FROM staff_pins WHERE owner_fingerprint IS NULL").forEach { row ->
+            val tenantId = row.getValue("tenant_id")
+            val fingerprint = owners.credentialFingerprint(tenantId)
+            if (fingerprint == null) execute("DELETE FROM staff_pins WHERE tenant_id=?", tenantId)
+            else execute("UPDATE staff_pins SET owner_fingerprint=? WHERE tenant_id=? AND owner_fingerprint IS NULL", fingerprint, tenantId)
         }
         if(Files.getFileStore(file).supportsFileAttributeView("posix")) Files.setPosixFilePermissions(file,PosixFilePermissions.fromString("rw-------"))
     }
 
     @Synchronized fun unlockOwner(tenantId:String,password:String):StaffSession? {
         if(!validTenant(tenantId)) return null
+        reconcileOwnerCredentialAudit(tenantId)
         return attemptLogin(tenantId,"owner:") {
-            if(!owners.unlock(tenantId,password)) null
-            else LoginIdentity(null,"Owner",StaffRole.OWNER,null)
+            owners.authenticateOwner(tenantId,password)?.let { fingerprint ->
+                LoginIdentity(null,"Owner",StaffRole.OWNER,null,ownerFingerprint=fingerprint)
+            }
         }
     }
+    /** A different owner or manager proves their full password for this exact sale. */
+    @Synchronized fun authorizeMinimumPrice(
+        requester: StaffSession, request: MinimumPriceApprovalRequest, approverStaffId: String?,
+        fullPassword: String, reason: String,
+    ): MinimumPriceApprovalWitness? {
+        requireSession(requester, StaffPermission.SELL)
+        require(request.tenantId == requester.tenantId && request.requiresApproval) { "Review a sale that needs price approval." }
+        require(approverStaffId != requester.staffId) { "A different owner or manager must approve this sale." }
+        val clean = reason.trim()
+        require(clean.length in 3..250 && clean.none { it.isISOControl() }) { "Enter a reason from 3 to 250 printable characters." }
+        val approver = if (approverStaffId == null) unlockOwner(request.tenantId, fullPassword)
+            else unlockStaff(request.tenantId, approverStaffId, fullPassword)
+        approver ?: return null
+        try {
+            requireSession(approver, StaffPermission.MANAGE_SETTINGS)
+            return transaction {
+                val now = clockMillis()
+                val requesting = validSession(requester, now)
+                val approving = validSession(approver, now)
+                require(now >= 0 && now <= Long.MAX_VALUE - 300_000) { "Correct the computer clock before approving prices." }
+                val at = Instant.ofEpochMilli(now)
+                val witness = approvalProofs.sign(MinimumPriceApprovalWitness(
+                    UUID.randomUUID().toString(), request, requester.staffId, requester.name, requester.role,
+                    approver.staffId, approver.name, approver.role, clean, at.toString(), at.plusSeconds(300).toString(),
+                    approvalProofs.publicKey, ""))
+                execute("INSERT INTO price_approval_grants VALUES(?,?,?,?,?,?,?,?,?)", request.tenantId, witness.id,
+                    tokenFingerprint(requester.token), requesting.version, approving.version, approving.ownerFingerprint,
+                    MinimumPriceApprovalProof.encode(witness), now, now + 300_000)
+                appendStaffAudit(approver, "approval.sale_prices_granted", witness.id,
+                    "Approved sale prices for ${requester.name}, sale ${request.operationId}, total ${money(request.totalMinor)}. Reason: $clean")
+                witness
+            }
+        } finally { logout(approver) }
+    }
+
+    /** Financial retries retain one operation and fingerprint, so another checkout cannot reuse a grant. */
+    @Synchronized fun requireMinimumPriceApproval(
+        requester: StaffSession, grantId: String, request: MinimumPriceApprovalRequest,
+    ): MinimumPriceApprovalWitness = transaction {
+        requireSession(requester, StaffPermission.SELL)
+        require(request.tenantId == requester.tenantId) { "Approval belongs to another shop." }
+        val row = requireNotNull(rows("SELECT * FROM price_approval_grants WHERE tenant_id=? AND id=?", request.tenantId, grantId).singleOrNull()) {
+            "Price approval is unavailable. Ask a different owner or manager to approve this sale."
+        }
+        val now = clockMillis()
+        require(now >= row.getValue("created_ms").toLong() && now < row.getValue("expires_ms").toLong()) {
+            "Price approval expired or the clock changed. Ask for a new approval."
+        }
+        val proof = MinimumPriceApprovalProof.decode(row.getValue("proof"))
+        require(proof.id == grantId && proof.request == request && proof.issuerPublicKey == approvalProofs.publicKey &&
+            proof.requesterId == requester.staffId && proof.requesterName == requester.name && proof.requesterRole == requester.role &&
+            row["requester_token_hash"] == tokenFingerprint(requester.token) &&
+            row["owner_fingerprint"] == owners.credentialFingerprint(request.tenantId)) { "The sale, account or price policy changed after approval." }
+        val requesting = validSession(requester, now)
+        require(row["requester_version"]?.toLongOrNull() == requesting.version) { "Requesting staff access changed after approval." }
+        if (proof.approverId != null) {
+            val person = rows("SELECT * FROM local_staff WHERE tenant_id=? AND id=?", request.tenantId, proof.approverId).singleOrNull()
+            require(person != null && person["active"] == "1" && person["version"] == row["approver_version"] &&
+                person["role"] == proof.approverRole.name && person["name"] == proof.approverName &&
+                proof.approverRole == StaffRole.MANAGER) { "The approving account changed or was disabled. Ask for a new approval." }
+        }
+        val used = rows("SELECT * FROM price_approval_usage WHERE tenant_id=? AND grant_id=?", request.tenantId, grantId).singleOrNull()
+        if (used == null) {
+            execute("INSERT INTO price_approval_usage VALUES(?,?,?,?,?,?)", request.tenantId, grantId, request.operationId, request.fingerprint, now, now)
+            appendStaffAudit(requester, "approval.sale_prices_used", grantId, "Used price approval for sale ${request.operationId}")
+        } else {
+            require(used["operation_id"] == request.operationId && used["fingerprint"] == request.fingerprint &&
+                now >= used.getValue("last_seen_ms").toLong()) { "This price approval was used for another sale or the clock changed." }
+            execute("UPDATE price_approval_usage SET last_seen_ms=? WHERE tenant_id=? AND grant_id=?", now, request.tenantId, grantId)
+        }
+        proof
+    }
+
+    /** Sender authorizes the movement; a different active recipient personally accepts the exact count. */
+    @Synchronized fun authorizeCashHandover(sender:StaffSession,request:CashHandoverRequest,receiverStaffId:String?,fullPassword:String):CashHandoverWitness? {
+        requireSession(sender,StaffPermission.MANAGE_MONEY)
+        require(request.tenantId==sender.tenantId && receiverStaffId!=sender.staffId) {"A different person must accept this shop's drawer."}
+        val receiver=if(receiverStaffId==null) unlockOwner(request.tenantId,fullPassword) else unlockStaff(request.tenantId,receiverStaffId,fullPassword)
+        receiver ?: return null
+        try {
+            requireSession(receiver,StaffPermission.SELL)
+            return transaction {
+                val now=clockMillis();require(now>=0 && now<=Long.MAX_VALUE-300_000)
+                val sending=validSession(sender,now);val receiving=validSession(receiver,now)
+                val at=Instant.ofEpochMilli(now)
+                val unsigned=CashHandoverWitness(UUID.randomUUID().toString(),request,sender.staffId,sender.name,sender.role,receiver.staffId,receiver.name,receiver.role,at.toString(),at.plusSeconds(300).toString(),approvalProofs.publicKey,"")
+                val witness=unsigned.copy(signature=approvalProofs.signPayload(CashHandoverProof.unsignedBytes(unsigned)))
+                CashHandoverProof.verify(witness)
+                execute("INSERT INTO cash_handover_grants VALUES(?,?,?,?,?,?,?,?,?)",request.tenantId,witness.id,tokenFingerprint(sender.token),sending.version,receiving.version,sending.ownerFingerprint,CashHandoverProof.encode(witness),now,now+300_000)
+                appendStaffAudit(receiver,"cash.handover_accepted",witness.id,"Accepted ${money(request.countedMinor)} from ${sender.name}, shift ${request.shiftId}. Reason: ${request.reason}")
+                witness
+            }
+        } finally {logout(receiver)}
+    }
+    @Synchronized fun requireCashHandover(sender:StaffSession,grantId:String,request:CashHandoverRequest):CashHandoverWitness=transaction {
+        requireSession(sender,StaffPermission.MANAGE_MONEY)
+        require(sender.tenantId==request.tenantId)
+        val row=requireNotNull(rows("SELECT * FROM cash_handover_grants WHERE tenant_id=? AND id=?",request.tenantId,grantId).singleOrNull()) {"Recipient consent is unavailable. Ask the recipient to accept again."}
+        val now=clockMillis()
+        require(now>=row.getValue("created_ms").toLong() && now<row.getValue("expires_ms").toLong()) {"Recipient consent expired or the clock changed."}
+        val witness=CashHandoverProof.decode(row.getValue("proof"))
+        val sending=validSession(sender,now)
+        require(witness.id==grantId && witness.request==request && witness.issuerPublicKey==approvalProofs.publicKey && witness.senderId==sender.staffId && witness.senderName==sender.name && witness.senderRole==sender.role && row["sender_token_hash"]==tokenFingerprint(sender.token) && row["sender_version"]?.toLongOrNull()==sending.version && row["owner_fingerprint"]==owners.credentialFingerprint(request.tenantId)) {"Handover details or staff access changed. Request fresh consent."}
+        if(witness.receiverId!=null) {
+            val person=rows("SELECT * FROM local_staff WHERE tenant_id=? AND id=?",request.tenantId,witness.receiverId).singleOrNull()
+            require(person!=null && person["active"]=="1" && person["version"]==row["receiver_version"] && person["name"]==witness.receiverName && person["role"]==witness.receiverRole.name) {"Receiving staff access changed. Request fresh consent."}
+        }
+        val used=rows("SELECT * FROM cash_handover_usage WHERE tenant_id=? AND grant_id=?",request.tenantId,grantId).singleOrNull()
+        if(used==null) {
+            execute("INSERT INTO cash_handover_usage VALUES(?,?,?,?,?)",request.tenantId,grantId,request.operationId,now,now)
+            appendStaffAudit(sender,"cash.handover_consent_used",grantId,"Used recipient consent for handover ${request.operationId}")
+        } else {
+            require(used["operation_id"]==request.operationId && now>=used.getValue("last_seen_ms").toLong()) {"Consent was used for another handover or the clock changed."}
+            execute("UPDATE cash_handover_usage SET last_seen_ms=? WHERE tenant_id=? AND grant_id=?",now,request.tenantId,grantId)
+        }
+        witness
+    }
+
+    private fun tokenFingerprint(token: String): String = encode(MessageDigest.getInstance("SHA-256").digest(token.toByteArray(Charsets.UTF_8)))
+
+    @Synchronized fun ownerRecoveryEnabled(ownerSession: StaffSession): Boolean {
+        requireSession(ownerSession, StaffPermission.MANAGE_STAFF)
+        reconcileOwnerCredentialAudit(ownerSession.tenantId)
+        return owners.recoveryEnabled(ownerSession.tenantId)
+    }
+
+    /** The returned 256-bit code is displayed once and is never stored as plaintext. */
+    @Synchronized fun configureOwnerRecovery(ownerSession: StaffSession, fullPassword: String): String? {
+        requireSession(ownerSession, StaffPermission.MANAGE_STAFF)
+        val verified = unlockOwner(ownerSession.tenantId, fullPassword) ?: return null
+        try {
+            requireSession(ownerSession, StaffPermission.MANAGE_STAFF)
+            reconcileOwnerCredentialAudit(ownerSession.tenantId)
+            val code = owners.configureRecovery(ownerSession.tenantId, fullPassword, clockMillis()) ?: return null
+            // The credential record retains its event until the next successful reconciliation.
+            runCatching { reconcileOwnerCredentialAudit(ownerSession.tenantId) }
+            return code
+        } finally { logout(verified) }
+    }
+
+    /** Recovery uses the same persistent owner attempt counter as password sign-in. */
+    @Synchronized fun recoverOwner(tenantId: String, recoveryCode: String, newPassword: String): Boolean {
+        if (!validTenant(tenantId)) return false
+        validatePassword(newPassword)
+        reconcileOwnerCredentialAudit(tenantId)
+        val verified = attemptLogin(tenantId, "owner:") { now ->
+            if (!owners.recoverOwner(tenantId, recoveryCode, newPassword, now)) null
+            else LoginIdentity(null, "Owner", StaffRole.OWNER, null,
+                ownerFingerprint = owners.credentialFingerprint(tenantId))
+        } ?: return false
+        sessions.entries.removeIf { it.value.session.tenantId == tenantId }
+        // Fingerprint checks revoke old PINs even if cleanup is interrupted.
+        runCatching { execute("DELETE FROM staff_pins WHERE tenant_id=?", tenantId) }
+        runCatching { reconcileOwnerCredentialAudit(tenantId) }
+        logout(verified)
+        return true
+    }
+
+    private fun reconcileOwnerCredentialAudit(tenantId: String) {
+        val event = owners.credentialEvent(tenantId) ?: return
+        val description = when (event.kind) {
+            "owner.recovery_enrolled" -> "Owner enrolled or rotated the recovery code on this computer"
+            "owner.password_recovered" -> "Owner password recovered using the enrolled code; previous sessions and PIN authorizations revoked"
+            else -> error("Unknown owner credential event")
+        }
+        execute("""INSERT OR IGNORE INTO staff_audit(
+            id,tenant_id,kind,entity_id,created_at,actor_id,actor_name,actor_role,description)
+            VALUES(?,?,?,?,?,NULL,'Owner','OWNER',?)""",event.id,tenantId,event.kind,tenantId,
+            Instant.ofEpochMilli(event.atMillis).toString(),description)
+    }
+
     @Synchronized fun signInMembers(tenantId:String):List<StaffMember> {
         validateTenant(tenantId)
         return rows("SELECT * FROM local_staff WHERE tenant_id=? AND active=1 ORDER BY name,id",tenantId).map(::member)
@@ -66,6 +275,7 @@ class StaffAccess(
 
     private fun authenticateStaff(tenantId:String,staffId:String,password:String):LoginIdentity? {
         if(password.length !in 8..1024) return null
+        val ownerFingerprint = owners.credentialFingerprint(tenantId) ?: return null
         val record=rows("SELECT * FROM local_staff WHERE tenant_id=? AND id=?",tenantId,staffId).singleOrNull() ?: return null
         if(record["active"]!="1") return null
         val salt=Base64.getDecoder().decode(record.getValue("salt"))
@@ -75,7 +285,7 @@ class StaffAccess(
         val matches=try {MessageDigest.isEqual(actual,expected)} finally {actual.fill(0);expected.fill(0);salt.fill(0)}
         if(!matches) return null
         val person=member(record)
-        return LoginIdentity(staffId,person.name,person.role,record.getValue("version").toLong())
+        return LoginIdentity(staffId,person.name,person.role,record.getValue("version").toLong(),ownerFingerprint=ownerFingerprint)
     }
 
     /** Six-digit convenience unlock never renews the fixed full-password authorization. */
@@ -85,7 +295,8 @@ class StaffAccess(
             if(!validPin(pin)) null else {
                 val person=rows("SELECT * FROM local_staff WHERE tenant_id=? AND id=?",tenantId,staffId).singleOrNull()
                 val saved=rows("SELECT * FROM staff_pins WHERE tenant_id=? AND staff_id=?",tenantId,staffId).singleOrNull()
-                if(person==null || saved==null || person["active"]!="1" || person["version"]!=saved["staff_version"] ||
+                if(person==null || saved==null || saved["owner_fingerprint"] != owners.credentialFingerprint(tenantId) ||
+                    saved["owner_fingerprint"] == null || person["active"]!="1" || person["version"]!=saved["staff_version"] ||
                     now<saved.getValue("last_used_ms").toLong() || now>=saved.getValue("expires_at_ms").toLong()) null
                 else {
                     val salt=Base64.getDecoder().decode(saved.getValue("salt"))
@@ -96,7 +307,7 @@ class StaffAccess(
                         if(!matches) null else {
                             execute("UPDATE staff_pins SET last_used_ms=? WHERE tenant_id=? AND staff_id=?",now,tenantId,staffId)
                             val member=member(person)
-                            LoginIdentity(staffId,member.name,member.role,person.getValue("version").toLong(),saved.getValue("authorization_id"),saved.getValue("expires_at_ms").toLong())
+                            LoginIdentity(staffId,member.name,member.role,person.getValue("version").toLong(),saved.getValue("authorization_id"),saved.getValue("expires_at_ms").toLong(),saved.getValue("owner_fingerprint"))
                         }
                     }
                 }
@@ -120,8 +331,8 @@ class StaffAccess(
                     val salt=ByteArray(24).also(random::nextBytes)
                     val hash=derive(tenantId,"pin:$staffId",pin,salt)
                     try {
-                        execute("INSERT INTO staff_pins VALUES(?,?,?,?,?,?,?,?,?) ON CONFLICT(tenant_id,staff_id) DO UPDATE SET salt=excluded.salt,pin_hash=excluded.pin_hash,staff_version=excluded.staff_version,authorization_id=excluded.authorization_id,authorized_at_ms=excluded.authorized_at_ms,expires_at_ms=excluded.expires_at_ms,last_used_ms=excluded.last_used_ms",
-                            tenantId,staffId,encode(salt),encode(hash),requireNotNull(sessions[verified.token]?.version),UUID.randomUUID().toString(),now,now+pinAuthorizationMillis,now)
+                        execute("INSERT INTO staff_pins(tenant_id,staff_id,salt,pin_hash,staff_version,authorization_id,authorized_at_ms,expires_at_ms,last_used_ms,owner_fingerprint) VALUES(?,?,?,?,?,?,?,?,?,?) ON CONFLICT(tenant_id,staff_id) DO UPDATE SET salt=excluded.salt,pin_hash=excluded.pin_hash,staff_version=excluded.staff_version,authorization_id=excluded.authorization_id,authorized_at_ms=excluded.authorized_at_ms,expires_at_ms=excluded.expires_at_ms,last_used_ms=excluded.last_used_ms,owner_fingerprint=excluded.owner_fingerprint",
+                            tenantId,staffId,encode(salt),encode(hash),requireNotNull(sessions[verified.token]?.version),UUID.randomUUID().toString(),now,now+pinAuthorizationMillis,now,requireNotNull(sessions[verified.token]).ownerFingerprint)
                     } finally {salt.fill(0);hash.fill(0)}
                 }
                 appendStaffAudit(verified,if(pin==null) "staff.pin_removed" else "staff.pin_configured",staffId,if(pin==null) "Removed convenience PIN" else "Configured six-digit convenience PIN on this computer")
@@ -133,6 +344,10 @@ class StaffAccess(
     private fun refreshPinAuthorization(tenantId:String,staffId:String,now:Long) {
         // A clock rollback cannot reauthorize a persisted PIN. Full-password access remains available.
         val saved=rows("SELECT * FROM staff_pins WHERE tenant_id=? AND staff_id=?",tenantId,staffId).singleOrNull() ?: return
+        if (saved["owner_fingerprint"] != owners.credentialFingerprint(tenantId)) {
+            execute("DELETE FROM staff_pins WHERE tenant_id=? AND staff_id=?",tenantId,staffId)
+            return
+        }
         if(now<saved.getValue("last_used_ms").toLong() || now>Long.MAX_VALUE-pinAuthorizationMillis) return
         execute("UPDATE staff_pins SET authorization_id=?,authorized_at_ms=?,expires_at_ms=?,last_used_ms=? WHERE tenant_id=? AND staff_id=?",
             UUID.randomUUID().toString(),now,now+pinAuthorizationMillis,now,tenantId,staffId)
@@ -156,6 +371,10 @@ class StaffAccess(
     private fun validSession(session:StaffSession,now:Long):Issued {
         val issued=sessions[session.token]
         require(issued!=null && issued.session==session) { "This session is no longer valid. Lock the shop and sign in again." }
+        if (issued.ownerFingerprint != owners.credentialFingerprint(session.tenantId)) {
+            sessions.remove(session.token)
+            throw IllegalArgumentException("Owner access changed. Sign in again.")
+        }
         if(now<issued.lastActivityMillis || now-issued.lastActivityMillis>=idleTimeoutMillis ||
             (issued.absoluteExpiryMillis!=null && now>=issued.absoluteExpiryMillis)) {
             sessions.remove(session.token)
@@ -180,7 +399,7 @@ class StaffAccess(
         return issued
     }
 
-    private data class LoginIdentity(val staffId:String?,val name:String,val role:StaffRole,val version:Long?,val pinAuthorizationId:String?=null,val absoluteExpiryMillis:Long?=null)
+    private data class LoginIdentity(val staffId:String?,val name:String,val role:StaffRole,val version:Long?,val pinAuthorizationId:String?=null,val absoluteExpiryMillis:Long?=null,val ownerFingerprint:String?=null)
 
     /** Failed attempts survive restart; cooldown is per shop and sign-in identity. */
     private fun attemptLogin(tenantId:String,subject:String,authenticate:(Long)->LoginIdentity?):StaffSession? {
@@ -210,7 +429,10 @@ class StaffAccess(
                 null
             }
         }
-        return identity?.let { issue(tenantId,it.staffId,it.name,it.role,it.version,now,it.pinAuthorizationId,it.absoluteExpiryMillis) }
+        return identity?.let {
+            val fingerprint = it.ownerFingerprint ?: owners.credentialFingerprint(tenantId) ?: return@let null
+            issue(tenantId,it.staffId,it.name,it.role,it.version,now,it.pinAuthorizationId,it.absoluteExpiryMillis,fingerprint)
+        }
     }
     @Synchronized fun logout(session:StaffSession) { sessions.remove(session.token) }
 
@@ -283,10 +505,10 @@ class StaffAccess(
             UUID.randomUUID().toString(),session.tenantId,kind,entityId,Instant.now().toString(),session.staffId,session.name,session.role.name,description)
     }
 
-    private fun issue(tenantId:String,staffId:String?,name:String,role:StaffRole,version:Long?,issuedAt:Long,pinAuthorizationId:String?=null,absoluteExpiryMillis:Long?=null):StaffSession {
+    private fun issue(tenantId:String,staffId:String?,name:String,role:StaffRole,version:Long?,issuedAt:Long,pinAuthorizationId:String?=null,absoluteExpiryMillis:Long?=null,ownerFingerprint:String):StaffSession {
         val token=encode(ByteArray(32).also(random::nextBytes))
         val session=StaffSession(token,tenantId,staffId,name,role)
-        sessions[token]=Issued(session,version,issuedAt,pinAuthorizationId,absoluteExpiryMillis)
+        sessions[token]=Issued(session,version,issuedAt,pinAuthorizationId,absoluteExpiryMillis,ownerFingerprint)
         return session
     }
     private fun invalidate(tenantId:String,id:String) {sessions.entries.removeIf {it.value.session.tenantId==tenantId && it.value.session.staffId==id}}
