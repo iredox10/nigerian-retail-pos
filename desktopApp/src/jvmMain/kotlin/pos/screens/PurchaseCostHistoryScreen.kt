@@ -13,6 +13,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import pos.data.PosRepository
 import pos.data.PurchaseCostRecord
+import pos.data.landedCostTotalsForPurchases
 import pos.data.latestSupplierPrices
 import pos.data.purchaseCostHistory
 import pos.domain.money
@@ -28,8 +29,11 @@ fun PurchaseCostHistoryScreen(repo: PosRepository, tenantId: String) = key(tenan
     var comparison by remember { mutableStateOf<PurchaseCostRecord?>(null) }
     var exportStatus by remember { mutableStateOf<String?>(null) }
     var exportError by remember { mutableStateOf<String?>(null) }
-    val loaded = remember(repo, revision) { runCatching { repo.purchaseCostHistory(tenantId) } }
-    val records = loaded.getOrNull().orEmpty()
+    val loaded = remember(repo, revision) {
+        runCatching { repo.purchaseCostHistory(tenantId) to repo.landedCostTotalsForPurchases(tenantId) }
+    }
+    val records = loaded.getOrNull()?.first.orEmpty()
+    val landed = loaded.getOrNull()?.second.orEmpty()
     val selected = comparison
     val visible = remember(records, selected, search) {
         if (selected != null) {
@@ -65,7 +69,7 @@ fun PurchaseCostHistoryScreen(repo: PosRepository, tenantId: String) = key(tenan
                 exportStatus = null
                 exportError = null
             })
-            NeutralButton("Export visible prices", {
+            NeutralButton("Export receipt prices", {
                 exportStatus = null
                 exportError = null
                 runCatching {
@@ -98,7 +102,7 @@ fun PurchaseCostHistoryScreen(repo: PosRepository, tenantId: String) = key(tenan
                     }
                 }
                 items(visible, key = { it.receipt.id }) { row ->
-                    PurchaseCostRow(row, if (selected == null) {
+                    PurchaseCostRow(row, if (selected == null) landed[row.receipt.id] else null, if (selected == null) {
                         {
                             comparison = row
                             exportStatus = null
@@ -112,7 +116,7 @@ fun PurchaseCostHistoryScreen(repo: PosRepository, tenantId: String) = key(tenan
 }
 
 @Composable
-private fun PurchaseCostRow(row: PurchaseCostRecord, compare: (() -> Unit)?) {
+private fun PurchaseCostRow(row: PurchaseCostRecord, allocatedMinor: Long?, compare: (() -> Unit)?) {
     val receipt = row.receipt
     Surface(Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.small) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -134,6 +138,11 @@ private fun PurchaseCostRow(row: PurchaseCostRecord, compare: (() -> Unit)?) {
             if (receipt.purchaseUnitId != null) {
                 Text("1 ${receipt.unit} = ${receipt.baseUnitsPerUnit} ${receipt.baseUnit}",
                     style = MaterialTheme.typography.bodySmall)
+            }
+            if (allocatedMinor != null && allocatedMinor > 0) {
+                LabelValueRow("Allocated delivery costs", money(allocatedMinor))
+                LabelValueRow("Purchase total including delivery", money(Math.addExact(receipt.totalCostMinor, allocatedMinor)),
+                    emphasized = true)
             }
             Text("Receipt ${receipt.id}", style = MaterialTheme.typography.bodySmall)
             if (compare != null) NeutralButton("Compare suppliers", compare)
