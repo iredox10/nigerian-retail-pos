@@ -1,0 +1,65 @@
+# Android feature coverage
+
+23 November 2026 · Implementation checklist, not a claim of full product completion.
+
+Cloud sync remains excluded. Android is an independent offline device. Reusing a repository does not connect its records to a desktop shop or make an Android editing flow available. **Source implemented** below means code is present; consult ANDROID_IMPLEMENTATION_PLAN.md and BUILD_STATUS.md for actual build, test, emulator and device evidence. Nothing in this matrix claims physical hardware or merchant acceptance.
+
+| Feature group | Android source coverage | Remaining Android work / acceptance |
+|---|---|---|
+| Build, installation, local data | Android application target with minimum API 30, manifest, app-private records and native SQLite adapter | APK install/upgrade and API/device matrix; release signing/distribution |
+| Shared financial rules | Same domain and local repository transactions, tenant scope, exact kobo/quantities, operation IDs and append-only source history | Platform regression/instrumentation, corruption/interruption and cross-version restore drills |
+| Shop onboarding/sign-in | Root shell supplies owner/staff sign-in, workspace creation, locking and local role gates | Broad lifecycle/revocation/biometric/PIN acceptance; no remote auth |
+| Navigation/accessibility | Labeled Sell, Sales, Stock, Customers, Money and More; scrollable touch forms, IME handling | Full TalkBack, switch access, font scaling, hardware keyboard/scanner and tablet/foldable/rotation acceptance |
+| Cash checkout | Catalogue/alias/SKU search and keyboard barcode submission; explicit whole selling-pack selection or measured base quantities; reasoned lower line prices; basket/payment review, tender/change, optional receipt note, stable operation and saved receipt action | Basket-discount editor, price-list/promotion application and frequent/category/favourite filters; native stale-stock/price/approval and large-catalogue acceptance |
+| Customer credit checkout | Explicit named customer, optional cash portion and agreed WAT due date; debt and permissions/limits rechecked by the shared transaction | Native partial-credit, due-date, recovered-draft and denied-permission acceptance; no independent cross-device credit guarantee |
+| External payments | One manually recorded transfer or card portion plus cash and optional named-customer credit; reference/account labels, explicit acknowledgment, unconfirmed review and saved status | Native split/restart/failure acceptance; multiple external portions in one checkout, live verification, original-method refunds, provider adapters, settlement and bank reconciliation |
+| Saved/held sale recovery | App-private active draft, named hold/list/resume and completed-operation recovery; resuming requires an empty current basket and rechecks current catalogue terms | Remove-held-sale UI; process death, disk-full, retry, multiple baskets and restored-source approval acceptance |
+| Sales history | Search by receipt/item/note/reference, original money/status, receipt details | Dated filtering, broader CSV/invoice/delivery/credit-note document flows |
+| Receipt print/share | Native paginated PDF with A4/58/80 mm width selection, captured shop identity/logo/artwork and original money/uncertainty, system print/share/file adapters | Full desktop typography/style/frame/accent/layout parity, thermal page-height/media negotiation and physical thermal output; no print success inferred from submission |
+| Cash sale returns | Original receipt, exact remaining measured quantities, cumulative original-price refund, reviewed reason/restock/cash refund and immutable history | Native partial-return/retry/failure checks; order/exchange/credit/external return UI unavailable |
+| Exchanges/refunds | Core history retained | Android exchange workflows, credit/external/store-credit/original-method refunds; several also remain unfinished on desktop |
+| Stock catalogue | Search, create named item/base unit/price/barcode/counted opening quantity and explicit precision | Edit/archive/restore, metadata/category/alias/favourite editors and full filter parity |
+| Stock receiving | Base-unit exact quantity, buying cost, supplier name, actual drawer cash paid, explicit supplier debt, review/confirmation | Buying-pack picker, stable supplier selection and purchase-order receiving |
+| Stock counts | Reasoned actual count with previous balance, stale-count protection and append-only correction | Multi-item saved count sessions, approvals, advanced history/export |
+| Product/shop images | Individual product-photo choose/save/remove and shop-logo choose/save/remove; managed historical bytes, bounded native decoding, EXIF normalization and crop/rotate adapter methods | Gallery and crop/rotate editing UI, bulk photo import, native orientation/history/recovery and actual-device acceptance |
+| Units and measured goods | Shared exact quantities, configured product precision, whole selling-pack checkout selection, base-unit receiving/counting | Selling/buying-unit definition editors, buying-pack receiving, nested packages and multi-input assembly |
+| Price lists/minimums/promotions | Shared enforcement/history; reasoned lower checkout prices and separate full-password manager approval bound to the reviewed sale on API 33+ | Price-list/minimum/promotion editors and explicit application; manager approval UI on API 30–32; native expiry/revocation/stale-review acceptance |
+| Variants | Read saved matrix family/options/item-count history; individual goods remain normal stock | Structured matrix creation/editing UI and family/label editor |
+| Bundles | Read versioned component definitions; review current stock/prices, cash tender/change, counted-cash confirmation, durable whole-bundle sale and saved receipt print/share | Definition editing and native failure/retry acceptance; mixed-basket/non-cash bundle features remain unfinished on desktop too |
+| Repacking | Shared records/cost transfers retained | Android recipe/repacking review/posting and material/yield-loss UI |
+| Replenishment | Read seven-day reorder suggestions including saved lead times, safety stock, reservations and incoming goods | Policy editing, cover-period control, CSV and stockout analysis |
+| Customers | Add name/phone/address/credit limit, searchable balances, original receipt/payment history | Profile edit/history, receipt assignment/reversal, write-off/reinstatement, ageing/follow-up editors and dated statements |
+| Cash repayments | Explicit positive payment up to current debt, counted cash confirmation and durable drawer/debt posting | Receipt assignment UI, full stale-state/retry/native acceptance |
+| Customer advances | Choose customer, read immutable history/current held balance, review received cash or unused cash refund, explicitly apply held money to a reconciled receipt with expected versions/balances and counted-cash confirmation | Native receive/refund/application/rollback acceptance and receipt-assignment editor; store-credit/new-checkout/change-owed features still open in desktop specification |
+| Customer disputes | Reconciled disputed/undisputed overview, reviewed receipt claim and resolution, preserved original claim/reason/history with no financial mutation | Native claim/resolution/stale/permission acceptance and additional original payment-provider dispute types |
+| Supplier profiles | Read active profile contacts/terms/revision and add supplier | Edit/archive/stable receipt linking and historical-profile UI |
+| Supplier payments | Read current receipt debt, reviewed counted cash payment, unchanged-review check and durable history | Statement CSV/PDF, payments/returns history and full native failure acceptance |
+| Supplier credit notes | Read saved note/original/available/voided balance | Record/apply/reverse/void, attachment and statement UI |
+| Purchase orders/invoices | Shared source records retained | Android drafts/approval/partial receiving/discrepancy/invoice evidence workflows |
+| Customer orders | Read agreed total, remaining deposit, balance, status and quantities | Creation, deposits/cancellation refunds, holds/expiry, partial/final collection and source receipts |
+| Quotations | Read current revision/status/expiry/agreed total/notes | Create/revise/accept/cancel, sale/order conversion and immutable history/document UI |
+| Dispatch | Shared dispatch/proof history retained | Android quantity/courier/recipient proof editor and status/retry/return workflow; proof-image attachments unfinished generally |
+| Cash drawer | Open counted cash, current expected/opening, cash movement list, reviewed expense, counted closing with retained discrepancy and past shifts | Denomination sheets, owner contributions/drawings/corrections, authenticated recipient handover, advanced custody; multiple-register drawers unfinished generally |
+| Expenses | Actual cash expense category/description/review/confirmation and source history | Attachments, recurring/accrued and non-cash funding |
+| Reports | Exact all-dates original sales/cash/credit/unconfirmed external/refund totals, current customer debt and expected drawer | WAT date ranges, current-category comparisons/charts, product/staff reports and CSV/PDF export |
+| FIFO valuation/COGS | Read stock/net-COGS coverage and item cost gaps; unknown amounts stay unavailable | Opening-cost declarations, historical date/source-ledger UI and export; full profit/accounting remain unfinished generally |
+| Staff | Owner creates cashier/manager and resets password using shared security, prior access revoked; separate API 33+ manager checkout-price approval UI | Role/active changes, PIN/recovery enrollment, recipient handover and full security audit UI; native role-revocation/approval acceptance |
+| Activity history | Read immutable actor/source/date business history | Filtering/export/human labels, security-audit and broader acceptance |
+| Shop settings | Shop/contact/footer, A4/58/80 mm paper, Classic/Modern/Compact style, frame, custom accent, tagline and policy fields; bounded logo choose/save/remove with reasoned history | Heading-alignment/logo-visibility/additional-artwork editors and actual PDF preview; full desktop captured-style rendering and native settings/branding history acceptance |
+| Encrypted backup | Explicit Android document create/restore, shared tenant snapshot validation and owner-provisioning adapters | Device/process interruptions, overwrite/cancel, another-device restore, key lifecycle and desktop↔Android schema drills; no automatic cloud backup |
+| CSV migration | Shared parsing/domain sources where portable | Android document picker/template/preview/import/export UI, duplicate/stale/large-file acceptance |
+| Offline help/practice | Existing local product semantics retained | Android searchable help, separate sample workspace/practice and guided tutorials |
+| Diagnostics/privacy | No diagnostic sending or false health state | Android health checks/redacted export, retention/access/privacy notices and fault recovery |
+| Security/storage | App-private working files and role/session guards; encrypted exported backup | Working database encryption/protected keys, security assessment, MFA and remote revocation remain unfinished generally |
+| Platform peripherals | Android print/share/file APIs | Camera barcode permission/scan, Bluetooth/USB printers, scanners, cash drawers, scales, customer displays and physical-device matrix |
+| Specialist retail modules | No fake success actions | Loyalty, containers/deposits, warranty/repairs, restaurant/pharmacy workflows; most also remain unfinished on desktop |
+| Accounting/tax | Exact local financial source history; no estimated profit | Journals/chart/periods/trial balance, complete expense recognition, inclusive/exclusive tax settings and tax invoices remain unfinished generally |
+| Online/multiple branches | Explicitly unavailable | Cloud sync excluded; backend/device enrollment/branches, provider confirmation and consented messaging require separate implementation and real acceptance |
+
+## Delivery rule
+
+A source-present row is not automatically tested or complete. Automated assertions, screenshots, native workflows and unperformed checks must be reported separately. Read-only tools display their limits and expose no simulated save actions. Missing desktop features are not represented as completed Android features.
+
+## Source review boundaries
+
+The coverage above was reconciled against `MainActivity.kt`, the Android checkout/payment/draft helpers, operations/account/tool screens, shop/photo editors, native receipt renderer and platform image adapter. It records available source workflows and explicit restrictions, not new execution evidence. In particular, Android 30–32 can run the app but the separately authenticated manager price-approval entry is currently enabled only on API 33+. Imported photo orientation is normalized by the adapter; a merchant-facing crop/rotate editor is still absent. Receipt paper widths exist, while desktop appearance parity and physical thermal sizing remain pending.
