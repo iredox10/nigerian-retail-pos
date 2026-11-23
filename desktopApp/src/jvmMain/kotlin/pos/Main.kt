@@ -30,6 +30,7 @@ import pos.screens.MinimumPricesScreen
 import pos.screens.RepackingScreen
 import pos.screens.ReorderSuggestionsScreen
 import pos.screens.PurchaseCostHistoryScreen
+import pos.screens.BulkProductPhotosScreen
 import pos.screens.PriceListsScreen
 import pos.screens.BulkCatalogueUpdateScreen
 import pos.screens.InventoryDispositionsScreen
@@ -107,7 +108,7 @@ fun main(args: Array<String>) {
         "Sell" -> allowed(StaffPermission.SELL)
         "Sales" -> allowed(StaffPermission.VIEW_SALES)
         "Quotations" -> allowed(StaffPermission.VIEW_SALES)
-        "Stock","Import","Stock counts","Stock removed","Bulk update","Price lists","Repacking","Reorder suggestions" -> allowed(StaffPermission.MANAGE_STOCK)
+        "Stock","Import","Stock counts","Stock removed","Bulk update","Import product photos","Price lists","Repacking","Reorder suggestions" -> allowed(StaffPermission.MANAGE_STOCK)
         "Purchase cost history" -> allowed(StaffPermission.MANAGE_STOCK) && allowed(StaffPermission.MANAGE_SUPPLIERS)
         "Customers","Credit review","Repayment follow-ups" -> allowed(StaffPermission.MANAGE_CUSTOMERS)
         "Money" -> allowed(StaffPermission.MANAGE_MONEY)
@@ -181,7 +182,7 @@ fun main(args: Array<String>) {
                 Text(session?.let { "${it.name} · ${it.role.name.lowercase().replaceFirstChar { c -> c.uppercaseChar() }}" } ?: "Isolated owner preview", style = MaterialTheme.typography.labelMedium)
                 Spacer(Modifier.height(20.dp))
                 listOf("Sell", "Sales", "Stock", "Customers", "Money", "More").filter { routeAllowed(it) }.forEach { item ->
-                    val selected = route == item || (item == "Customers" && route == "Repayment follow-ups") || (item == "Stock" && route in setOf("Stock counts","Stock removed","Bulk update","Price lists","Repacking","Reorder suggestions","Purchase cost history","Minimum prices")) || (item == "More" && route in setOf("Reports","Suppliers","Backup","Import","Credit review","Staff","Audit","Help","Shop settings","Quotations"))
+                    val selected = route == item || (item == "Customers" && route == "Repayment follow-ups") || (item == "Stock" && route in setOf("Stock counts","Stock removed","Bulk update","Import product photos","Price lists","Repacking","Reorder suggestions","Purchase cost history","Minimum prices")) || (item == "More" && route in setOf("Reports","Suppliers","Backup","Import","Credit review","Staff","Audit","Help","Shop settings","Quotations"))
                     Surface(onClick = {
                         try {
                             session?.let { staffAccess.requireSession(it,StaffPermission.SELL) }
@@ -199,7 +200,7 @@ fun main(args: Array<String>) {
                 Row(Modifier.fillMaxWidth().height(64.dp).padding(horizontal = 24.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text(if(route=="Audit") "Activity history" else route, style = MaterialTheme.typography.headlineSmall)
                     if (route == "Repayment follow-ups") TextButton({route="Customers"}) {Text("Back to customers")}
-                    else if(route in setOf("Stock counts","Stock removed","Bulk update","Price lists","Repacking","Reorder suggestions","Purchase cost history","Minimum prices")) TextButton({route="Stock"}) {Text("Back to stock")}
+                    else if(route in setOf("Stock counts","Stock removed","Bulk update","Import product photos","Price lists","Repacking","Reorder suggestions","Purchase cost history","Minimum prices")) TextButton({route="Stock"}) {Text("Back to stock")}
                     else if (route in setOf("Reports","Suppliers","Backup","Import","Credit review","Staff","Audit","Help","Shop settings","Quotations")) TextButton({ route = if(route=="Import") "Stock" else "More" }) { Text(if(route=="Import") "Back to stock" else "Back to shop tools") }
                     Spacer(Modifier.weight(1f))
                     if (route == "Sell" && allowed(StaffPermission.MANAGE_MONEY)) {
@@ -218,9 +219,10 @@ fun main(args: Array<String>) {
                         "Sell" -> saleStates.SaveableStateProvider(current.id) { SellScreen(current.id, products, customers, remember(current.id, revision) { repo.sellingUnits(current.id) }, allowCredit = allowed(StaffPermission.SELL_CREDIT), allowDiscounts = allowed(StaffPermission.DISCOUNT),repository=repo,imageRevision=revision) { lines, cash, customer, operationId, dueDate, basketDiscount, externalPayments, cashGiven, note ->
                             try { repo.checkout(current.id, lines, cash, customer, operationId,dueDate,basketDiscount,externalPayments,cashGiven,note); revision++; null } catch (e: Exception) { e.message ?: "Sale not saved" }
                         } }
-                        "Stock" -> StockScreen(repo, current.id, onChanged={ revision++ }, onImport={ route="Import" }, onCounts={route="Stock counts"}, onDispositions={route="Stock removed"}, onBulkUpdate={route="Bulk update"}, onPriceLists={route="Price lists"}, onMinimumPrices=if(allowed(StaffPermission.MANAGE_SETTINGS)) ({route="Minimum prices"}) else null, onRepacking={route="Repacking"}, onReorder={route="Reorder suggestions"}, onPurchaseCosts=if(allowed(StaffPermission.MANAGE_SUPPLIERS)) ({route="Purchase cost history"}) else null)
+                        "Stock" -> StockScreen(repo, current.id, onChanged={ revision++ }, onImport={ route="Import" }, onCounts={route="Stock counts"}, onDispositions={route="Stock removed"}, onBulkUpdate={route="Bulk update"}, onPriceLists={route="Price lists"}, onMinimumPrices=if(allowed(StaffPermission.MANAGE_SETTINGS)) ({route="Minimum prices"}) else null, onRepacking={route="Repacking"}, onReorder={route="Reorder suggestions"}, onPurchaseCosts=if(allowed(StaffPermission.MANAGE_SUPPLIERS)) ({route="Purchase cost history"}) else null, onPhotoImport={route="Import product photos"})
                         "Reorder suggestions" -> ReorderSuggestionsScreen(repo,current.id)
                         "Purchase cost history" -> PurchaseCostHistoryScreen(repo,current.id)
+                        "Import product photos" -> BulkProductPhotosScreen(repo,current.id) { revision++ }
                         "Stock counts" -> StockCountSessionsScreen(repo,current.id) {revision++}
                         "Stock removed" -> InventoryDispositionsScreen(repo,current.id) {revision++}
                         "Bulk update" -> BulkCatalogueUpdateScreen(repo,current.id) {revision++}
