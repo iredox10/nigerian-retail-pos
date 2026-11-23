@@ -1,5 +1,8 @@
 package pos.screens
 
+import kotlinx.coroutines.delay
+import pos.data.orderReservationDate
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
@@ -20,7 +23,9 @@ import pos.ui.components.SavedImage
 import pos.data.DraftDiscountCodec
 import pos.data.DraftStore
 import pos.data.frequentItemIds
+import pos.data.orderReservedQuantities
 import pos.data.productVariants
+import pos.data.unreservedStock
 import pos.data.SaleDraft
 import pos.data.HeldSale
 import androidx.compose.ui.input.key.*
@@ -43,6 +48,17 @@ fun SellScreen(
     onCheckout: (List<CartLine>, Long, String?, String, String?, BasketDiscount?, List<ExternalPayment>, Long, String?) -> String?,
 ) {
     val draftStoreResult = remember(tenantId) { runCatching { DraftStore(tenantId) } }
+    val reservationDate by produceState(orderReservationDate(java.time.Instant.now()), tenantId) {
+        while (true) {
+            delay(30_000)
+            value = orderReservationDate(java.time.Instant.now())
+        }
+    }
+    val reservationResult = remember(repository, tenantId, imageRevision, reservationDate) {
+        runCatching { repository?.orderReservedQuantities(tenantId).orEmpty() }
+    }
+    val reservations = reservationResult.getOrDefault(emptyMap())
+    fun availableStock(product: Product) = product.unreservedStock(reservations[product.id] ?: 0L)
     val draftStore = draftStoreResult.getOrNull()
     val restoredDraft = remember(tenantId) { runCatching { draftStore?.load() } }
     var search by rememberSaveable { mutableStateOf("") }
@@ -148,14 +164,14 @@ fun SellScreen(
     fun fitsStock(line: CartLine, quantity: Int): Boolean = runCatching {
         if (quantity < 0) return@runCatching false
         val other = lines.filter { it.product.id == line.product.id && it.key != line.key }.fold(0L) { sum, item -> Math.addExact(sum, item.baseQuantity) }
-        Math.addExact(other, if(quantity==0) 0 else line.copy(quantity=quantity).baseQuantity) <= line.product.exactStockScaled
+        Math.addExact(other, if(quantity==0) 0 else line.copy(quantity=quantity).baseQuantity) <= availableStock(line.product)
     }.getOrDefault(false)
     fun nextAddedQuantity(line:CartLine):Int = runCatching {
         val current=quantities[line.key] ?: 0
         val step=quantityScaleFactor(line.quantityPrecision).toInt()
         if(current>0) Math.addExact(current,step) else {
             val used=lines.filter {it.product.id==line.product.id}.fold(0L) {sum,item -> Math.addExact(sum,item.baseQuantity)}
-            val available=(line.product.exactStockScaled-used).coerceAtLeast(0)
+            val available=(availableStock(line.product)-used).coerceAtLeast(0)
             val perSmallest=Quantity(1,line.quantityPrecision).rescale(line.product.quantityPrecision).timesWhole(line.baseUnitsPerUnit.toLong()).scaledUnits
             minOf(step.toLong(),available/perSmallest).toInt()
         }
@@ -163,6 +179,9 @@ fun SellScreen(
     val totalResult = runCatching {basketAllocation.getOrThrow();cartTotal(lines)}
     val total = totalResult.getOrDefault(0L)
     val unavailableDraftItems = quantities.keys.any { it !in options }
+    val reservedDraftItems = reservations.isNotEmpty() && lines.any { line ->
+        line.product.id in reservations && !fitsStock(line, line.quantity)
+    }
     fun persistBasket(next: Map<String,Int>, nextDiscounts: Map<String,UnitDiscount>) {
         val updated = next.entries.joinToString(";") { "${it.key}:${it.value}" }
         require(draftStore != null && restoredDraft.isSuccess) { "Draft storage is unavailable. Resolve the saved-draft error first." }
@@ -246,6 +265,7 @@ fun SellScreen(
                             ?: "Ranked by sales in the last 30 shop days.", style = MaterialTheme.typography.bodySmall)
                     }
                     if (variantResult.isFailure) Text("Product variant labels unavailable.", style = MaterialTheme.typography.bodySmall)
+                    if (reservationResult.isFailure) Text("Reserved quantities unavailable. Stock is checked before saving each sale.", style = MaterialTheme.typography.bodySmall)
                     val matches = products.filter { product -> (!favouritesOnly || product.favourite) && (!frequentOnly || product.id in frequentRank) && (selectedCategory==null || product.category==selectedCategory) && (product.matchesCatalogueSearch(search) || variants[product.id]?.description?.contains(search.trim(), true)==true || sellingUnits.any { unit -> unit.productId==product.id && !unit.archived && (unit.name.contains(search,true) || unit.barcode?.contains(search.trim())==true) }) }
                     val filtered = if (frequentOnly) matches.sortedBy { frequentRank[it.id] } else matches
                     if (filtered.isEmpty()) Surface(Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.medium) {
@@ -277,7 +297,7 @@ fun SellScreen(
                                             }
                                         }
                                         if (choice.baseUnitsPerUnit > 1) Text("1 ${choice.sellingUnit} = ${choice.baseUnitsPerUnit} ${product.unit}", style = MaterialTheme.typography.bodySmall)
-                                        Text(if ((quantities[choice.key] ?: 0) > 0) "In this sale: ${quantityLabel((quantities[choice.key] ?: 0).toLong(),choice.quantityPrecision)} ${choice.sellingUnit}" else "${product.stockLabel} ${product.unit} available", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                        Text(if ((quantities[choice.key] ?: 0) > 0) "In this sale: ${quantityLabel((quantities[choice.key] ?: 0).toLong(),choice.quantityPrecision)} ${choice.sellingUnit}" else "${quantityLabel(availableStock(product), product.quantityPrecision)} ${product.unit} available", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                     }
                                     OutlinedButton(shape = MaterialTheme.shapes.small, onClick = { update(choice, nextAddedQuantity(choice)) }, enabled = stage != "saved" && nextAddedQuantity(choice)>0 && fitsStock(choice, nextAddedQuantity(choice))) {
                                         Text("Add to sale")
@@ -415,6 +435,7 @@ fun SellScreen(
                             }
                             if (forbiddenDraft) Text("This saved sale needs a manager or owner because it contains credit or a discount. Sign in with that account, or remove discounted items and choose Cash.",color=MaterialTheme.colorScheme.error)
                             if(staleBasket) Text("This basket changed after its discount was reviewed. Review or remove the basket discount before payment.",color=MaterialTheme.colorScheme.error)
+                            if (reservedDraftItems) Text("Some goods in this sale are reserved for orders. Reduce or remove those quantities before payment.", color = MaterialTheme.colorScheme.error)
                             if (staleDiscounts) Text("A discounted item's catalogue price changed. Review its discount before payment, or remove the item.", color = MaterialTheme.colorScheme.error)
                             if (stalePromotions) Text("The promotion's date or quantity changed. Review the promotion or remove its discount.",
                                 color = MaterialTheme.colorScheme.error)
@@ -476,7 +497,7 @@ fun SellScreen(
                                         } else error = result
                                     }
                                 }
-                            }, modifier = Modifier.fillMaxWidth().height(56.dp), enabled = quantityErrors.none {it.key in quantities && it.value} && lines.isNotEmpty() && !committing && totalResult.isSuccess && !unavailableDraftItems && !staleDiscounts && !stalePromotions && !staleBasket && (!forbiddenDraft || stage=="items") && draftStore != null && restoredDraft.isSuccess) {
+                            }, modifier = Modifier.fillMaxWidth().height(56.dp), enabled = quantityErrors.none {it.key in quantities && it.value} && lines.isNotEmpty() && !committing && totalResult.isSuccess && !unavailableDraftItems && !reservedDraftItems && !staleDiscounts && !stalePromotions && !staleBasket && (!forbiddenDraft || stage=="items") && draftStore != null && restoredDraft.isSuccess) {
                                 Text(if (committing) "Saving…" else if (stage == "items") "Take payment" else if (method in setOf("credit","split_credit") && credit > 0) "Save with ${money(credit)} owed" else if(isSplit) "Save without bank confirmation" else "Finish sale")
                             }
                             if (stage == "items" && lines.isEmpty()) Text("Add an item to take payment", Modifier.padding(top = 8.dp), style = MaterialTheme.typography.bodySmall)

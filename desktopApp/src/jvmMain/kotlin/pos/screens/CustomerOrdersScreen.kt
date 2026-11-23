@@ -10,7 +10,9 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import java.time.Instant
 import java.util.UUID
+import kotlinx.coroutines.delay
 import pos.data.*
 import pos.domain.*
 import pos.output.receiptDate
@@ -27,6 +29,19 @@ fun CustomerOrdersScreen(repo: PosRepository, tenantId: String, onChanged: () ->
     val loaded = remember(revision) { runCatching { repo.customerOrders(tenantId) } }
     val orders = loaded.getOrNull().orEmpty()
     val selected = orders.firstOrNull { it.order.id == selectedId }
+    val reservationHistory = remember(selected?.order?.id, revision) {
+        selected?.let { runCatching { repo.customerOrderReservationHistory(tenantId, it.order.id) } }
+    }
+    val reservations = reservationHistory?.getOrNull().orEmpty()
+    val latestReservation = reservations.lastOrNull()
+    var today by remember(selected?.order?.id) { mutableStateOf(orderReservationDate(Instant.now())) }
+    LaunchedEffect(selected?.order?.id) {
+        while (selected != null) {
+            delay(30_000)
+            today = orderReservationDate(Instant.now())
+        }
+    }
+    val stockHeld = selected?.open == true && latestReservation?.heldOn(today) == true
     fun refresh(message: String) {
         notice = message
         action = null
@@ -74,11 +89,20 @@ fun CustomerOrdersScreen(repo: PosRepository, tenantId: String, onChanged: () ->
                                 LabelValueRow("Value of goods waiting for collection", money(selected.remainingValueMinor))
                                 LabelValueRow("Deposit available", money(selected.depositLeftMinor))
                                 LabelValueRow("Remaining amount to pay", money(selected.balanceMinor), emphasized = true)
-                                Text("Stock is checked when you record collection.", style = MaterialTheme.typography.bodySmall)
                                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                     PosButton("Record collection", { action = "collect" })
                                     NeutralButton("Record deposit", { action = "deposit" }, enabled = selected.balanceMinor > 0)
                                     TextButton({ action = "cancel" }) { Text("Cancel remaining order") }
+                                }
+                            }
+                            val holdError = reservationHistory?.exceptionOrNull()
+                            if (holdError != null) {
+                                InlineNotice("Stock holds unavailable", holdError.message.orEmpty(), NoticeTone.Danger)
+                            } else if (selected.open || latestReservation != null) {
+                                LabelValueRow("Stock hold", orderReservationStatus(selected, latestReservation, today))
+                                if (selected.open) {
+                                    NeutralButton(if (stockHeld) "Release stock hold" else "Hold stock",
+                                        { action = if (stockHeld) "release" else "hold" })
                                 }
                             }
                         }
@@ -110,6 +134,16 @@ fun CustomerOrdersScreen(repo: PosRepository, tenantId: String, onChanged: () ->
                     }
                 }
                 item { Text("Order created · ${receiptDate(order.createdAt)}", style = MaterialTheme.typography.bodySmall) }
+                if (reservations.isNotEmpty()) item { Text("Stock hold history", style = MaterialTheme.typography.titleMedium) }
+                items(reservations.reversed(), key = { "reservation:${it.id}" }) { event ->
+                    Surface(shape = MaterialTheme.shapes.medium) {
+                        Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            val label = event.expiresOn?.let { "Stock held through $it (WAT)" } ?: "Stock hold released"
+                            Text("$label · ${receiptDate(event.createdAt)}")
+                            if (event.expiresOn == null) Text(event.reason, style = MaterialTheme.typography.bodySmall)
+                        }
+                    }
+                }
             }
         }
     }
@@ -119,6 +153,8 @@ fun CustomerOrdersScreen(repo: PosRepository, tenantId: String, onChanged: () ->
     }
     selected?.let { state ->
         when (action) {
+            "hold", "release" -> OrderReservationDialog(repo, state, reservations.size, action == "release",
+                { action = null }, ::refresh)
             "collect" -> CollectOrderDialog(repo, state, { action = null }) {
                 refresh("Collection saved. Receipt ${it.saleId?.take(8)}.")
             }

@@ -1,5 +1,8 @@
 package pos.screens
 
+import kotlinx.coroutines.delay
+import pos.data.orderReservationDate
+
 import pos.domain.*
 
 import androidx.compose.foundation.BorderStroke
@@ -31,15 +34,25 @@ import java.util.UUID
 
 /** Every read and write remains scoped to the selected business, including editor state. */
 @Composable
-fun StockScreen(repo: PosRepository, tenantId: String, onChanged: () -> Unit, onImport: (() -> Unit)? = null, onCounts: (() -> Unit)? = null, onDispositions: (() -> Unit)? = null, onBulkUpdate:(()->Unit)?=null, onPriceLists:(()->Unit)?=null, onMinimumPrices:(()->Unit)?=null, onRepacking:(()->Unit)?=null, onReorder:(()->Unit)?=null, onPurchaseCosts:(()->Unit)?=null, onPhotoImport:(()->Unit)?=null) {
-    key(tenantId) { TenantStockScreen(repo, tenantId, onChanged, onImport, onCounts, onDispositions, onBulkUpdate, onPriceLists, onMinimumPrices, onRepacking, onReorder, onPurchaseCosts, onPhotoImport) }
+fun StockScreen(repo: PosRepository, tenantId: String, onChanged: () -> Unit, onImport: (() -> Unit)? = null, onCounts: (() -> Unit)? = null, onDispositions: (() -> Unit)? = null, onBulkUpdate:(()->Unit)?=null, onPriceLists:(()->Unit)?=null, onMinimumPrices:(()->Unit)?=null, onRepacking:(()->Unit)?=null, onReorder:(()->Unit)?=null, onPurchaseCosts:(()->Unit)?=null, onPhotoImport:(()->Unit)?=null, onPromotions:(()->Unit)?=null, onLandedCosts:(()->Unit)?=null) {
+    key(tenantId) { TenantStockScreen(repo, tenantId, onChanged, onImport, onCounts, onDispositions, onBulkUpdate, onPriceLists, onMinimumPrices, onRepacking, onReorder, onPurchaseCosts, onPhotoImport, onPromotions, onLandedCosts) }
 }
 
 @Composable
-private fun TenantStockScreen(repo: PosRepository, tenantId: String, onChanged: () -> Unit, onImport: (() -> Unit)?, onCounts: (() -> Unit)?, onDispositions: (() -> Unit)?, onBulkUpdate:(()->Unit)?,onPriceLists:(()->Unit)?, onMinimumPrices:(()->Unit)?, onRepacking:(()->Unit)?, onReorder:(()->Unit)?, onPurchaseCosts:(()->Unit)?, onPhotoImport:(()->Unit)?) {
+private fun TenantStockScreen(repo: PosRepository, tenantId: String, onChanged: () -> Unit, onImport: (() -> Unit)?, onCounts: (() -> Unit)?, onDispositions: (() -> Unit)?, onBulkUpdate:(()->Unit)?,onPriceLists:(()->Unit)?, onMinimumPrices:(()->Unit)?, onRepacking:(()->Unit)?, onReorder:(()->Unit)?, onPurchaseCosts:(()->Unit)?, onPhotoImport:(()->Unit)?, onPromotions:(()->Unit)?, onLandedCosts:(()->Unit)?) {
     var revision by remember { mutableStateOf(0) }
     val allProducts = remember(tenantId, revision) { repo.products(tenantId, includeArchived = true) }
     val products = allProducts.filterNot { it.archived }
+    val reservationDate by produceState(orderReservationDate(java.time.Instant.now()), tenantId) {
+        while (true) {
+            delay(30_000)
+            value = orderReservationDate(java.time.Instant.now())
+        }
+    }
+    val reservationResult = remember(repo, tenantId, revision, reservationDate) {
+        runCatching { repo.orderReservedQuantities(tenantId, permission = StaffPermission.MANAGE_STOCK) }
+    }
+    val reservations = reservationResult.getOrDefault(emptyMap())
     val variantResult = remember(tenantId, revision) { runCatching { repo.productVariants(tenantId) } }
     val variants = variantResult.getOrDefault(emptyMap())
     val receipts = remember(tenantId, revision) { repo.stockReceipts(tenantId) }
@@ -69,8 +82,8 @@ private fun TenantStockScreen(repo: PosRepository, tenantId: String, onChanged: 
                         Box {
                             NeutralButton("Stock tools ▾",{toolsOpen=true})
                             DropdownMenu(toolsOpen,{toolsOpen=false}) {
-                                listOf("Reorder suggestions" to onReorder,"Purchase cost history" to onPurchaseCosts,"Count several items" to onCounts,"Stock removed" to onDispositions,
-                                    "Price lists" to onPriceLists,"Minimum selling prices" to onMinimumPrices,
+                                listOf("Reorder suggestions" to onReorder,"Purchase cost history" to onPurchaseCosts,"Landed costs" to onLandedCosts,"Count several items" to onCounts,"Stock removed" to onDispositions,
+                                    "Price lists" to onPriceLists,"Promotions" to onPromotions,"Minimum selling prices" to onMinimumPrices,
                                     "Repack goods" to onRepacking,"Update existing goods from CSV" to onBulkUpdate,
                                     "Import new items from CSV" to onImport,"Import product photos" to onPhotoImport).forEach {(label,action) ->
                                     if(action!=null) DropdownMenuItem(text={Text(label)},onClick={toolsOpen=false;action()})
@@ -155,6 +168,7 @@ private fun TenantStockScreen(repo: PosRepository, tenantId: String, onChanged: 
                     }
                 } else {
                     if (variantResult.isFailure) Text("Product variant labels unavailable.", style = MaterialTheme.typography.bodySmall)
+                    if (reservationResult.isFailure) Text("Reserved quantities unavailable.", style = MaterialTheme.typography.bodySmall)
                     val visible = allProducts.filter { it.archived == archived && (!lowStock || it.reorderLevel?.let { level -> it.stock <= level } == true) }
                     val matching = visible.filter { (it.matchesCatalogueSearch(search) || variants[it.id]?.description?.contains(search.trim(), true)==true) && (!favouritesOnly || it.favourite) && (selectedCategory==null || it.category==selectedCategory) }
                     if (lowStock) Text("Active items at or below the reorder level set for them. Set or change a level under Manage → Details.", style = MaterialTheme.typography.bodySmall, color = PosPalette.Secondary)
@@ -168,12 +182,13 @@ private fun TenantStockScreen(repo: PosRepository, tenantId: String, onChanged: 
                         Column(Modifier.fillMaxSize()) {
                             if (!compact) Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp), horizontalArrangement = Arrangement.spacedBy(20.dp)) {
                                 Text("Item", Modifier.weight(1f), style = MaterialTheme.typography.labelMedium)
-                                Text("Available", Modifier.width(130.dp), style = MaterialTheme.typography.labelMedium)
+                                Text("On hand", Modifier.width(130.dp), style = MaterialTheme.typography.labelMedium)
                                 Text("Selling price", Modifier.width(170.dp), style = MaterialTheme.typography.labelMedium)
                                 Spacer(Modifier.width(230.dp))
                             }
                             LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
                                 items(matching, key = { it.id }) { product ->
+                                    val held = reservations[product.id] ?: 0L
                                     Surface(color = PosPalette.Surface) {
                                         Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                                             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(20.dp)) {
@@ -183,6 +198,10 @@ private fun TenantStockScreen(repo: PosRepository, tenantId: String, onChanged: 
                                                     variants[product.id]?.let { Text(it.description, style = MaterialTheme.typography.bodySmall) }
                                                     listOfNotNull(product.sku?.let {"SKU $it"},product.category,product.brand,if(product.favourite) "Favourite" else null).takeIf {it.isNotEmpty()}?.let { Text(it.joinToString(" · "),style=MaterialTheme.typography.bodySmall,color=PosPalette.Secondary) }
                                                     product.barcode?.let { Text("Barcode $it", style = MaterialTheme.typography.bodySmall, color = PosPalette.Secondary) }
+                                                    if (held > 0L) Text(
+                                                        "${quantityLabel(held, product.quantityPrecision)} ${product.unit} reserved · ${quantityLabel(product.unreservedStock(held), product.quantityPrecision)} available",
+                                                        style = MaterialTheme.typography.bodySmall, color = PosPalette.Secondary,
+                                                    )
                                                     if (!product.archived && product.reorderLevel?.let { product.stock <= it } == true)
                                                         Text("Low stock · Reorder level ${product.reorderLevel} ${product.unit}", style = MaterialTheme.typography.bodySmall, color = PosPalette.Warning)
                                                 }
@@ -198,7 +217,7 @@ private fun TenantStockScreen(repo: PosRepository, tenantId: String, onChanged: 
                                                 }
                                             }
                                             if (compact) {
-                                                Text("${product.stockLabel} ${product.unit} available · ${money(product.priceMinor)} / ${product.unit}", color = PosPalette.Secondary)
+                                                Text("${product.stockLabel} ${product.unit} on hand · ${money(product.priceMinor)} / ${product.unit}", color = PosPalette.Secondary)
                                                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                                                     NeutralButton("Manage", { selectedProductId = product.id; savedMessage = null; editor = "manage" })
                                                     NeutralButton("Add stock", { selectedProductId = product.id; savedMessage = null; editor = "receive" }, enabled = !product.archived)
