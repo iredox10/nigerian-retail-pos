@@ -100,6 +100,8 @@ private fun AndroidApp(repo:PosRepository,access:StaffAccess,installLock:((()->U
           Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.SpaceEvenly) {
             destinations.forEach {item ->
                 TextButton({route=item;receipt=null},contentPadding=PaddingValues(horizontal=3.dp,vertical=12.dp),modifier=Modifier.weight(1f)) {
+                    PosIcon(destinationIcon(item), Modifier.size(18.dp), tint=if(route==item)MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
+                    Spacer(Modifier.width(6.dp))
                     Text(item,style=MaterialTheme.typography.labelLarge,color=if(route==item)MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,maxLines=1)
                 }
             }
@@ -145,6 +147,6 @@ private fun AndroidSignIn(repo:PosRepository,access:StaffAccess,onEnter:(Tenant,
                 } catch(e:Exception){error=e.message ?: "Try again."} finally {busy=false}
             }
         },enabled=!busy,modifier=Modifier.fillMaxWidth().heightIn(min=56.dp)) {Text(if(busy)"Opening shop…" else if(create)"Create shop" else "Open shop")}
-        TextButton({create=!create;error=null;password=""}) {Text(if(create && shops.isNotEmpty())"Use an existing shop" else "Create another shop")}
+        if(shops.isNotEmpty()) TextButton({create=!create;error=null;password=""}) {Text(if(create && shops.isNotEmpty())"Use an existing shop" else "Create another shop")}
     }
 }
