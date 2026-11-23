@@ -64,11 +64,15 @@ object ReceiptService {
             }
             appendLine("Original sale total: ${money(sale.totalMinor)}")
             appendLine("Cash applied at sale: ${money(sale.cashMinor)}")
+            sale.exchange?.let { exchange ->
+                appendLine("Value from the exchange: ${money(exchange.amountMinor)}")
+                appendLine("Original receipt: ${exchange.linkedReceiptId}")
+            }
             if (sale.creditMinor > 0) {
                 appendLine("Customer owed at sale: ${money(sale.creditMinor)}")
                 appendLine("This is not the customer's current debt.")
                 appendLine(sale.dueDate?.let { "Agreed repayment due date: $it (WAT)" } ?: "No repayment due date recorded")
-            } else if(sale.externalPayments.isEmpty()) appendLine("Paid in cash")
+            } else if(sale.externalPayments.isEmpty() && sale.exchange == null) appendLine("Paid in cash")
             sale.externalPayments.forEach {p ->appendLine("${p.label}: ${money(p.amountMinor)}");appendLine("Reference: ${p.reference}");appendLine("Receiving account / terminal: ${p.receivingAccount}")}
             if(sale.externalPayments.isNotEmpty()) appendLine("Manually recorded. This app has not confirmed bank receipt or settlement.")
             sale.cashGivenMinor?.let { tender ->
@@ -85,6 +89,10 @@ object ReceiptService {
                     item.lines.forEach { line -> appendLine("  ${line.quantityLabel} ${line.unit} ${line.name}") }
                     appendLine("Returned goods value: ${money(item.returnedValueMinor)}")
                     appendLine("Cash refunded: ${money(item.refundMinor)}")
+                    item.exchange?.let { exchange ->
+                        appendLine("Value applied to replacement: ${money(exchange.amountMinor)}")
+                        appendLine("Replacement receipt: ${exchange.linkedReceiptId}")
+                    }
                     if(item.creditReductionMinor>0) appendLine("Customer debt reduced: ${money(item.creditReductionMinor)}")
                     appendLine(if (item.restock) "Returned goods added back to stock" else "Returned goods not added to sellable stock")
                     appendLine("Reason: ${item.reason}")

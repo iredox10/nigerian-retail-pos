@@ -81,6 +81,7 @@ fun ReportsScreen(repo: PosRepository, tenantId: String) {
                     sum(records.customers.map { it.balanceMinor }), sum(cash.filter { it.kind == "repayment" }.map { it.amountMinor }),
                     sum(expenses.map { it.amountMinor }), sum(returns.map { it.refundMinor }), sum(receipts.map { it.totalCostMinor }),
                     sum(receipts.map { it.paidCashMinor }), sum(supplierPayments.map { it.amountMinor }), sum(cash.map { it.amountMinor }),sum(sales.map {it.externalRecordedMinor}),sum(returns.map {it.creditReductionMinor}),
+                    sum(sales.map { it.exchange?.amountMinor ?: 0L }), sum(returns.map { it.returnedValueMinor }),
                 )
             }
             calculated.exceptionOrNull()?.let { InlineNotice("Report could not be calculated", it.message ?: "A stored date or amount needs checking.", NoticeTone.Danger) }
@@ -89,6 +90,8 @@ fun ReportsScreen(repo: PosRepository, tenantId: String) {
                     SectionHeader("Sales in this date range", "$start through $end · WAT")
                     LabelValueRow("Original sales total", money(amounts.sales), emphasized = true)
                     LabelValueRow("Cash applied when these sales were made", money(amounts.saleCash))
+                    if (amounts.exchangeApplied > 0) LabelValueRow("Returned value used for replacement sales", money(amounts.exchangeApplied))
+                    if (amounts.returnedValue > 0) LabelValueRow("Value of goods returned in range", money(amounts.returnedValue))
                     LabelValueRow("Credit granted when these sales were made", money(amounts.saleCredit))
                     LabelValueRow("External portions recorded · not confirmed",money(amounts.externalRecorded))
                     LabelValueRow("Customer debt reduced by returns in range",money(amounts.creditReduced))
@@ -156,4 +159,4 @@ fun ReportsScreen(repo: PosRepository, tenantId: String) {
     }
 }
 
-private data class ReportAmounts(val sales: Long, val saleCash: Long, val saleCredit: Long, val currentDebt: Long, val repayments: Long, val expenses: Long, val refunds: Long, val purchases: Long, val purchaseCash: Long, val supplierPayments: Long, val netCash: Long,val externalRecorded:Long,val creditReduced:Long)
+private data class ReportAmounts(val sales: Long, val saleCash: Long, val saleCredit: Long, val currentDebt: Long, val repayments: Long, val expenses: Long, val refunds: Long, val purchases: Long, val purchaseCash: Long, val supplierPayments: Long, val netCash: Long,val externalRecorded:Long,val creditReduced:Long, val exchangeApplied: Long, val returnedValue: Long)

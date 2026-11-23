@@ -30,6 +30,10 @@ object SaleDocumentService {
             }
             appendLine("Invoice total: ${money(sale.totalMinor)}")
             appendLine("Cash applied at sale: ${money(sale.cashMinor)}")
+            sale.exchange?.let { exchange ->
+                appendLine("Value from the exchange: ${money(exchange.amountMinor)}")
+                appendLine("Original receipt: ${exchange.linkedReceiptId}")
+            }
             sale.externalPayments.forEach { payment ->
                 appendLine("${payment.label}: ${money(payment.amountMinor)}")
                 appendLine("  Payment reference: ${payment.reference}")
@@ -100,6 +104,10 @@ object SaleDocumentService {
             appendLine("Returned goods value: ${money(returned.returnedValueMinor)}")
             appendLine("Customer debt reduced: ${money(returned.creditReductionMinor)}")
             appendLine("Cash refunded: ${money(returned.refundMinor)}")
+            returned.exchange?.let { exchange ->
+                appendLine("Value applied to replacement: ${money(exchange.amountMinor)}")
+                appendLine("Replacement receipt: ${exchange.linkedReceiptId}")
+            }
             appendLine()
             appendLine("Copy of saved return ${returned.id}.")
         }
