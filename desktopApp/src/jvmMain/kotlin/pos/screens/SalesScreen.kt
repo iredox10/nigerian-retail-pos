@@ -48,6 +48,7 @@ private fun TenantSalesScreen(repo: PosRepository, tenantId: String, allowReturn
     var search by remember { mutableStateOf("") }
     var selectedId by remember { mutableStateOf<String?>(null) }
     var returning by remember { mutableStateOf(false) }
+    var exchanging by remember { mutableStateOf(false) }
     var showingDocuments by remember { mutableStateOf(false) }
     var notice by remember { mutableStateOf<String?>(null) }
     var noticeError by remember { mutableStateOf(false) }
@@ -109,7 +110,12 @@ private fun TenantSalesScreen(repo: PosRepository, tenantId: String, allowReturn
                                         Text(receiptDate(sale.createdAt), style = MaterialTheme.typography.bodySmall, color = PosPalette.Secondary)
                                         Text(sale.lines.joinToString { "${it.quantityLabel} ${it.sellingUnit} ${it.product.name}" },
                                             maxLines = 2, style = MaterialTheme.typography.bodySmall, color = PosPalette.Secondary)
-                                        StatusPill(if(sale.externalPayments.isNotEmpty()) "External payment not confirmed" else if (sale.creditMinor > 0) "Part paid / pay later at sale" else "Paid in cash",
+                                        StatusPill(when {
+                                            sale.externalPayments.isNotEmpty() -> "External payment not confirmed"
+                                            sale.creditMinor > 0 -> "Part paid / pay later at sale"
+                                            sale.exchange != null -> "Replacement sale"
+                                            else -> "Paid in cash"
+                                        },
                                             if (sale.creditMinor > 0 || sale.externalPayments.isNotEmpty()) NoticeTone.Warning else NoticeTone.Neutral)
                                     }
                                 }
@@ -178,7 +184,11 @@ private fun TenantSalesScreen(repo: PosRepository, tenantId: String, allowReturn
                                 Text(creditAllowance?.exceptionOrNull()?.message ?: "Credit-return eligibility could not be loaded. Refresh before continuing.",style=MaterialTheme.typography.bodySmall,color=PosPalette.Secondary)
                                 NeutralButton("Refresh return eligibility",{revision++})
                             } else if (returnable.values.any { it > 0 }) {
-                                NeutralButton("Return items", { returning = true }, Modifier.fillMaxWidth(), enabled = !outputBusy)
+                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    NeutralButton("Return items", { returning = true }, Modifier.weight(1f), enabled = !outputBusy)
+                                    if (selected.creditMinor == 0L) NeutralButton("Exchange items", { exchanging = true },
+                                        Modifier.weight(1f), enabled = !outputBusy)
+                                }
                                 Text("Cash refunds require an open shift with enough cash.", style = MaterialTheme.typography.bodySmall, color = PosPalette.Secondary)
                             } else Text("All items from this sale have been returned.", style = MaterialTheme.typography.bodySmall, color = PosPalette.Secondary)
                         }
@@ -197,6 +207,16 @@ private fun TenantSalesScreen(repo: PosRepository, tenantId: String, allowReturn
             canPrepareDelivery = returnable.values.any { it > 0 },
             dismiss = { showingDocuments = false },
         )
+    }
+    if (allowReturns && exchanging && selected != null) {
+        CashExchangeDialog(repo, selected, returnable, dismiss = { exchanging = false }) { exchange ->
+            exchanging = false
+            selectedId = exchange.replacementReceiptId
+            revision++
+            onChanged()
+            noticeError = false
+            notice = "Exchange saved on this computer. Replacement receipt ${exchange.replacementReceiptId.take(8)}."
+        }
     }
     if (allowReturns && returning && selected != null) {
         ReturnItemsDialog(selected, returnable, creditAllowance?.getOrNull(), { returning = false }) { quantities, restock, reason, operation ->
