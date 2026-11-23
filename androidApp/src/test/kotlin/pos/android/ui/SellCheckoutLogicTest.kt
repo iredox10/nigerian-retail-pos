@@ -56,4 +56,34 @@ class SellCheckoutLogicTest {
         val basket = BasketDiscount("fixed", 1000, "Sale offer")
         denied { sellDraftLines(draft.copy(basketDiscount = basket, basketBasis = "stale"), listOf(bottle), emptyList()) }
     }
+
+    @Test fun selectedCustomerSurvivesFullCashAndExternalPaymentWithoutCreatingDebt() {
+        val lines = listOf(CartLine(bottle, 2))
+        val cash = SaleDraft("drink:2", "cash-sale", "1200", customerId = "amina")
+        val paid = reviewSellPayment(cash, lines, false)
+        assertEquals("amina", paid.customerId)
+        assertEquals(0L, paid.creditMinor)
+        assertEquals(20000L, paid.changeMinor)
+        val external = reviewSellPayment(cash.copy(cashText = "0", method = "split",
+            externalAmountText = "1000", externalReference = "BANK-2", externalAccount = "Shop bank"), lines, true)
+        assertEquals("amina", external.customerId)
+        assertEquals(0L, external.creditMinor)
+        assertEquals(0L, external.cashMinor)
+    }
+
+    @Test fun addingMatchingTermsConservesMeasuredQuantitiesAndRejectsConflictingPrices() {
+        val first = CartLine(measured, 1250, discountPerUnitMinor = 345, discountReason = "Agreed market price")
+        val other = CartLine(bottle, 1)
+        val added = first.copy(quantity = 375)
+        val merged = addSellLine(listOf(first, other), added)
+        assertEquals(listOf(first.copy(quantity = 1625), other), merged)
+        assertEquals(1625L, merged.first().baseQuantity)
+        assertEquals("Agreed market price", merged.first().discountReason)
+        denied { addSellLine(listOf(first), added.copy(discountPerUnitMinor = 445)) }
+        denied { addSellLine(listOf(first), added.copy(discountReason = "Different agreement")) }
+        denied { addSellLine(listOf(first), CartLine(measured, 375)) }
+        assertEquals(listOf(other, added), addSellLine(listOf(other), added))
+        try { addSellLine(listOf(first.copy(quantity = Int.MAX_VALUE)), added); fail("Quantity overflow accepted") }
+        catch (_: ArithmeticException) { }
+    }
 }

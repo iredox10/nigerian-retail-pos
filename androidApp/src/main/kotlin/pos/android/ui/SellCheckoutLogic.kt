@@ -37,6 +37,20 @@ internal data class SellPaymentReview(
     val changeMinor: Long get() = cashGivenMinor - cashMinor
 }
 
+/** Adding another quantity must not silently choose between two agreed price terms. */
+internal fun addSellLine(lines: List<CartLine>, added: CartLine): List<CartLine> {
+    val previous = lines.firstOrNull { it.key == added.key } ?: return lines + added
+    require(previous.unitPriceMinor == added.unitPriceMinor &&
+        previous.discountPerUnitMinor == added.discountPerUnitMinor &&
+        previous.discountReason == added.discountReason &&
+        previous.sellingUnit == added.sellingUnit &&
+        previous.baseUnitsPerUnit == added.baseUnitsPerUnit &&
+        previous.quantityPrecision == added.quantityPrecision) {
+        "This selling unit is already in the sale with different price terms. Change its existing quantity / price, or use the same agreed price and reason."
+    }
+    return lines.map { if (it.key == added.key) it.copy(quantity = Math.addExact(it.quantity, added.quantity)) else it }
+}
+
 internal fun reviewSellPayment(draft: SaleDraft, lines: List<CartLine>, externalAcknowledged: Boolean): SellPaymentReview {
     require(lines.isNotEmpty()) { "Add an item before taking payment." }
     val total = cartTotal(lines)
@@ -61,5 +75,5 @@ internal fun reviewSellPayment(draft: SaleDraft, lines: List<CartLine>, external
     require(due == null || debt > 0) { "Remove the due date when no debt remains." }
     require(due == null || isValidCreditDueDate(due)) { "Use a valid YYYY-MM-DD due date." }
     return SellPaymentReview(draft, lines, total, cash, tender, debt, external,
-        if (debt > 0) draft.customerId else null, due)
+        draft.customerId, due)
 }

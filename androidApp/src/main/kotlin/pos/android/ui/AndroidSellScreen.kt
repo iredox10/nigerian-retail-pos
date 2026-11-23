@@ -297,9 +297,7 @@ fun AndroidSellScreen(
     adding?.let { product ->
         SellItemDialog(product, units.filter { it.productId == product.id }, null,
             dismiss = { adding = null }, apply = { line ->
-                val previous = lines.firstOrNull { it.key == line.key }
-                val next = if (previous == null) line else previous.copy(quantity = Math.addExact(previous.quantity, line.quantity))
-                val candidate = lines.filterNot { it.key == line.key } + next
+                val candidate = addSellLine(lines, line)
                 require(candidate.filter { it.product.id == product.id }.fold(0L) { sum, line -> Math.addExact(sum, line.baseQuantity) } <= product.unreservedStock(reservations.getOrThrow()[product.id] ?: 0L)) { "There is not enough available stock." }
                 if (changeLines(candidate)) adding = null
             })
