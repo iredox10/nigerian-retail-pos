@@ -12,14 +12,18 @@ data class PurchaseReturn(
     val stockAfter: Long,
     val reason: String,
     val createdAt: String,
+    val cashReceivedMinor: Long = 0,
+    val cashShiftId: String? = null,
 ) {
     init {
         require(validPurchaseReturnId(id) && tenantId.isNotBlank() && receiptId.isNotBlank())
-        require(quantity > 0 && creditMinor > 0 && owedBeforeMinor >= creditMinor)
+        require(quantity > 0 && creditMinor >= 0 && owedBeforeMinor >= creditMinor && cashReceivedMinor >= 0 && returnedValueMinor > 0)
+        require((cashReceivedMinor > 0) == (cashShiftId != null) && (cashShiftId == null || cashShiftId.isNotBlank()))
         require(stockAfter >= 0 && stockBefore > stockAfter && stockBefore <= 9_007_199_254_740_991L)
         require(reason == reason.trim() && reason.length in 3..500 && reason.none { it.isISOControl() })
         require(createdAt.isNotBlank())
     }
+    val returnedValueMinor: Long get() = addMoney(creditMinor, cashReceivedMinor)
 }
 
 fun validPurchaseReturnId(id: String): Boolean = id.isNotBlank() && id.length <= 200 && id.none { it.isISOControl() }

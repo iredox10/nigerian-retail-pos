@@ -1205,6 +1205,7 @@ class PosRepository(path: String = File(System.getProperty("user.home"), ".niger
         sources("sales","sale","cash_minor");sources("repayments","repayment","amount_minor")
         sources("expenses","expense","amount_minor",true);sources("stock_receipts","stock_purchase","paid_cash_minor",true)
         sources("sale_returns","refund","refund_minor",true);sources("supplier_payments","supplier_payment","amount_minor",true)
+        sources("purchase_cash_returns", "supplier_reimbursement", "cash_received_minor")
         val actualSources=linkedMapOf<Pair<String,String>,Long>()
         query("SELECT kind,source_id,amount_minor,shift_id FROM cash_entries WHERE tenant_id=?",tenant.id) { row ->
             val kind=row.getString(1)
@@ -1262,6 +1263,15 @@ class PosRepository(path: String = File(System.getProperty("user.home"), ".niger
         validateCashExchanges(tenant.id)
         provisionOwner(tenant)
         tenant
+    }
+
+    internal fun recordSupplierCashReimbursement(tenantId: String, event: PurchaseReturn) {
+        requirePermission(tenantId, StaffPermission.MANAGE_MONEY)
+        require(event.tenantId == tenantId && event.cashReceivedMinor > 0)
+        val shift = requireCashShift(tenantId)
+        require(event.cashShiftId == shift.id) { "The cash drawer changed after review." }
+        appendCash(tenantId, shift.id, "supplier_reimbursement", event.cashReceivedMinor,
+            "Cash received for supplier return ${event.id.take(8)}", event.id)
     }
 
     private fun requireCashShift(tenantId:String)=activeCashShift(tenantId) ?: throw IllegalArgumentException("Open today's cash shift before recording money taken from the drawer.")
