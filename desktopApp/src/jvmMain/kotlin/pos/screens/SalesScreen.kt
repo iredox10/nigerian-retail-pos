@@ -18,6 +18,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import pos.data.PosRepository
+import pos.data.imageBytes
 import pos.data.receiptImageBytes
 import pos.data.receiptProfile
 import pos.data.creditReturnAllowance
@@ -50,6 +51,7 @@ private fun TenantSalesScreen(repo: PosRepository, tenantId: String, allowReturn
     var returning by remember { mutableStateOf(false) }
     var exchanging by remember { mutableStateOf(false) }
     var showingDocuments by remember { mutableStateOf(false) }
+    var receiptPreview by remember { mutableStateOf<ByteArray?>(null) }
     var notice by remember { mutableStateOf<String?>(null) }
     var noticeError by remember { mutableStateOf(false) }
     var outputBusy by remember { mutableStateOf(false) }
@@ -76,6 +78,20 @@ private fun TenantSalesScreen(repo: PosRepository, tenantId: String, allowReturn
             sale.externalPayments.any {it.reference.contains(search,true) || it.receivingAccount.contains(search,true)}
     }
 
+    receiptPreview?.let { bytes ->
+        androidx.compose.ui.window.Dialog(onDismissRequest = { receiptPreview = null }) {
+            Surface(shape = MaterialTheme.shapes.large) {
+                Column(Modifier.widthIn(max = 640.dp).heightIn(max = 800.dp).padding(24.dp).verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                        Text("Saved receipt design", Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
+                        TextButton({ receiptPreview = null }) { Text("Close") }
+                    }
+                    ReceiptPdfPreview(bytes)
+                }
+            }
+        }
+    }
     Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         SectionHeader("Sales", if(allowReturns) "Find a saved sale, print a receipt or record returned items." else "Find a saved sale and print or export its receipt.")
         receiptResult.exceptionOrNull()?.let {
@@ -142,7 +158,14 @@ private fun TenantSalesScreen(repo: PosRepository, tenantId: String, allowReturn
                                     outputBusy = true
                                     scope.launch {
                                         try {
-                                            val submitted = withContext(Dispatchers.IO) { ReceiptService.printReceipt(receipt) }
+                                            val submitted = withContext(Dispatchers.IO) {
+                                                val details = profileResult.getOrNull()?.details
+                                                val appearance = details?.appearance ?: pos.domain.ReceiptAppearance()
+                                                val pdf = PdfReceiptService.createPdf(receipt, details?.receiptPaper ?: "A4",
+                                                    repo.receiptImageBytes(tenantId, selected.id), appearance,
+                                                    appearance.artworkAssetId?.let { repo.imageBytes(tenantId, it) })
+                                                pos.output.ReceiptDesignPrinter.print(pdf)
+                                            }
                                             noticeError = false
                                             notice = if (submitted) "Receipt sent to the printer. Check the printer for delivery." else "Printing cancelled. The sale is unchanged."
                                         } catch (e: Exception) { noticeError = true; notice = e.message ?: "Printing failed. You can export the receipt instead." }
@@ -166,13 +189,33 @@ private fun TenantSalesScreen(repo: PosRepository, tenantId: String, allowReturn
                                 scope.launch {
                                     try {
                                         val file = withContext(Dispatchers.IO) {
-                                            PdfReceiptService.exportReceipt(receipt, profileResult.getOrNull()?.details?.receiptPaper ?: "A4",repo.receiptImageBytes(tenantId,selected.id))
+                                            val details = profileResult.getOrNull()?.details
+                                            val appearance = details?.appearance ?: pos.domain.ReceiptAppearance()
+                                            val artwork = appearance.artworkAssetId?.let { repo.imageBytes(tenantId, it) }
+                                            PdfReceiptService.exportReceipt(receipt, details?.receiptPaper ?: "A4",
+                                                repo.receiptImageBytes(tenantId, selected.id), appearance, artwork)
                                         }
                                         noticeError = false
                                         notice = file?.let { "Receipt PDF saved to ${it.absolutePath}" } ?: "PDF export cancelled. The sale is unchanged."
                                     } catch (e: Exception) {
                                         noticeError = true
                                         notice = e.message ?: "The receipt PDF could not be saved."
+                                    } finally { outputBusy = false }
+                                }
+                            }, Modifier.fillMaxWidth(), enabled = !outputBusy)
+                            NeutralButton("Preview receipt design", {
+                                outputBusy = true
+                                scope.launch {
+                                    try {
+                                        receiptPreview = withContext(Dispatchers.IO) {
+                                            val details = profileResult.getOrNull()?.details
+                                            val appearance = details?.appearance ?: pos.domain.ReceiptAppearance()
+                                            PdfReceiptService.createPdf(receipt, details?.receiptPaper ?: "A4",
+                                                repo.receiptImageBytes(tenantId, selected.id), appearance,
+                                                appearance.artworkAssetId?.let { repo.imageBytes(tenantId, it) })
+                                        }
+                                    } catch (e: Exception) {
+                                        noticeError = true; notice = e.message ?: "Receipt preview could not be opened."
                                     } finally { outputBusy = false }
                                 }
                             }, Modifier.fillMaxWidth(), enabled = !outputBusy)

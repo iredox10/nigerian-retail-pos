@@ -132,6 +132,7 @@ private fun activityLabel(kind: String): String = when (kind) {
     "stock.repacking_recipe_saved" -> "Repacking recipe saved"
     "expense.attachment_changed" -> "Expense receipt changed"
     "minimum_price.changed" -> "Minimum selling price changed"
+    "receipt.artwork_imported" -> "Receipt artwork imported"
     "image.changed" -> "Shop or product image changed"
     "shop.receipt_settings_changed" -> "Receipt details changed"
     "staff.pin_configured" -> "Staff PIN configured"
