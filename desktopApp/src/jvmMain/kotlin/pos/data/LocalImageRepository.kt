@@ -24,7 +24,7 @@ private fun PosRepository.validateImageOwner(tenantId:String,kind:String,owner:S
     imagePermission(kind)
     require(if(kind=="shop") owner=="shop" else featureQuery("SELECT id FROM products WHERE tenant_id=? AND id=?",tenantId,owner) {it.getString(1)}.size==1) {"Image location does not belong to this shop."}
 }
-private fun PosRepository.selectionUnchecked(tenantId:String,kind:String,owner:String):LocalImageSelection =featureQuery("SELECT * FROM local_image_selections WHERE tenant_id=? AND owner_kind=? AND owner_id=?",tenantId,kind,owner) {LocalImageSelection(kind,owner,it.getString("asset_id"),it.getLong("version"))}.singleOrNull() ?: LocalImageSelection(kind,owner,null,0)
+internal fun PosRepository.selectionUnchecked(tenantId:String,kind:String,owner:String):LocalImageSelection =featureQuery("SELECT * FROM local_image_selections WHERE tenant_id=? AND owner_kind=? AND owner_id=?",tenantId,kind,owner) {LocalImageSelection(kind,owner,it.getString("asset_id"),it.getLong("version"))}.singleOrNull() ?: LocalImageSelection(kind,owner,null,0)
 fun PosRepository.imageSelection(tenantId:String,ownerKind:String,ownerId:String):LocalImageSelection=featureRead(tenantId,StaffPermission.SELL) {
     validateImageOwner(tenantId,ownerKind,ownerId);selectionUnchecked(tenantId,ownerKind,ownerId)
 }
