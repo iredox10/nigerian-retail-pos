@@ -28,14 +28,16 @@ Started 14 November 2026. Scope: the local desktop gaps listed in the conversati
 - [x] Supplier invoice metadata, duplicate detection/review and preserved source history.
 - [x] Reviewed purchase returns against unpaid receipt debt, with exact stock removal, recorded credit and reconciled statements.
 - [x] Record supplier cash reimbursements during a reviewed return and reconcile receipt debt and the drawer.
-- [ ] Unapplied supplier credits, credit notes, account adjustments and damaged-delivery discrepancies.
+- [x] Record and resolve quantity or condition discrepancies on an approved purchase order with reasoned history.
+- [ ] Unapplied supplier credits, credit notes, account adjustments and stock quarantine.
 - [x] Purchase cost history and latest explicitly linked supplier comparison, normalized by saved buying units with CSV export.
-- [ ] Landed costs with explicit allocation.
+- [x] Explicit landed-cost allocation from a paid cash expense, with exact splitting and revision history.
 - [x] Stock reorder suggestions with a configurable coverage period, saved sales, approved incoming quantities and export.
 - [x] Reviewed bulk CSV catalogue update/repricing with row errors, stale checks and atomic application.
 - [x] Retail/wholesale/customer price lists and quantity breaks with historical sale snapshots.
 - [x] Versioned base/selling-pack minimum prices, strict final-line enforcement after discounts and historical sale checks.
-- [ ] Separate-identity minimum-price approval/override; promotions/bundles with exact stock/discount arithmetic.
+- [x] Scheduled, explicitly selected line promotions with qualifying units and quantities, optional usage caps and historical discount details.
+- [ ] Separately authenticated minimum-price approval, automatic promotions and stock-tracked bundles.
 - [x] Shop logo and one product photo with offline database bytes, reasoned replacement/removal history, Stock/Sell thumbnails, captured receipt logos and encrypted backup/restore.
 - [x] On-demand PNG/JPEG preview of current/historical supplier invoice evidence.
 - [x] Expense receipt PDF/PNG/JPEG attachments, retained historical bytes, preview/export and encrypted recovery.
@@ -64,7 +66,8 @@ Started 14 November 2026. Scope: the local desktop gaps listed in the conversati
 - [x] Quotations with fixed terms/expiry, immutable revisions, PDF/text and explicitly reviewed full-cash conversion.
 - [x] Sales invoice, pre-handover delivery note and credit note PDF copies from saved records.
 - [ ] Quotation conversion to credit/electronic payment or orders, and sales document sharing.
-- [ ] Orders, deposits/layaway, reservations/expiry, partial fulfilment and collection/dispatch.
+- [x] Orders, cash deposits and refunds, order stock holds with WAT expiry, and partial or final counter collection.
+- [ ] Wider layaway terms, backorders, dispatch and proof of delivery.
 - [ ] Optional lots/expiry, serials/warranty/repair, container deposits and loyalty according to enabled business modules.
 - [ ] Optional restaurant recipes/tickets/tables; specialist features remain gated by requirements validation.
 

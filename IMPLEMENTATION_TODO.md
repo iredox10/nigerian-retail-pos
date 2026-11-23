@@ -99,7 +99,8 @@ Work is ordered by dependencies, not by hiding any part of the full specificatio
 - [ ] Full basket-discount UI/keyboard/failure acceptance and approval-policy extensions.
 - [x] Versioned retail/wholesale/customer quantity price lists, explicit checkout review, provenance checks and historical sale snapshots; reduction-only.
 - [ ] Automatic pricing/markups and broader price-list UI/keyboard acceptance.
-- [ ] Promotions, validity periods, usage rules and explicit offline time policy.
+- [x] Explicitly reviewed fixed or percentage line promotions with WAT validity dates, qualifying units and quantities, optional usage caps and revision history. Promotion use is checked again when the sale saves.
+- [ ] Automatic and basket-wide promotions, stacking policies and broader offline clock acceptance.
 - [ ] Bundles with component stock movements.
 - [x] Versioned base/selling-pack minimum prices and final-line enforcement after every discount, including measured whole-line ceilings; preserved historical checks.
 - [ ] Cost/margin warnings and separately authenticated price approvals/overrides.
@@ -155,12 +156,14 @@ Work is ordered by dependencies, not by hiding any part of the full specificatio
 - [ ] Full supplier-account UI/keyboard/failure acceptance and historical contact snapshots.
 - [x] Local purchase-order drafts, approval/cancellation and atomic multi-line purchasing with immutable history.
 - [x] Partial deliveries and explicit outstanding purchase quantities.
-- [ ] Damaged/quarantined delivery workflows and discrepancy resolution.
+- [x] Record and resolve shortage, damaged and unexpected delivery discrepancies with reasons and an optional link to a later stock receipt.
+- [ ] Quarantine, supplier claims and inspection workflows for damaged deliveries.
 - [x] Supplier invoice metadata, normalized duplicate review, immutable reasoned corrections and managed local evidence history.
 - [x] Managed supplier PDF/PNG/JPEG attachment bytes and historical versions in encrypted backups, with current/historical image preview and file export.
 - [ ] Broader invoice native/keyboard acceptance.
 - [x] Purchase-cost history and linked supplier comparisons using saved buying-unit conversions, with CSV export.
-- [ ] Landed-cost allocation.
+- [x] Allocate existing paid cash expenses to purchase receipts by value or equally, with exact kobo splits, revisions and removals.
+- [ ] Feed landed-cost allocations into historical stock valuation and accounting once costing policy is implemented.
 - [x] Reviewed purchase returns with exact removal from stock and receipt-linked credit up to the amount owed, with no drawer movement.
 - [x] Explicit cash reimbursements on supplier returns with receipt debt reduction and drawer reconciliation.
 - [ ] Supplier credit notes, unapplied credits and account adjustments.
@@ -177,7 +180,8 @@ Work is ordered by dependencies, not by hiding any part of the full specificatio
 - [x] Source movement history and configurable low-stock threshold/filter.
 - [x] Durable multi-item stock-count drafts, saved baseline/movement cutoffs, stale-count rejection, atomic posting/cancellation and backup history.
 - [ ] Separate variance approvals, multi-user count coordination and full count UI/failure acceptance.
-- [ ] Locations/bins, reservations and available/in-transit stock.
+- [x] Local customer-order stock reservations with WAT expiry, release history and available quantities in Sell and Stock.
+- [ ] Locations, bins and in-transit stock.
 - [ ] Lots, expiry dates, serial numbers and stock ageing.
 - [x] Damage/loss/theft/owner-use physical stock removals with reason categories and immutable quantity/history snapshots; no financial valuation.
 - [ ] Advanced replenishment, safety stock and stockout analysis.
@@ -210,9 +214,10 @@ Work is ordered by dependencies, not by hiding any part of the full specificatio
 - [ ] Fulfilment and dispatch records, tax-invoice requirements, and document sharing/delivery.
 - [x] A4/58/80 mm PDF receipt layouts with automated extraction, font and pagination checks.
 - [ ] Real thermal-printer delivery/size/scanner compatibility, Windows native dialogs and comprehensive native export acceptance.
-- [ ] Orders, deposits, layaway and reservation expiry.
-- [ ] Fulfilment, backorders, delivery/dispatch and proof of delivery.
-- [ ] Source channels, storefront/payment links and stock buffers.
+- [x] Local customer orders with agreed quantities and prices, cash deposits, reservation expiry and cancellation with an explicit cash refund.
+- [x] Partial and final counter collection with linked sale receipts and tracked quantities, deposits applied and cash due.
+- [ ] Broader layaway payment and forfeiture terms, backorders, delivery/dispatch and proof of delivery.
+- [ ] Connected order channels, storefront/payment links and stock buffers.
 - [ ] Beverage container/deposit ledger.
 - [ ] Fashion variants/size-colour workflows.
 - [ ] Serial/warranty/repair jobs.

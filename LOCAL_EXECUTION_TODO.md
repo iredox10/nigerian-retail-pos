@@ -16,9 +16,9 @@
 
 1. Exchanges involving customer credit or external payments, advances, store credit, change owed, repayment reversals and disputes.
 2. Customer disputes and merge, additional authorized account adjustments, and separately authenticated manager approvals.
-3. Unapplied supplier credits, damaged-delivery discrepancies and landed-cost allocations.
-4. Structured variant options and nested unit definitions, promotions/bundles/open-price goods and advanced replenishment.
-5. Orders, deposits, layaway, reservations, partial fulfilment, collection, dispatch, tax-invoice requirements and document sharing.
+3. Unapplied supplier credits, supplier claims and stock quarantine.
+4. Structured variant options, nested units, automatic promotions, bundles, open-price goods and advanced replenishment.
+5. Backorders, wider layaway payment terms, dispatch, tax invoices and document sharing.
 6. Per-cashier/register custody, handover/sign-off, historical costing/valuation/COGS, journals and accounting periods.
 7. Local lots/expiry/serial/warranty/service/container/loyalty modules where their requirements are defined.
 8. Owner recovery, encrypted working storage, diagnostics/fault recovery, privacy/help/localization and offline release tooling.
@@ -63,3 +63,13 @@ Four subagents contributed sales documents, photo tools, debt corrections and pu
 - [x] Run full regression tests, rebuild the Linux image and check all three journeys in the disconnected desktop app.
 
 The checkpoint is 593 passing tests. [Build evidence](BUILD_STATUS.md)
+
+## 23 November order and purchasing wave
+
+- [x] Record local orders with agreed prices, cash deposits, cancellation refunds and partial or final collection.
+- [x] Hold remaining order stock through a selected WAT day and show the resulting availability in Sell and Stock.
+- [x] Record purchase delivery shortages, damaged goods and unexpected goods, then resolve them with a reason.
+- [x] Allocate recorded cash expenses to buying receipts and review revisions and removals.
+- [x] Schedule and explicitly apply line promotions with saved review and usage history.
+
+The current test and native acceptance results are recorded in [BUILD_STATUS.md](BUILD_STATUS.md).

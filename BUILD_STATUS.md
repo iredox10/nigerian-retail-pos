@@ -1,8 +1,30 @@
 # Desktop build status
 
-23 November 2026 · Cash exchanges, supplier reimbursements and bulk photo imports
+23 November 2026 · Orders, stock holds, promotions and purchasing
 
 ## Current integrated checkpoint
+
+**608 tests pass** (77 shared and 531 desktop) with zero failures, errors or skips. Ran `gradle :shared:jvmTest :desktopApp:jvmTest :desktopApp:createDistributable --offline`. The Linux image rebuilt successfully.
+
+- More → Customer orders saves agreed goods, units and prices, cash deposits and explicit cancellation refunds. Partial and final counter collections create linked sale receipts and apply the remaining deposit once. Drawer reports and receipt exports retain the linked amounts.
+- Remaining order quantities can be reserved through a selected WAT date. Holds shrink with collection and end on release, cancellation, completion or expiry. Checkout, supplier returns and repacking protect reserved stock. Stock shows on-hand, reserved and available quantities, and Sell uses available quantities. Long-open screens refresh the WAT date every 30 seconds.
+- Stock tools → Promotions configures dated fixed or percentage offers, selling-unit and quantity eligibility and optional sale caps. Sell reviews the exact reduction. Saving checks the terms again and preserves offer details in held baskets and receipts.
+- Stock tools → Landed costs allocates an existing paid expense equally or by purchase value. Shares reconcile to the kobo, and revision/removal keeps earlier reasons and amounts. Purchase cost history shows the allocation.
+- Suppliers → Purchase orders records and resolves shortages, damaged goods and unexpected goods, with an optional link to a matching later receipt. Quarantine and supplier claims remain pending.
+
+### Disconnected desktop checks
+
+Used actual Linux Compose at 1440 × 1000 with isolated sample records and loopback-only networking. Exercised selected keyboard entry, Tab/Enter and pointer actions.
+
+- Recorded a ₦700 deposit and collected two ₦450 soap pieces. The review applied ₦700 and collected ₦200, then showed the remaining quantities and linked receipt. [Deposit](artifacts/desktop-customer-order-deposit.png), [collection review](artifacts/desktop-customer-order-collection-review.png), [partial collection](artifacts/desktop-customer-order-part-collected.png)
+- Reserved 13 soap pieces from 96 on hand. Stock displayed 13 reserved and 83 available, and Sell displayed 83 available. [Saved hold](artifacts/desktop-order-stock-held.png), [Stock](artifacts/desktop-order-stock-available.png), [Sell](artifacts/desktop-order-sell-available.png)
+- Created a one-day 20% malt promotion, reviewed a ₦300 reduction, put aside and resumed the basket, then saved ₦13,700 cash. The saved receipt retained the offer and usage increased by one. [Review](artifacts/desktop-promotion-review.png), [resumed basket](artifacts/desktop-promotion-resumed.png), [receipt](artifacts/desktop-promotion-receipt.png)
+- Allocated a ₦750.01 transport expense across ₦4,000 and ₦20,000 receipts as ₦125.00 and ₦625.01. Revised to an equal split and removed it with a reason. Expected cash stayed ₦8,749.98 through those allocation actions. [Review](artifacts/desktop-landed-cost-review.png), [history](artifacts/desktop-landed-cost-revision-history.png), [drawer](artifacts/desktop-landed-cost-cash.png)
+- Recorded one soap piece missing from an approved four-piece purchase order, then resolved it with the supplier acknowledgement reason. [Review](artifacts/desktop-purchase-discrepancy-review.png), [resolution](artifacts/desktop-purchase-discrepancy-resolved.png)
+
+Automated coverage includes deposit/refund reconciliation, partial collection and encrypted recovery, competing stock holds, cashier permission enforcement, WAT midnight expiry, stale changes and backup tampering, promotion validity and usage, exact expense allocation and discrepancy history. Native hold release and midnight expiry were not exercised. Windows, physical peripherals, comprehensive accessibility, replacement-machine recovery and merchant testing remain pending. The remaining local backlog is in LOCAL_DESKTOP_TODO.md. Cloud sync is excluded by the user's instruction.
+
+## Earlier cash exchange checkpoint
 
 **593 tests pass** (77 shared and 516 desktop) with zero failures, errors or skips. Ran `gradle :shared:jvmTest :desktopApp:jvmTest :desktopApp:createDistributable --offline`. The Linux image is at `desktopApp/build/compose/binaries/main/app/RetailPOS`.
 
