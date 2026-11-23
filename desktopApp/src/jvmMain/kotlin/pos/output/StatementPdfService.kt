@@ -34,7 +34,7 @@ object StatementPdfService {
                     appendLine("Cash applied at sale: ${money(sale.cashMinor)}")
                     appendLine("Credit added at sale: ${money(sale.creditMinor)}")
                 }
-                event.repayment?.let {appendLine("Cash received against debt: ${money(it.amountMinor)}")}
+                event.repayment?.let {appendLine("${if (event.advanceFunded) "Customer advance applied" else "Cash received against debt"}: ${money(it.amountMinor)}")}
                 event.creditReturn?.let {returned ->
                     appendLine("Original sale: ${returned.saleId}")
                     appendLine("Debt reduced for returned goods: ${money(returned.amountMinor)}")
@@ -60,7 +60,7 @@ object StatementPdfService {
     fun supplier(tenant:Tenant,value:SupplierAccountStatement):String {
         val profile=value.profile;val statement=value.statement
         require(profile.tenantId==tenant.id) {"Supplier statement belongs to another shop."}
-        require(SupplierAccountStatementService.build(profile,value.links,value.receipts,value.payments,statement.from,statement.through,value.returns)==value) {"Supplier statement has inconsistent history or totals."}
+        require(SupplierAccountStatementService.build(profile,value.links,value.receipts,value.payments,statement.from,statement.through,value.returns,value.credits)==value) {"Supplier statement has inconsistent history or totals."}
         val receipts=value.receipts.associateBy {it.id}
         return buildString {
             appendLine(tenant.name);appendLine("SUPPLIER STATEMENT")
@@ -84,6 +84,7 @@ object StatementPdfService {
                         appendLine("Purchase return credit: ${money(event.returnCreditMinor)}")
                         if (event.returnCashMinor > 0) appendLine("Cash received on return: ${money(event.returnCashMinor)}")
                     }
+                    event.creditNoteMinor != 0L -> appendLine("Credit note adjustment: ${money(event.creditNoteMinor)}")
                     event.laterPaymentMinor > 0 -> appendLine("Later cash payment: ${money(event.laterPaymentMinor)}")
                     else -> {
                         appendLine("Purchase total: ${money(event.purchaseMinor)}")

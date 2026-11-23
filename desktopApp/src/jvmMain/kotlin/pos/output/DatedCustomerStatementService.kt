@@ -15,7 +15,7 @@ object DatedCustomerStatementService {
         val customer=statement.customer
         val validated=CustomerStatementService.build(customer.tenantId,customer,statement.events.mapNotNull {it.sale},
             statement.events.mapNotNull {it.repayment},statement.events.mapNotNull {it.creditReturn},
-            statement.events.mapNotNull {it.debtAdjustment})
+            statement.events.mapNotNull {it.debtAdjustment}, statement.events.filter {it.advanceFunded}.map {it.id}.toSet())
         require(validated==statement) { "Statement totals do not match the complete saved history." }
         val start=range.from.atStartOfDay(ZoneId.of("Africa/Lagos")).toInstant()
         val end=range.through.plusDays(1).atStartOfDay(ZoneId.of("Africa/Lagos")).toInstant()
@@ -42,7 +42,7 @@ object DatedCustomerStatementService {
         fun amount(value:Long)=CsvCell.Number(BigDecimal.valueOf(value,2).toPlainString())
         fun summary(label:String,balance:Long)=listOf(text(customer.id),text(customer.name),text(range.from.toString()),text(range.through.toString()),text(""),text(label),text(""),text(""),text(""),text(""),amount(balance),text(""),text(""),text(""),text(""),text(""))
         val rows=listOf(summary("Opening debt before selected period",dated.openingMinor))+dated.events.map {(event,balance) ->
-            listOf(text(customer.id),text(customer.name),text(range.from.toString()),text(range.through.toString()),text(event.createdAt),text(if(event.repayment!=null) "Later cash repayment" else event.activity),text(event.id),event.sale?.let {amount(it.totalMinor)} ?: text(""),event.sale?.let {amount(it.creditMinor)} ?: text(""),event.repayment?.let {amount(it.amountMinor)} ?: text(""),amount(balance),event.creditReturn?.let {amount(it.amountMinor)} ?: text(""),event.creditReturn?.let {amount(it.cashRefundMinor)} ?: text(""),
+            listOf(text(customer.id),text(customer.name),text(range.from.toString()),text(range.through.toString()),text(event.createdAt),text(if(event.repayment!=null && !event.advanceFunded) "Later cash repayment" else event.activity),text(event.id),event.sale?.let {amount(it.totalMinor)} ?: text(""),event.sale?.let {amount(it.creditMinor)} ?: text(""),event.repayment?.let {amount(it.amountMinor)} ?: text(""),amount(balance),event.creditReturn?.let {amount(it.amountMinor)} ?: text(""),event.creditReturn?.let {amount(it.cashRefundMinor)} ?: text(""),
                 event.debtAdjustment?.review?.deltaMinor?.let(::amount) ?: text(""),
                 text(event.debtAdjustment?.review?.saleId.orEmpty()), text(event.debtAdjustment?.reason.orEmpty()))
         }+listOf(summary("Closing debt through selected WAT date",dated.closingMinor),summary("Current debt — all saved dates",customer.balanceMinor))

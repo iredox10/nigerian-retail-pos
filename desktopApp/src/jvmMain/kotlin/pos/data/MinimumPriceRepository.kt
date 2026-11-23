@@ -6,14 +6,17 @@ import java.sql.ResultSet
 import java.time.Instant
 import java.util.Base64
 import java.util.UUID
+import java.security.MessageDigest
+import pos.security.MinimumPriceApprovalProof
 
-internal val minimumPriceSnapshotTables=listOf("minimum_price_policies","minimum_price_changes","sale_minimum_price_checks")
+internal val minimumPriceSnapshotTables=listOf("minimum_price_policies","minimum_price_changes","sale_minimum_price_checks","sale_minimum_price_approvals")
 internal fun PosRepository.initializeMinimumPrices() {
     if("minimum_price_captured" !in featureQuery("PRAGMA table_info(sales)") {it.getString("name")}) featureSchema("ALTER TABLE sales ADD COLUMN minimum_price_captured INTEGER NOT NULL DEFAULT 0 CHECK(minimum_price_captured IN(0,1))")
     featureSchema("CREATE TABLE IF NOT EXISTS minimum_price_policies(tenant_id TEXT NOT NULL,product_id TEXT NOT NULL,unit_key TEXT NOT NULL,details TEXT NOT NULL,version INTEGER NOT NULL CHECK(version>0),updated_at TEXT NOT NULL,PRIMARY KEY(tenant_id,product_id,unit_key),FOREIGN KEY(tenant_id,product_id) REFERENCES products(tenant_id,id))")
     featureSchema("CREATE TABLE IF NOT EXISTS minimum_price_changes(tenant_id TEXT NOT NULL,id TEXT NOT NULL,product_id TEXT NOT NULL,unit_key TEXT NOT NULL,previous_details TEXT,current_details TEXT NOT NULL,version INTEGER NOT NULL CHECK(version>0),reason TEXT NOT NULL,created_at TEXT NOT NULL,PRIMARY KEY(tenant_id,id),UNIQUE(tenant_id,product_id,unit_key,version),FOREIGN KEY(tenant_id,product_id,unit_key) REFERENCES minimum_price_policies(tenant_id,product_id,unit_key))")
     featureSchema("CREATE TABLE IF NOT EXISTS sale_minimum_price_checks(tenant_id TEXT NOT NULL,sale_id TEXT NOT NULL,line_key TEXT NOT NULL,product_id TEXT NOT NULL,unit_key TEXT NOT NULL,policy_version INTEGER NOT NULL,required_minor INTEGER NOT NULL CHECK(required_minor>=0),PRIMARY KEY(tenant_id,sale_id,line_key,product_id,unit_key),FOREIGN KEY(tenant_id,sale_id) REFERENCES sales(tenant_id,id),FOREIGN KEY(tenant_id,product_id,unit_key,policy_version) REFERENCES minimum_price_changes(tenant_id,product_id,unit_key,version))")
-    listOf("minimum_price_changes","sale_minimum_price_checks").forEach {table ->listOf("UPDATE","DELETE").forEach {action ->featureSchema("CREATE TRIGGER IF NOT EXISTS ${table}_no_${action.lowercase()} BEFORE $action ON $table BEGIN SELECT RAISE(ABORT,'Minimum-price history cannot be edited or removed'); END")}}
+    featureSchema("CREATE TABLE IF NOT EXISTS sale_minimum_price_approvals(tenant_id TEXT NOT NULL,sale_id TEXT NOT NULL,grant_id TEXT NOT NULL,source_tenant_id TEXT NOT NULL,proof TEXT NOT NULL,PRIMARY KEY(tenant_id,sale_id),UNIQUE(tenant_id,grant_id),FOREIGN KEY(tenant_id,sale_id) REFERENCES sales(tenant_id,id))")
+    listOf("minimum_price_changes","sale_minimum_price_checks","sale_minimum_price_approvals").forEach {table ->listOf("UPDATE","DELETE").forEach {action ->featureSchema("CREATE TRIGGER IF NOT EXISTS ${table}_no_${action.lowercase()} BEFORE $action ON $table BEGIN SELECT RAISE(ABORT,'Minimum-price history cannot be edited or removed'); END")}}
 }
 fun PosRepository.minimumPricePolicies(tenantId:String):List<MinimumPricePolicy> =featureRead(tenantId,StaffPermission.MANAGE_SETTINGS) {minimumPolicies(tenantId)}
 fun PosRepository.minimumPriceHistory(tenantId:String,productId:String,sellingUnitId:String?):List<MinimumPriceChange> =featureRead(tenantId,StaffPermission.MANAGE_SETTINGS) {
@@ -43,21 +46,58 @@ fun PosRepository.saveMinimumPrice(tenantId:String,productId:String,sellingUnitI
     MinimumPricePolicy(tenantId,terms,change.version,change.createdAt)
 }
 
+/** Review the normalized final cart after allocating any basket discount. */
+fun PosRepository.minimumPriceApprovalRequest(tenantId:String,operationId:String,lines:List<CartLine>):MinimumPriceApprovalRequest = featureRead(tenantId,StaffPermission.SELL) {
+    require(lines.all {it.product.tenantId==tenantId}) {"Sale items belong to another shop."}
+    approvalRequest(tenantId,operationId,lines,currentApprovalChecks(tenantId,lines))
+}
+private fun PosRepository.currentApprovalChecks(tenantId:String,lines:List<CartLine>):List<MinimumPriceApprovalCheck> = minimumPolicies(tenantId).flatMap {policy ->
+    lines.mapNotNull {line ->policy.terms.minimumFor(line)?.let {required -> MinimumPriceApprovalCheck(line.key,policy.terms.productId,policy.terms.sellingUnitId.orEmpty(),policy.version,required)}}
+}.sortedWith(compareBy({it.lineKey},{it.productId},{it.unitKey}))
+private fun approvalRequest(tenantId:String,operationId:String,lines:List<CartLine>,checks:List<MinimumPriceApprovalCheck>):MinimumPriceApprovalRequest {
+    val sorted=lines.sortedBy {it.key}
+    val bytes=ByteArrayOutputStream()
+    DataOutputStream(bytes).use {out ->
+        out.writeInt(1);out.writeUTF(tenantId);out.writeUTF(operationId);out.writeInt(sorted.size)
+        sorted.forEach {line ->
+            out.writeUTF(line.product.id);out.writeUTF(line.product.name);out.writeUTF(line.product.unit);out.writeLong(line.product.priceMinor);out.writeInt(line.product.quantityPrecision)
+            out.writeInt(line.quantity);out.writeInt(line.quantityPrecision);out.writeBoolean(line.sellingUnitId!=null);line.sellingUnitId?.let(out::writeUTF)
+            out.writeUTF(line.sellingUnit);out.writeLong(line.unitPriceMinor);out.writeInt(line.baseUnitsPerUnit);out.writeLong(line.discountPerUnitMinor)
+            out.writeBoolean(line.discountReason!=null);line.discountReason?.let(out::writeUTF);out.writeLong(line.basketDiscountMinor);out.writeLong(line.totalMinor)
+        }
+        out.writeInt(checks.size);checks.forEach {out.writeUTF(it.lineKey);out.writeUTF(it.productId);out.writeUTF(it.unitKey);out.writeLong(it.policyVersion);out.writeLong(it.requiredMinor)}
+    }
+    val fingerprint=MessageDigest.getInstance("SHA-256").digest(bytes.toByteArray()).joinToString("") {"%02x".format(it.toInt() and 255)}
+    return MinimumPriceApprovalRequest(tenantId,operationId,fingerprint,sorted.map {MinimumPriceApprovalLine(it.key,it.product.id,it.product.name,it.quantityLabel,it.sellingUnit,it.totalMinor)},checks,cartTotal(lines),lines.any {it.discountPerUnitMinor>0 || it.basketDiscountMinor>0})
+}
+private fun validateApproval(approval:MinimumPriceApprovalWitness,request:MinimumPriceApprovalRequest,time:Instant) {
+    MinimumPriceApprovalProof.verify(approval)
+    require(approval.request==request && !time.isBefore(Instant.parse(approval.approvedAt)) && time.isBefore(Instant.parse(approval.expiresAt))) {"Price approval expired or the sale changed. Ask for a new approval."}
+}
 /** Must receive normalized final lines after their basket-discount allocations. Caller owns sale transaction. */
-internal fun PosRepository.validateMinimumPricesAtCheckout(tenantId:String,lines:List<CartLine>) {
+internal fun PosRepository.validateMinimumPricesAtCheckout(tenantId:String,lines:List<CartLine>,approval:MinimumPriceApprovalWitness?=null,operationId:String?=null) {
     val now=Instant.now()
+    if(approval!=null) validateApproval(approval,approvalRequest(tenantId,requireNotNull(operationId),lines,currentApprovalChecks(tenantId,lines)),now)
     minimumPolicies(tenantId).forEach {policy ->lines.forEach {line ->policy.terms.minimumFor(line)?.let {required ->
         require(!Instant.parse(policy.updatedAt).isAfter(now)) {"The saved minimum price is in the future. Correct the computer clock before selling."}
-        require(line.totalMinor>=required) {"${line.product.name}: ${line.quantityLabel} ${line.sellingUnit} must total at least ${money(required)} after all discounts. Review the sale or ask the owner/manager to review the minimum price under Stock."}
+        require(line.totalMinor>=required || approval!=null) {"${line.product.name}: ${line.quantityLabel} ${line.sellingUnit} must total at least ${money(required)} after all discounts. Review the sale or request approval."}
     }}}
 }
-internal fun PosRepository.captureMinimumPriceChecks(tenantId:String,saleId:String,lines:List<CartLine>) {
+internal fun PosRepository.captureMinimumPriceChecks(tenantId:String,saleId:String,lines:List<CartLine>,approval:MinimumPriceApprovalWitness?=null) {
     val saleTime=featureQuery("SELECT created_at FROM sales WHERE tenant_id=? AND id=?",tenantId,saleId) {Instant.parse(it.getString(1))}.single()
+    if(approval!=null) {
+        validateApproval(approval,approvalRequest(tenantId,saleId,lines,currentApprovalChecks(tenantId,lines)),saleTime)
+        featureExecute("INSERT INTO sale_minimum_price_approvals VALUES(?,?,?,?,?)",tenantId,saleId,approval.id,tenantId,MinimumPriceApprovalProof.encode(approval))
+        featureEvent(tenantId,"minimum_price.override_used",saleId)
+    }
     minimumPolicies(tenantId).forEach {policy ->lines.forEach {line ->policy.terms.minimumFor(line)?.let {required ->
-        require(!Instant.parse(policy.updatedAt).isAfter(saleTime) && line.totalMinor>=required) {"Minimum-price review changed before saving. No sale was recorded."}
+        require(!Instant.parse(policy.updatedAt).isAfter(saleTime) && (line.totalMinor>=required || approval!=null)) {"Minimum-price review changed before saving. No sale was recorded."}
         featureExecute("INSERT INTO sale_minimum_price_checks VALUES(?,?,?,?,?,?,?)",tenantId,saleId,line.key,policy.terms.productId,policy.terms.sellingUnitId.orEmpty(),policy.version,required)
     }}}
     featureExecute("UPDATE sales SET minimum_price_captured=1 WHERE tenant_id=? AND id=?",tenantId,saleId)
+}
+fun PosRepository.minimumPriceApprovalForSale(tenantId:String,saleId:String):MinimumPriceApprovalWitness? =featureRead(tenantId,StaffPermission.VIEW_SALES) {
+    featureQuery("SELECT proof FROM sale_minimum_price_approvals WHERE tenant_id=? AND sale_id=?",tenantId,saleId) {MinimumPriceApprovalProof.decode(it.getString(1))}.singleOrNull()
 }
 internal fun PosRepository.validateMinimumPrices(tenantId:String) {
     val policies=minimumPolicies(tenantId);val changes=minimumChanges(tenantId)
@@ -77,12 +117,26 @@ internal fun PosRepository.validateMinimumPrices(tenantId:String) {
     val captured=featureQuery("SELECT id FROM sales WHERE tenant_id=? AND minimum_price_captured=1",tenantId) {it.getString(1)}.toSet()
     val checks=featureQuery("SELECT * FROM sale_minimum_price_checks WHERE tenant_id=?",tenantId) {MinimumCheck(it.getString("sale_id"),it.getString("line_key"),it.getString("product_id"),it.getString("unit_key"),it.getLong("policy_version"),it.getLong("required_minor"))}
     require(checks.all {it.saleId in captured}) {"Backup minimum-price checks have no captured sale."}
+    val proofs=featureQuery("SELECT * FROM sale_minimum_price_approvals WHERE tenant_id=?",tenantId) {r ->
+        val proof=MinimumPriceApprovalProof.decode(r.getString("proof"))
+        require(proof.id==r.getString("grant_id") && proof.request.tenantId==r.getString("source_tenant_id") && proof.request.operationId==r.getString("sale_id")) {"Backup price approval scope is inconsistent."}
+        r.getString("sale_id") to proof
+    }.toMap()
+    require(proofs.keys.all {it in captured}) {"Backup price approval has no captured sale."}
+    val approvalEvents=featureQuery("SELECT entity_id FROM outbox WHERE tenant_id=? AND kind='minimum_price.override_used'",tenantId) {it.getString(1)}
+    require(approvalEvents.size==proofs.size && approvalEvents.toSet()==proofs.keys) {"Backup price approval activity is incomplete."}
     val expected=mutableSetOf<MinimumCheck>()
     sales(tenantId).filter {it.id in captured}.forEach {sale ->
         val time=Instant.parse(sale.createdAt)
-        changes.filter {!Instant.parse(it.createdAt).isAfter(time)}.groupBy {it.current.key}.values.map {it.maxBy {event ->event.version}}.forEach {event ->sale.lines.forEach {line ->
+        val revisions=changes.filter {!Instant.parse(it.createdAt).isAfter(time)}.groupBy {it.current.key}.values.map {it.maxBy {event ->event.version}}
+        val proof=proofs[sale.id]
+        if(proof!=null) {
+            val historicalChecks=revisions.flatMap {event ->sale.lines.mapNotNull {line ->event.current.minimumFor(line)?.let {MinimumPriceApprovalCheck(line.key,event.current.productId,event.current.sellingUnitId.orEmpty(),event.version,it)}}}.sortedWith(compareBy({it.lineKey},{it.productId},{it.unitKey}))
+            validateApproval(proof,approvalRequest(proof.request.tenantId,sale.id,sale.lines,historicalChecks),time)
+        }
+        revisions.forEach {event ->sale.lines.forEach {line ->
             event.current.minimumFor(line)?.let {required ->
-                require(line.totalMinor>=required) {"Backup sale is below its recorded minimum price."}
+                require(line.totalMinor>=required || proof!=null) {"Backup sale is below its recorded minimum price without authenticated approval."}
                 expected+=MinimumCheck(sale.id,line.key,event.current.productId,event.current.sellingUnitId.orEmpty(),event.version,required)
             }
         }}

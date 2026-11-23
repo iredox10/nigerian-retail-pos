@@ -14,6 +14,12 @@ class PosRepository(path: String = File(System.getProperty("user.home"), ".niger
     // A null callback is for trusted local tooling/tests. The desktop installs a genuine-session
     // validator, including while locked; this adapter is not a server authorization boundary.
     private var permissionCheck: ((String, StaffPermission) -> Unit)? = null
+    private var minimumPriceApprovalCheck: ((String, String, MinimumPriceApprovalRequest) -> MinimumPriceApprovalWitness)? = null
+    @Synchronized fun setMinimumPriceApprovalCheck(check: ((String, String, MinimumPriceApprovalRequest) -> MinimumPriceApprovalWitness)?) { minimumPriceApprovalCheck = check }
+    private var cashHandoverAuthorizationCheck: ((String, String, CashHandoverRequest) -> CashHandoverWitness)? = null
+    @Synchronized fun setCashHandoverAuthorizationCheck(check: ((String, String, CashHandoverRequest) -> CashHandoverWitness)?) { cashHandoverAuthorizationCheck = check }
+    internal fun featureAuthorizeCashHandover(tenantId:String,grantId:String,request:CashHandoverRequest):CashHandoverWitness =
+        requireNotNull(cashHandoverAuthorizationCheck) { "Cash handover authentication is unavailable." }(tenantId,grantId,request)
     private var actorProvider: ((String) -> AuditActor?)? = null
 
     /** Desktop wiring supplies a genuine current identity; trusted tools can be unattributed. */
@@ -165,6 +171,14 @@ class PosRepository(path: String = File(System.getProperty("user.home"), ".niger
         initializeLandedCosts()
         initializePromotions()
         initializeReplenishmentPolicies()
+        initializeSupplierCredits()
+        initializeCustomerDisputes()
+        initializeOrderDispatches()
+        initializeVariantMatrices()
+        initializeCustomerAdvances()
+        initializeInventoryCosting()
+        initializeCashHandovers()
+        initializeBundles()
         execute("CREATE TRIGGER IF NOT EXISTS activity_audit_no_update BEFORE UPDATE ON activity_audit BEGIN SELECT RAISE(ABORT,'Activity history cannot be edited'); END")
         execute("CREATE TRIGGER IF NOT EXISTS activity_audit_no_delete BEFORE DELETE ON activity_audit BEGIN SELECT RAISE(ABORT,'Activity history cannot be removed'); END")
     }
@@ -520,17 +534,17 @@ class PosRepository(path: String = File(System.getProperty("user.home"), ".niger
         return query("SELECT * FROM sales WHERE tenant_id=? ORDER BY created_at DESC",tenantId,map=::sale)
     }
     /** cashMinor is applied cash, excluding change. Caller must explicitly choose a customer for credit. */
-    @Synchronized fun checkout(tenantId: String, lines: List<CartLine>, cashMinor: Long, customerId: String? = null, operationId: String? = null, dueDate: String? = null,basketDiscount:BasketDiscount?=null,externalPayments:List<ExternalPayment> = emptyList(), cashGivenMinor: Long? = null, note: String? = null): Sale =
+    @Synchronized fun checkout(tenantId: String, lines: List<CartLine>, cashMinor: Long, customerId: String? = null, operationId: String? = null, dueDate: String? = null,basketDiscount:BasketDiscount?=null,externalPayments:List<ExternalPayment> = emptyList(), cashGivenMinor: Long? = null, note: String? = null, priceApprovalId: String? = null): Sale =
         checkoutWithPayment(tenantId, lines, cashMinor, customerId, operationId, dueDate, basketDiscount,
-            externalPayments, cashGivenMinor, note, exchange = null)
+            externalPayments, cashGivenMinor, note, exchange = null, priceApprovalId = priceApprovalId)
 
     private fun checkoutWithPayment(
         tenantId: String, lines: List<CartLine>, cashMinor: Long, customerId: String?, operationId: String?,
         dueDate: String?, basketDiscount: BasketDiscount?, externalPayments: List<ExternalPayment>,
-        cashGivenMinor: Long?, note: String?, exchange: ExchangePortion?, orderPayment: OrderPayment? = null,
+        cashGivenMinor: Long?, note: String?, exchange: ExchangePortion?, orderPayment: OrderPayment? = null, priceApprovalId: String? = null,
     ): Sale = transaction {
         requirePermission(tenantId, StaffPermission.SELL)
-        if (basketDiscount!=null || lines.any { it.discountPerUnitMinor > 0 || it.basketDiscountMinor>0 }) requirePermission(tenantId, StaffPermission.DISCOUNT)
+        if (priceApprovalId == null && (basketDiscount!=null || lines.any { it.discountPerUnitMinor > 0 || it.basketDiscountMinor>0 })) requirePermission(tenantId, StaffPermission.DISCOUNT)
         val externalRecorded=externalPaymentTotal(externalPayments)
         val carriedPayment = Math.addExact(exchange?.amountMinor ?: 0L, orderPayment?.depositMinor ?: 0L)
         val recordedPayment = Math.addExact(Math.addExact(cashMinor, externalRecorded), carriedPayment)
@@ -562,7 +576,11 @@ class PosRepository(path: String = File(System.getProperty("user.home"), ".niger
             requireUnreservedStock(tenantId, product, quantity, orderPayment?.orderId, now)
             productId to scaledStock(product, Math.negateExact(quantity))
         }
-        validateMinimumPricesAtCheckout(tenantId,normalized)
+        val priceApproval = priceApprovalId?.let { grantId ->
+            val request = minimumPriceApprovalRequest(tenantId, requireNotNull(operationId) { "Price approval needs a sale operation reference." }, normalized)
+            requireNotNull(minimumPriceApprovalCheck) { "Manager approval is unavailable in this session." }(tenantId, grantId, request)
+        }
+        validateMinimumPricesAtCheckout(tenantId,normalized,priceApproval,operationId)
         val total=cartTotal(normalized)
         require(recordedPayment<=total) { "Record applied cash only; return extra cash as change." }
         val credit=total-recordedPayment
@@ -593,11 +611,20 @@ class PosRepository(path: String = File(System.getProperty("user.home"), ".niger
         if (sale.note != null) featureEvent(tenantId, "sale.note_captured", sale.id)
         captureReceiptProfile(tenantId,sale.id)
         captureReceiptImage(tenantId,sale.id)
-        captureMinimumPriceChecks(tenantId,sale.id,normalized)
+        captureMinimumPriceChecks(tenantId,sale.id,normalized,priceApproval)
         enqueue(tenantId,"sale.completed",sale.id)
         sale
     }
-    @Synchronized fun recordRepayment(tenantId: String, customerId: String, amountMinor: Long, operationId: String? = null) = transaction {
+    @Synchronized fun recordRepayment(tenantId: String, customerId: String, amountMinor: Long, operationId: String? = null) {
+        recordRepaymentWithFunding(tenantId, customerId, amountMinor, operationId, false)
+    }
+
+    /** Called inside the advance application transaction, which records the matching funding witness. */
+    internal fun recordRepaymentFromAdvance(tenantId: String, customerId: String, amountMinor: Long, operationId: String): CustomerRepayment =
+        recordRepaymentWithFunding(tenantId, customerId, amountMinor, operationId, true)
+
+    @Synchronized private fun recordRepaymentWithFunding(tenantId: String, customerId: String, amountMinor: Long,
+        operationId: String?, fromAdvance: Boolean): CustomerRepayment = transaction {
         requirePermission(tenantId, StaffPermission.MANAGE_CUSTOMERS)
         requireTenant(tenantId)
         require(amountMinor>0) { "Enter a payment greater than zero." }
@@ -606,15 +633,27 @@ class PosRepository(path: String = File(System.getProperty("user.home"), ".niger
         val previous=query("SELECT customer_id,amount_minor FROM repayments WHERE tenant_id=? AND id=?",tenantId,paymentId) { it.getString(1) to it.getLong(2) }.singleOrNull()
         if(previous!=null) {
             require(previous.first==customerId && previous.second==amountMinor) { "This repayment was already recorded with different details." }
-            return@transaction
+            require((paymentId in advanceFundedRepaymentIds(tenantId)) == fromAdvance) { "This repayment uses a different funding source." }
+            return@transaction requireRepayment(tenantId, paymentId)
         }
         val now = Instant.now()
         checkDebtAdjustmentClock(tenantId, customerId, now)
         val changed=execute("UPDATE customers SET balance_minor=balance_minor-? WHERE tenant_id=? AND id=? AND balance_minor>=?",amountMinor,tenantId,customerId,amountMinor)
         require(changed==1) { "Customer not found in this shop, or payment exceeds debt." }
         execute("INSERT INTO repayments VALUES(?,?,?,?,?)",paymentId,tenantId,customerId,amountMinor,now.toString())
-        appendCash(tenantId,activeCashShift(tenantId)?.id,"repayment",amountMinor,"Customer repayment",paymentId)
+        if (!fromAdvance) appendCash(tenantId,activeCashShift(tenantId)?.id,"repayment",amountMinor,"Customer repayment",paymentId)
         enqueue(tenantId,"customer.repayment",paymentId)
+        requireRepayment(tenantId, paymentId)
+    }
+
+    internal fun recordCustomerAdvanceCash(tenantId: String, eventId: String, customerId: String, amountMinor: Long, refund: Boolean) {
+        requirePermission(tenantId, StaffPermission.MANAGE_MONEY)
+        requireCustomer(tenantId, customerId)
+        require(amountMinor > 0)
+        val shift = requireCashShift(tenantId)
+        if (refund) requireCashAvailable(tenantId, shift.id, amountMinor)
+        appendCash(tenantId, shift.id, if (refund) "customer_advance_refund" else "customer_advance",
+            if (refund) -amountMinor else amountMinor, if (refund) "Customer advance refunded" else "Customer advance received", eventId)
     }
     @Synchronized fun pendingSyncCount(tenantId: String): Int {
         requireTenant(tenantId)
@@ -1021,7 +1060,7 @@ class PosRepository(path: String = File(System.getProperty("user.home"), ".niger
     @Synchronized fun supplierOutstanding(tenantId:String,receiptId:String):Long {
         val receipt=requireStockReceipt(tenantId,receiptId)
         val paid=supplierPayments(tenantId,receiptId).fold(0L) { total,payment -> Math.addExact(total,payment.amountMinor) }
-        val credited=purchaseReturnCredits(tenantId,receiptId)
+        val credited=Math.addExact(purchaseReturnCredits(tenantId,receiptId), supplierCreditApplied(tenantId,receiptId))
         return Math.subtractExact(Math.subtractExact(receipt.unpaidMinor,paid),credited).also {
             require(it>=0) { "Supplier payments and returns exceed the receipt balance." }
         }
@@ -1043,7 +1082,7 @@ class PosRepository(path: String = File(System.getProperty("user.home"), ".niger
         val shift=requireCashShift(tenantId)
         requireCashAvailable(tenantId,shift.id,amountMinor)
         val now=Instant.now()
-        purchaseReturnLatestTime(tenantId,receiptId)?.let {
+        listOfNotNull(purchaseReturnLatestTime(tenantId,receiptId), supplierCreditLatestTime(tenantId,receiptId)).maxOrNull()?.let {
             require(now>it) { "Correct the computer clock before paying this receipt." }
         }
         val result=SupplierPayment(operationId?:id(),tenantId,receiptId,receipt.supplierName,amountMinor,now.toString())
@@ -1076,7 +1115,7 @@ class PosRepository(path: String = File(System.getProperty("user.home"), ".niger
     }
     private fun supplierPayment(r:ResultSet)=SupplierPayment(r.getString("id"),r.getString("tenant_id"),r.getString("receipt_id"),r.getString("supplier_name"),r.getLong("amount_minor"),r.getString("created_at"))
 
-    private val snapshotTableOrder get() = listOf("products","product_metadata_changes","selling_units","stock_settings_changes","purchase_units","customers","customer_changes","cash_shifts","sales","sale_lines","repayments","repayment_allocations","allocation_reversals","stock_receipts","expenses","sale_returns","return_lines","supplier_payments","cash_entries","catalogue_changes","stock_adjustments","outbox","activity_audit") + supplierProfileSnapshotTables + purchaseOrderSnapshotTables + purchaseDiscrepancySnapshotTables + inventoryDispositionSnapshotTables + stockCountSessionSnapshotTables + shopProfileSnapshotTables + externalPaymentSnapshotTables + priceListSnapshotTables + bulkCatalogueUpdateSnapshotTables + supplierInvoiceSnapshotTables + creditReturnSnapshotTables + quotationSnapshotTables + localImageSnapshotTables + ownerCashSnapshotTables + minimumPriceSnapshotTables + repackingSnapshotTables + expenseAttachmentSnapshotTables + saleTenderSnapshotTables + reminderSnapshotTables + variantSnapshotTables + purchaseReturnSnapshotTables + debtAdjustmentSnapshotTables + cashExchangeSnapshotTables + customerOrderSnapshotTables + orderReservationSnapshotTables + landedCostSnapshotTables + promotionSnapshotTables + replenishmentPolicySnapshotTables
+    private val snapshotTableOrder get() = listOf("products","product_metadata_changes","selling_units","stock_settings_changes","purchase_units","customers","customer_changes","cash_shifts","sales","sale_lines","repayments","repayment_allocations","allocation_reversals","stock_receipts","expenses","sale_returns","return_lines","supplier_payments","cash_entries","catalogue_changes","stock_adjustments","outbox","activity_audit") + supplierProfileSnapshotTables + purchaseOrderSnapshotTables + purchaseDiscrepancySnapshotTables + inventoryDispositionSnapshotTables + stockCountSessionSnapshotTables + shopProfileSnapshotTables + externalPaymentSnapshotTables + priceListSnapshotTables + bulkCatalogueUpdateSnapshotTables + supplierInvoiceSnapshotTables + creditReturnSnapshotTables + quotationSnapshotTables + localImageSnapshotTables + ownerCashSnapshotTables + minimumPriceSnapshotTables + repackingSnapshotTables + expenseAttachmentSnapshotTables + saleTenderSnapshotTables + reminderSnapshotTables + variantSnapshotTables + purchaseReturnSnapshotTables + debtAdjustmentSnapshotTables + cashExchangeSnapshotTables + customerOrderSnapshotTables + orderReservationSnapshotTables + landedCostSnapshotTables + promotionSnapshotTables + replenishmentPolicySnapshotTables + supplierCreditSnapshotTables + customerDisputeSnapshotTables + orderDispatchSnapshotTables + variantMatrixSnapshotTables + customerAdvanceSnapshotTables + inventoryCostingSnapshotTables + cashHandoverSnapshotTables + bundleSnapshotTables
     @Synchronized fun exportTenantSnapshot(tenantId:String):TenantSnapshot = transaction {
         requirePermission(tenantId, StaffPermission.BACKUP)
         requireTenant(tenantId)
@@ -1216,7 +1255,11 @@ class PosRepository(path: String = File(System.getProperty("user.home"), ".niger
                 expectedCashSources[kind to source]=if(outflow) Math.negateExact(amount) else amount
             }
         }
-        sources("sales","sale","cash_minor");sources("repayments","repayment","amount_minor")
+        sources("sales","sale","cash_minor")
+        val fundedRepayments = advanceFundedRepaymentIds(tenant.id)
+        query("SELECT id,amount_minor FROM repayments WHERE tenant_id=?", tenant.id) { it.getString(1) to it.getLong(2) }
+            .filterNot { it.first in fundedRepayments }.forEach { (id, amount) -> expectedCashSources["repayment" to id] = amount }
+        expectedCashSources.putAll(customerAdvanceCashSources(tenant.id))
         sources("expenses","expense","amount_minor",true);sources("stock_receipts","stock_purchase","paid_cash_minor",true)
         sources("sale_returns","refund","refund_minor",true);sources("supplier_payments","supplier_payment","amount_minor",true)
         sources("purchase_cash_returns", "supplier_reimbursement", "cash_received_minor")
@@ -1286,6 +1329,14 @@ class PosRepository(path: String = File(System.getProperty("user.home"), ".niger
         validateLandedCostSnapshot(tenant.id)
         validatePromotionHistory(tenant.id)
         validateReplenishmentPolicies(tenant.id)
+        validateSupplierCredits(tenant.id)
+        validateCustomerDisputeSnapshot(tenant.id)
+        validateOrderDispatchSnapshot(tenant.id)
+        validateVariantMatrices(tenant.id)
+        validateCustomerAdvanceSnapshot(tenant.id)
+        validateInventoryCosting(tenant.id)
+        validateCashHandovers(tenant.id)
+        validateBundles(tenant.id)
         provisionOwner(tenant)
         tenant
     }

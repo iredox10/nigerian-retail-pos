@@ -16,13 +16,14 @@ data class CustomerStatementEvent(
     val id: String, val createdAt: String, val sale: Sale? = null, val repayment: CustomerRepayment? = null,
     val creditReturn:CreditReturnReduction? = null,
     val debtAdjustment: DebtAdjustment? = null,
+    val advanceFunded: Boolean = false,
 ) {
     init { require(listOf(sale,repayment,creditReturn,debtAdjustment).count {it!=null}==1) }
     val debtDeltaMinor:Long get()=debtAdjustment?.review?.deltaMinor
         ?: Math.subtractExact(Math.subtractExact(sale?.creditMinor ?: 0L,repayment?.amountMinor ?: 0L),creditReturn?.amountMinor ?: 0L)
     val activity: String get() = when {
         sale != null -> "Original sale"
-        repayment != null -> "Cash debt repayment"
+        repayment != null -> if (advanceFunded) "Customer advance applied" else "Cash debt repayment"
         creditReturn != null -> "Credit-sale return"
         else -> requireNotNull(debtAdjustment).activity
     }
@@ -40,11 +41,12 @@ data class CustomerStatement(
 object CustomerStatementService {
     /** Input is complete local history for a tenant, never an arbitrary date-filtered debt reconstruction. */
     fun build(tenantId: String, customer: Customer, sales: List<Sale>, repayments: List<CustomerRepayment>,
-        creditReturns:List<CreditReturnReduction> = emptyList(), debtAdjustments: List<DebtAdjustment> = emptyList()): CustomerStatement {
+        creditReturns:List<CreditReturnReduction> = emptyList(), debtAdjustments: List<DebtAdjustment> = emptyList(), advanceFundedRepaymentIds:Set<String> = emptySet()): CustomerStatement {
         require(tenantId.isNotBlank() && customer.tenantId == tenantId) { "Customer belongs to another shop." }
         require(sales.all { it.tenantId == tenantId } && repayments.all { it.tenantId == tenantId } &&
             creditReturns.all {it.tenantId==tenantId} && debtAdjustments.all { it.tenantId == tenantId }) { "History includes another shop's records." }
         require(sales.map { it.id }.distinct().size == sales.size && repayments.map { it.id }.distinct().size == repayments.size && creditReturns.map {it.returnId}.distinct().size==creditReturns.size) { "History contains repeated records." }
+        require(advanceFundedRepaymentIds.all { id -> repayments.any { it.id == id } }) { "Advance funding refers to an unavailable repayment." }
         val customerSales = sales.filter { it.customerId == customer.id }
         val customerPayments = repayments.filter { it.customerId == customer.id }
         val customerReturns=creditReturns.filter {it.customerId==customer.id}
@@ -72,7 +74,7 @@ object CustomerStatementService {
         require(paid <= granted && returned<=granted-paid && writtenOff <= granted - paid - returned &&
             granted - paid - returned - writtenOff == customer.balanceMinor) { "Saved customer debt does not match the available history. Refresh before exporting a statement." }
         val events = (customerSales.map { CustomerStatementEvent(it.id, it.createdAt, sale = it) } +
-            customerPayments.map { CustomerStatementEvent(it.id, it.createdAt, repayment = it) } +
+            customerPayments.map { CustomerStatementEvent(it.id, it.createdAt, repayment = it, advanceFunded = it.id in advanceFundedRepaymentIds) } +
             customerReturns.map {CustomerStatementEvent(it.returnId,it.createdAt,creditReturn=it)} +
             adjustments.map { CustomerStatementEvent(it.id, it.createdAt, debtAdjustment = it) })
             .sortedWith(compareBy<CustomerStatementEvent> { Instant.parse(it.createdAt) }.thenBy { if (it.sale != null) 0 else if(it.repayment!=null) 1 else 2 }.thenBy { it.id })
@@ -82,7 +84,8 @@ object CustomerStatementService {
     fun csv(statement: CustomerStatement): String {
         val verified = build(statement.customer.tenantId, statement.customer,
             statement.events.mapNotNull { it.sale }, statement.events.mapNotNull { it.repayment },
-            statement.events.mapNotNull {it.creditReturn}, statement.events.mapNotNull { it.debtAdjustment })
+            statement.events.mapNotNull {it.creditReturn}, statement.events.mapNotNull { it.debtAdjustment },
+            statement.events.filter { it.advanceFunded }.map { it.id }.toSet())
         require(verified == statement) { "Statement contains inconsistent customer history." }
         fun text(value: String) = CsvCell.Text(value)
         fun amount(value: Long) = CsvCell.Number(BigDecimal.valueOf(value, 2).toPlainString())

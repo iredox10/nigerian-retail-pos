@@ -191,6 +191,7 @@ internal fun PosRepository.validatePurchaseReturns(tenantId: String) {
     val witnessedAt = outbox.toMap()
     val receipts = stockReceipts(tenantId).associateBy { it.id }
     val payments = supplierPayments(tenantId).groupBy { it.receiptId }
+    val creditApplications = supplierCreditAllocationHistory(tenantId).groupBy { it.receiptId }
     val products = products(tenantId, includeArchived = true).associateBy { it.id }
     records.groupBy { it.receiptId }.forEach { (id, returned) ->
         val receipt = requireNotNull(receipts[id]) { "Backup purchase return has no stock receipt." }
@@ -198,7 +199,8 @@ internal fun PosRepository.validatePurchaseReturns(tenantId: String) {
         require(receipt.baseUnit == item.unit && receipt.basePrecision == item.quantityPrecision) {
             "Backup purchase return unit differs from its stock item."
         }
-        val paid = payments[id].orEmpty().map { Instant.parse(it.createdAt) to it.amountMinor }.sortedBy { it.first }
+        val paid = (payments[id].orEmpty().map { Instant.parse(it.createdAt) to it.amountMinor } +
+            creditApplications[id].orEmpty().map { Instant.parse(it.createdAt) to it.signedAmountMinor }).sortedBy { it.first }
         var nextPayment = 0
         var owed = receipt.unpaidMinor
         var returnedQuantity = 0
@@ -265,10 +267,12 @@ private fun PosRepository.purchaseReturnCandidate(
     require(exactReturnProjection(after, item.quantityPrecision)) { "The remaining stock exceeds the supported exact range." }
     val movements = inventoryMovements(tenantId, item.id)
     val payments = supplierPayments(tenantId, receiptId)
-    val latest = (listOf(receipt.createdAt) + movements.map { it.createdAt } + payments.map { it.createdAt }).maxOf(Instant::parse)
+    val creditApplications = supplierCreditAllocationHistory(tenantId).filter { it.receiptId == receiptId }
+    val latest = (listOf(receipt.createdAt) + movements.map { it.createdAt } + payments.map { it.createdAt } + creditApplications.map { it.createdAt }).maxOf(Instant::parse)
     val fields = listOf(tenantId, receipt.id, item.name, stock.toString(), after.toString(), owed.toString(), credit.toString(), quantity.toString(), cash.toString(), shift?.id.orEmpty()) +
         movements.flatMap { listOf(it.id, it.createdAt, it.quantityDelta.toString()) } +
-        payments.sortedBy { it.id }.flatMap { listOf(it.id, it.createdAt, it.amountMinor.toString()) }
+        payments.sortedBy { it.id }.flatMap { listOf(it.id, it.createdAt, it.amountMinor.toString()) } +
+        creditApplications.sortedBy { it.id }.flatMap { listOf(it.id, it.createdAt, it.signedAmountMinor.toString()) }
     val token = HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(
         fields.joinToString("") { "${it.length}:$it" }.toByteArray(),
     ))
