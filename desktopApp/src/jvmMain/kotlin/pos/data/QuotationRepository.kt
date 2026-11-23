@@ -45,6 +45,7 @@ fun PosRepository.reviseQuotation(tenantId:String,quotationId:String,lines:List<
         require(event.kind=="revised" && event.quotationId==quotationId && event.snapshot.version==Math.addExact(expectedVersion,1) && event.snapshot.lines.map {it.input()}==lines && event.snapshot.expiresOn==expiresOn && event.snapshot.customer==customer && event.snapshot.notes==notes.trim() && event.reason==reason) {"This revision request was already used with different terms."}
         return@featureWrite requireQuote(tenantId,quotationId)
     }
+    requireQuotationUnordered(tenantId,quotationId)
     val old=requireQuote(tenantId,quotationId)
     require(old.status==QuotationStatus.ISSUED && old.version==expectedVersion) {"Only the current issued quotation can be revised. Accepted terms stay frozen."}
     val now=quoteTime(old);validateExpiry(expiresOn,now);validateQuoteCustomer(tenantId,customer)
@@ -55,6 +56,7 @@ fun PosRepository.reviseQuotation(tenantId:String,quotationId:String,lines:List<
 fun PosRepository.acceptQuotation(tenantId:String,quotationId:String,expectedVersion:Long,operationId:String=UUID.randomUUID().toString()):Quotation = featureWrite(tenantId,StaffPermission.DISCOUNT) {
     validQuoteId(operationId)
     quoteEvent(tenantId,operationId)?.let {event ->require(event.kind=="accepted" && event.quotationId==quotationId && event.snapshot.version==Math.addExact(expectedVersion,1)) {"This acceptance request was already used."};return@featureWrite requireQuote(tenantId,quotationId)}
+    requireQuotationUnordered(tenantId,quotationId)
     val old=requireQuote(tenantId,quotationId)
     require(old.status==QuotationStatus.ISSUED && old.version==expectedVersion) {"Only the current issued quotation can be accepted."}
     val now=quoteTime(old);require(!quotationExpired(old.expiresOn,Instant.parse(now))) {"This quotation has expired. Issue a reviewed revision before acceptance."}
@@ -65,6 +67,7 @@ fun PosRepository.acceptQuotation(tenantId:String,quotationId:String,expectedVer
 fun PosRepository.cancelQuotation(tenantId:String,quotationId:String,reason:String,expectedVersion:Long,operationId:String=UUID.randomUUID().toString()):Quotation = featureWrite(tenantId,StaffPermission.DISCOUNT) {
     validQuoteId(operationId)
     quoteEvent(tenantId,operationId)?.let {event ->require(event.kind=="cancelled" && event.quotationId==quotationId && event.snapshot.version==Math.addExact(expectedVersion,1) && event.reason==reason) {"This cancellation request was already used."};return@featureWrite requireQuote(tenantId,quotationId)}
+    requireQuotationUnordered(tenantId,quotationId)
     val old=requireQuote(tenantId,quotationId)
     require(old.status in setOf(QuotationStatus.ISSUED,QuotationStatus.ACCEPTED) && old.version==expectedVersion) {"Only the current unconverted quotation can be cancelled."}
     val cancelled=old.copy(status=QuotationStatus.CANCELLED,version=Math.addExact(old.version,1),updatedAt=quoteTime(old))
@@ -82,6 +85,7 @@ fun PosRepository.convertQuotation(tenantId:String,quotationId:String,expectedVe
         return@featureWrite sales(tenantId).single {it.id==operationId}
     }
     require(featureQuery("SELECT id FROM sales WHERE tenant_id=? AND id=?",tenantId,operationId) {it.getString(1)}.isEmpty()) {"This operation ID already belongs to another sale. No quotation was converted."}
+    requireQuotationUnordered(tenantId,quotationId)
     val old=requireQuote(tenantId,quotationId)
     val review=conversionReview(old,expectedVersion)
     require(review.token==reviewToken) {"Goods or prices changed after review. Review the conversion again; nothing has been sold."}
@@ -97,6 +101,7 @@ fun PosRepository.convertQuotation(tenantId:String,quotationId:String,expectedVe
 }
 
 private fun PosRepository.conversionReview(quote:Quotation,expectedVersion:Long):QuotationConversionReview {
+    requireQuotationUnordered(quote.tenantId,quote.id)
     require(quote.status==QuotationStatus.ACCEPTED && quote.version==expectedVersion) {"Accept the current quotation before reviewing a sale. A converted quote cannot be sold again."}
     require(!quotationExpired(quote.expiresOn)) {"This quotation has expired; conversion is unavailable."}
     val products=products(quote.tenantId,true).associateBy {it.id};val units=sellingUnits(quote.tenantId,includeArchived=true).associateBy {it.id}
@@ -136,6 +141,7 @@ private fun PosRepository.recordQuoteEvent(quote:Quotation,operationId:String,ki
     featureEvent(quote.tenantId,"quotation.$kind",operationId)
 }
 private fun PosRepository.quoteRows(tenantId:String)=featureQuery("SELECT * FROM quotations WHERE tenant_id=? ORDER BY id DESC",tenantId,map=::quoteRow)
+internal fun PosRepository.storedQuotation(tenantId: String, quotationId: String): Quotation = requireQuote(tenantId, quotationId)
 private fun PosRepository.requireQuote(tenantId:String,id:String)=requireNotNull(featureQuery("SELECT * FROM quotations WHERE tenant_id=? AND id=?",tenantId,id,map=::quoteRow).singleOrNull()) {"Quotation belongs to another shop or is unavailable."}
 private fun quoteRow(row:ResultSet)=decodeQuotation(row.getString("snapshot"),row.getString("tenant_id")).also {require(it.id==row.getString("id") && it.status.name==row.getString("status") && it.version==row.getLong("version") && it.saleId==row.getString("sale_id")) {"Quotation projection does not match its snapshot."}}
 private fun PosRepository.quoteEvents(tenantId:String,id:String)=featureQuery("SELECT * FROM quotation_events WHERE tenant_id=? AND quotation_id=? ORDER BY version",tenantId,id,map=::quoteEventRow)

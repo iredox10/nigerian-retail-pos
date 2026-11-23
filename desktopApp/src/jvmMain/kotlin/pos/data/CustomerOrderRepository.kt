@@ -86,6 +86,15 @@ fun PosRepository.createCustomerOrder(
         ?: prices.getValue(it.productId).priceMinor) }) { "A selling price changed. Review the order items again." }
     val order = CustomerOrder(operationId, tenantId, customerId, customer.name, source, collectOn,
         note.trim(), now.toString(), lines)
+    insertCustomerOrderSnapshot(order)
+    order
+}
+
+internal fun PosRepository.insertCustomerOrderSnapshot(order: CustomerOrder) {
+    val tenantId = order.tenantId
+    val customerId = order.customerId
+    val source = order.source
+    val collectOn = order.collectOn
     featureExecute("INSERT INTO customer_orders VALUES(?,?,?,?,?,?,?,?)", tenantId, order.id, customerId, order.customerName,
         source, collectOn, order.note, order.createdAt)
     order.lines.forEach { line ->
@@ -94,7 +103,6 @@ fun PosRepository.createCustomerOrder(
             line.baseUnitsPerUnit, line.quantityPrecision, line.quantity, line.agreedUnitPriceMinor)
     }
     featureEvent(tenantId, "order.created", order.id)
-    order
 }
 
 fun PosRepository.recordCustomerOrderDeposit(

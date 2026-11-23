@@ -30,10 +30,13 @@ fun QuotationsScreen(repo:PosRepository,tenantId:String,onChanged:()->Unit,canMa
     var creating by remember {mutableStateOf(false)}
     var cancelling by remember {mutableStateOf(false)}
     var converting by remember {mutableStateOf(false)}
+    var convertingOrder by remember {mutableStateOf(false)}
     var message by remember {mutableStateOf<String?>(null)}
     var error by remember {mutableStateOf<String?>(null)}
     val loaded=remember(tenantId,revision) {runCatching {repo.quotations(tenantId)}}
+    val orderLinks = remember(tenantId, revision) { runCatching { repo.quotationOrderLinks(tenantId) } }
     val quotes=loaded.getOrDefault(emptyList())
+    fun displayedStatus(quote: Quotation) = if (orderLinks.getOrDefault(emptyList()).any { it.quotationId == quote.id }) "Customer order created" else quoteStatus(quote)
     val selected=quotes.find {it.id==selectedId}
     fun refresh(text:String) {revision++;message=text;error=null;onChanged()}
     fun export(quote:Quotation,pdf:Boolean) {
@@ -60,16 +63,17 @@ fun QuotationsScreen(repo:PosRepository,tenantId:String,onChanged:()->Unit,canMa
                 items(visible,key={it.id}) {quote ->Surface(shape=MaterialTheme.shapes.medium) {Column(Modifier.fillMaxWidth().padding(20.dp),verticalArrangement=Arrangement.spacedBy(10.dp)) {
                     Text("Quotation ${quote.id.takeLast(8)} · Revision ${quote.version}",style=MaterialTheme.typography.titleMedium)
                     Text(quote.customer?.name ?: "No customer/contact recorded")
-                    Text("${quoteStatus(quote)} · Valid through ${quote.expiresOn} WAT")
+                    Text("${displayedStatus(quote)} · Valid through ${quote.expiresOn} WAT")
                     LabelValueRow("Agreed total",money(quote.totalMinor),emphasized=true)
                     NeutralButton("Open quotation",{selectedId=quote.id;message=null;error=null})
                 }}}
             }
         }
         selected?.let {quote ->
+            val orderLink = orderLinks.getOrDefault(emptyList()).singleOrNull { it.quotationId == quote.id }
             val history=remember(quote.id,revision) {runCatching {repo.quotationEvents(tenantId,quote.id)}}
             Column(Modifier.weight(1f).verticalScroll(rememberScrollState()),verticalArrangement=Arrangement.spacedBy(14.dp)) {
-                SectionHeader("Quotation ${quote.id.takeLast(8)}","Revision ${quote.version} · ${quoteStatus(quote)}")
+                SectionHeader("Quotation ${quote.id.takeLast(8)}","Revision ${quote.version} · ${displayedStatus(quote)}")
                 LabelValueRow("Valid through",quote.expiresOn+" · whole day WAT")
                 Text("Customer/contact snapshot: ${quote.customer?.name ?: "Not recorded"}")
                 quote.customer?.phone?.let {Text(it)};quote.customer?.address?.let {Text(it)}
@@ -86,10 +90,17 @@ fun QuotationsScreen(repo:PosRepository,tenantId:String,onChanged:()->Unit,canMa
                         NeutralButton("Revise terms",{editing=true})
                         PosButton("Record acceptance",{try {repo.acceptQuotation(tenantId,quote.id,quote.version);refresh("Acceptance recorded. No sale, stock movement or payment was created.")} catch(e:Exception) {error=e.message}},enabled=!quotationExpired(quote.expiresOn))
                     }
-                    if(canManage && quote.status==QuotationStatus.ACCEPTED) PosButton("Review cash sale",{converting=true},enabled=!quotationExpired(quote.expiresOn))
-                    if(canManage && quote.status in setOf(QuotationStatus.ISSUED,QuotationStatus.ACCEPTED)) NeutralButton("Cancel quotation",{cancelling=true})
+                    if(canManage && quote.status==QuotationStatus.ACCEPTED && orderLinks.isSuccess && orderLink == null) {
+                        PosButton("Create customer order", { convertingOrder = true }, enabled = !quotationExpired(quote.expiresOn))
+                        NeutralButton("Review cash sale",{converting=true},enabled=!quotationExpired(quote.expiresOn))
+                    }
+                    if(canManage && quote.status in setOf(QuotationStatus.ISSUED,QuotationStatus.ACCEPTED) && orderLinks.isSuccess && orderLink == null) NeutralButton("Cancel quotation",{cancelling=true})
                 }
-                if(quote.status==QuotationStatus.ACCEPTED) Text("Accepted terms cannot be edited. Cash conversion requires unchanged goods and packs, enough stock, and each agreed price no higher than today's normal price. Other conversion methods remain unavailable.",style=MaterialTheme.typography.bodySmall)
+                orderLinks.exceptionOrNull()?.let { InlineNotice("Order conversion history unavailable", it.message.orEmpty(), NoticeTone.Warning) }
+                orderLink?.let { link ->
+                    InlineNotice("Customer order created", "Order ${link.orderId}. Open Customer orders to record payments, stock holds and collection.", NoticeTone.Info)
+                }
+                if(quote.status==QuotationStatus.ACCEPTED && orderLink == null) Text("Create a customer order using these agreed terms, with an optional cash deposit. Full cash conversion requires enough stock. Both routes preserve the quoted prices and selling units.",style=MaterialTheme.typography.bodySmall)
                 quote.saleId?.let {InlineNotice("Separate sale recorded","Sale ID: $it. This quotation cannot create another sale.",NoticeTone.Info)}
                 HorizontalDivider();SectionHeader("Revision history","Earlier agreed terms stay saved")
                 history.exceptionOrNull()?.let {InlineNotice("History unavailable",it.message ?: "Refresh to try again.",NoticeTone.Warning)}
@@ -104,6 +115,10 @@ fun QuotationsScreen(repo:PosRepository,tenantId:String,onChanged:()->Unit,canMa
     }
     if(creating || editing) QuotationEditor(repo,tenantId,if(editing) selected else null,{creating=false;editing=false}) {value ->selectedId=value.id;creating=false;editing=false;refresh("Quotation revision ${value.version} saved. No goods or money changed.")}
     if(cancelling && selected!=null) CancelQuotationDialog(repo,selected,{cancelling=false}) {cancelling=false;refresh("Quotation cancelled. Earlier terms remain in history.")}
+    if (convertingOrder && selected != null) QuotationOrderDialog(repo, selected, { convertingOrder = false }) { order ->
+        convertingOrder = false
+        refresh("Customer order ${order.id.takeLast(8)} created. Open Customer orders for payments and collection.")
+    }
     if(converting && selected!=null) QuotationCashDialog(repo,selected,{converting=false}) {sale ->converting=false;refresh("Cash sale ${sale.id.takeLast(8)} saved. Stock and cash were recorded once.")}
 }
 private fun quoteStatus(quote:Quotation):String = if(quote.status in setOf(QuotationStatus.ISSUED,QuotationStatus.ACCEPTED) && quotationExpired(quote.expiresOn)) "Expired · ${quote.status.name.lowercase()}" else quote.status.name.lowercase().replaceFirstChar {it.uppercase()}
@@ -202,7 +217,7 @@ private fun QuotationCashDialog(repo:PosRepository,quote:Quotation,dismiss:()->U
     val tender=parseNaira(cash)
     AlertDialog(onDismissRequest=dismiss,title={Text("Review quotation as a cash sale")},text={Column(Modifier.widthIn(max=640.dp).heightIn(max=600.dp).verticalScroll(rememberScrollState()),verticalArrangement=Arrangement.spacedBy(12.dp)) {
         Text("Quotation ${quote.id.takeLast(8)} · accepted revision ${quote.version}")
-        Text("This records a real sale and reduces stock. Count the full cash payment before recording. Transfer, card, credit, orders and changed goods/pack conversions are unavailable here.",style=MaterialTheme.typography.bodySmall)
+        Text("This records a real sale and reduces stock. Count the full cash payment before recording. Transfer, card, credit and changed goods/pack conversions are unavailable here.",style=MaterialTheme.typography.bodySmall)
         review.exceptionOrNull()?.let {InlineNotice("Conversion unavailable",it.message ?: "Review the quotation and goods.",NoticeTone.Warning)}
         review.getOrNull()?.lines?.forEach {line ->
             Text(line.product.name)

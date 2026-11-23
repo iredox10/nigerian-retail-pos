@@ -142,6 +142,7 @@ private fun activityLabel(kind: String): String = when (kind) {
     "supplier.credit_application_reversed" -> "Supplier credit application reversed"
     "supplier.credit_voided" -> "Unused supplier credit note voided"
     "catalogue.variant_matrix_created" -> "Variant matrix created"
+    "order.from_quotation" -> "Order created from quotation"
     "order_dispatch.dispatched" -> "Order goods dispatched"
     "order_dispatch.delivered" -> "Order delivery recorded"
     "order_dispatch.failed" -> "Order delivery failed"
