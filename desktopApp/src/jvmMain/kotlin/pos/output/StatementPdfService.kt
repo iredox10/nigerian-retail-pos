@@ -80,7 +80,10 @@ object StatementPdfService {
                 appendLine("Source ID: ${event.id}");appendLine("Stock receipt ID: ${event.receiptId}")
                 appendLine("Supplier name saved on receipt: ${receipts.getValue(event.receiptId).supplierName}")
                 when {
-                    event.returnCreditMinor > 0 -> appendLine("Purchase return credit: ${money(event.returnCreditMinor)}")
+                    event.isReturn -> {
+                        appendLine("Purchase return credit: ${money(event.returnCreditMinor)}")
+                        if (event.returnCashMinor > 0) appendLine("Cash received on return: ${money(event.returnCashMinor)}")
+                    }
                     event.laterPaymentMinor > 0 -> appendLine("Later cash payment: ${money(event.laterPaymentMinor)}")
                     else -> {
                         appendLine("Purchase total: ${money(event.purchaseMinor)}")
@@ -93,6 +96,7 @@ object StatementPdfService {
             appendLine("Cash paid at receipt in period: ${money(statement.paidAtReceiptMinor)}")
             appendLine("Later payments in period: ${money(statement.laterPaymentsMinor)}")
             appendLine("Purchase return credits in period: ${money(statement.returnCreditsMinor)}")
+            if (statement.returnCashMinor > 0) appendLine("Cash received on returns in period: ${money(statement.returnCashMinor)}")
             appendLine("Closing amount owed: ${money(statement.closingMinor)}")
             appendLine("Closing amount owed is through the selected WAT end date.")
             appendLine("Current outstanding, all saved dates: ${money(statement.currentOutstandingMinor)}")

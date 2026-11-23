@@ -13,10 +13,11 @@ import java.time.ZoneId
 data class SupplierStatementEvent(
     val id:String, val receiptId:String, val createdAt:String,
     val purchaseMinor:Long, val paidAtReceiptMinor:Long, val laterPaymentMinor:Long,
-    val balanceAfterMinor:Long, val returnCreditMinor:Long=0,
+    val balanceAfterMinor:Long, val returnCreditMinor:Long=0, val returnCashMinor:Long=0,
 ) {
+    val isReturn: Boolean get() = returnCreditMinor > 0 || returnCashMinor > 0
     val activity: String get() = when {
-        returnCreditMinor > 0 -> "Purchase return"
+        isReturn -> "Purchase return"
         laterPaymentMinor > 0 -> "Later cash payment"
         else -> "Stock received"
     }
@@ -29,7 +30,7 @@ data class SupplierStatement(
     val events:List<SupplierStatementEvent>, val openingMinor:Long, val closingMinor:Long,
     val purchasesMinor:Long, val paidAtReceiptMinor:Long, val laterPaymentsMinor:Long,
     val currentOutstandingMinor:Long,
-    val returns:List<PurchaseReturn> = emptyList(), val returnCreditsMinor:Long=0,
+    val returns:List<PurchaseReturn> = emptyList(), val returnCreditsMinor:Long=0, val returnCashMinor:Long=0,
 )
 
 object SupplierStatementService {
@@ -62,8 +63,10 @@ object SupplierStatementService {
                     "Purchase return dates are inconsistent."
                 }
                 val paidBefore = receiptPayments.filter {Instant.parse(it.createdAt) < time}.sumOf {it.amountMinor}
-                require(event.owedBeforeMinor == receipt.unpaidMinor - credits - paidBefore &&
-                    event.creditMinor == receipt.purchaseReturnCredit(quantity, event.quantity) &&
+                val owed = receipt.unpaidMinor - credits - paidBefore
+                val value = receipt.purchaseReturnCredit(quantity, event.quantity)
+                require(event.owedBeforeMinor == owed && event.creditMinor == minOf(value, owed) &&
+                    event.returnedValueMinor == value &&
                     event.stockBefore - event.stockAfter == receipt.purchaseReturnBaseQuantity(event.quantity)) {
                     "A purchase return does not match its recorded receipt balance or quantity."
                 }
@@ -83,9 +86,9 @@ object SupplierStatementService {
         val end=through.plusDays(1).atStartOfDay(zone).toInstant()
         val all=(selectedReceipts.map { SupplierStatementEvent(it.id,it.id,it.createdAt,it.totalCostMinor,it.paidCashMinor,0,0) }+
             selectedPayments.map { SupplierStatementEvent(it.id,it.receiptId,it.createdAt,0,0,it.amountMinor,0) }+
-            selectedReturns.map { SupplierStatementEvent(it.id,it.receiptId,it.createdAt,0,0,0,0,it.creditMinor) })
+            selectedReturns.map { SupplierStatementEvent(it.id,it.receiptId,it.createdAt,0,0,0,0,it.creditMinor,it.cashReceivedMinor) })
             .sortedWith(compareBy<SupplierStatementEvent> {Instant.parse(it.createdAt)}
-                .thenBy {if(it.laterPaymentMinor == 0L && it.returnCreditMinor == 0L) 0 else 1}.thenBy {it.id})
+                .thenBy {if(it.laterPaymentMinor == 0L && !it.isReturn) 0 else 1}.thenBy {it.id})
         var balance=0L
         var opening=0L
         var closing=0L
@@ -104,18 +107,18 @@ object SupplierStatementService {
         val laterPaid=total(visible.map {it.laterPaymentMinor})
         val credits=total(visible.map {it.returnCreditMinor})
         require(Math.subtractExact(Math.subtractExact(Math.addExact(opening,purchased-initialPaid),laterPaid),credits)==closing) { "Supplier statement does not reconcile." }
-        return SupplierStatement(tenantId,supplierName,from,through,selectedReceipts,selectedPayments,visible,opening,closing,purchased,initialPaid,laterPaid,balance,selectedReturns,credits)
+        return SupplierStatement(tenantId,supplierName,from,through,selectedReceipts,selectedPayments,visible,opening,closing,purchased,initialPaid,laterPaid,balance,selectedReturns,credits,total(visible.map { it.returnCashMinor }))
     }
 
     fun csv(statement:SupplierStatement):String {
         require(build(statement.tenantId,statement.supplierName,statement.receipts,statement.payments,statement.from,statement.through,statement.returns)==statement) { "Supplier statement has inconsistent history or totals." }
         fun text(value:String)=CsvCell.Text(value)
         fun amount(value:Long)=CsvCell.Number(BigDecimal.valueOf(value,2).toPlainString())
-        fun row(kind:String,id:String="",receipt:String="",date:String="",purchase:Long=0,paid:Long=0,later:Long=0,balance:Long,credit:Long=0)=
-            listOf(text(statement.supplierName),text(statement.from.toString()),text(statement.through.toString()),text(kind),text(id),text(receipt),text(date),amount(purchase),amount(paid),amount(later),amount(balance),amount(credit))
+        fun row(kind:String,id:String="",receipt:String="",date:String="",purchase:Long=0,paid:Long=0,later:Long=0,balance:Long,credit:Long=0,cash:Long=0)=
+            listOf(text(statement.supplierName),text(statement.from.toString()),text(statement.through.toString()),text(kind),text(id),text(receipt),text(date),amount(purchase),amount(paid),amount(later),amount(balance),amount(credit),amount(cash))
         val rows=listOf(row("Opening balance before period",balance=statement.openingMinor))+
-            statement.events.map {event -> row(event.activity,event.id,event.receiptId,event.createdAt,event.purchaseMinor,event.paidAtReceiptMinor,event.laterPaymentMinor,event.balanceAfterMinor,event.returnCreditMinor) }+
+            statement.events.map {event -> row(event.activity,event.id,event.receiptId,event.createdAt,event.purchaseMinor,event.paidAtReceiptMinor,event.laterPaymentMinor,event.balanceAfterMinor,event.returnCreditMinor,event.returnCashMinor) }+
             listOf(row("Closing balance through selected WAT date",balance=statement.closingMinor),row("Current outstanding — all recorded dates",balance=statement.currentOutstandingMinor))
-        return CsvService.encode(listOf("Supplier name exactly as recorded","From WAT","Through WAT","Activity","Source ID","Stock receipt ID","Recorded at UTC","Purchase total NGN","Cash paid at receipt NGN","Later cash payment NGN","Recorded balance NGN","Purchase return credit NGN"),rows)
+        return CsvService.encode(listOf("Supplier name exactly as recorded","From WAT","Through WAT","Activity","Source ID","Stock receipt ID","Recorded at UTC","Purchase total NGN","Cash paid at receipt NGN","Later cash payment NGN","Recorded balance NGN","Purchase return credit NGN","Cash received on return NGN"),rows)
     }
 }

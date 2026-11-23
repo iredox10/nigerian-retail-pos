@@ -40,11 +40,11 @@ object SupplierAccountStatementService {
         fun text(v:String)=CsvCell.Text(v)
         fun money(v:Long)=CsvCell.Number(BigDecimal.valueOf(v,2).toPlainString())
         val receipts=value.receipts.associateBy {it.id}
-        fun row(kind:String,source:String="",receiptId:String="",date:String="",purchase:Long=0,paid:Long=0,later:Long=0,balance:Long,credit:Long=0)=listOf(
-            text(value.profile.id),text(value.profile.details.name),text(receipts[receiptId]?.supplierName.orEmpty()),text(s.from.toString()),text(s.through.toString()),text(kind),text(source),text(receiptId),text(date),money(purchase),money(paid),money(later),money(balance),money(credit))
+        fun row(kind:String,source:String="",receiptId:String="",date:String="",purchase:Long=0,paid:Long=0,later:Long=0,balance:Long,credit:Long=0,cash:Long=0)=listOf(
+            text(value.profile.id),text(value.profile.details.name),text(receipts[receiptId]?.supplierName.orEmpty()),text(s.from.toString()),text(s.through.toString()),text(kind),text(source),text(receiptId),text(date),money(purchase),money(paid),money(later),money(balance),money(credit),money(cash))
         val rows=listOf(row("Opening balance before period",balance=s.openingMinor))+s.events.map {event ->
-            row(event.activity,event.id,event.receiptId,event.createdAt,event.purchaseMinor,event.paidAtReceiptMinor,event.laterPaymentMinor,event.balanceAfterMinor,event.returnCreditMinor)
+            row(event.activity,event.id,event.receiptId,event.createdAt,event.purchaseMinor,event.paidAtReceiptMinor,event.laterPaymentMinor,event.balanceAfterMinor,event.returnCreditMinor,event.returnCashMinor)
         }+listOf(row("Closing balance through selected WAT date",balance=s.closingMinor),row("Current outstanding — all recorded dates",balance=s.currentOutstandingMinor))
-        return CsvService.encode(listOf("Supplier account ID","Current supplier profile name","Supplier name saved on receipt","From WAT","Through WAT","Activity","Source ID","Stock receipt ID","Recorded at UTC","Purchase total NGN","Cash paid at receipt NGN","Later cash payment NGN","Recorded balance NGN","Purchase return credit NGN"),rows)
+        return CsvService.encode(listOf("Supplier account ID","Current supplier profile name","Supplier name saved on receipt","From WAT","Through WAT","Activity","Source ID","Stock receipt ID","Recorded at UTC","Purchase total NGN","Cash paid at receipt NGN","Later cash payment NGN","Recorded balance NGN","Purchase return credit NGN","Cash received on return NGN"),rows)
     }
 }

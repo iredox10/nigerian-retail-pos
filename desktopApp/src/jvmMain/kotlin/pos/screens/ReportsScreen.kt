@@ -82,6 +82,7 @@ fun ReportsScreen(repo: PosRepository, tenantId: String) {
                     sum(expenses.map { it.amountMinor }), sum(returns.map { it.refundMinor }), sum(receipts.map { it.totalCostMinor }),
                     sum(receipts.map { it.paidCashMinor }), sum(supplierPayments.map { it.amountMinor }), sum(cash.map { it.amountMinor }),sum(sales.map {it.externalRecordedMinor}),sum(returns.map {it.creditReductionMinor}),
                     sum(sales.map { it.exchange?.amountMinor ?: 0L }), sum(returns.map { it.returnedValueMinor }),
+                    sum(cash.filter { it.kind == "supplier_reimbursement" }.map { it.amountMinor }),
                 )
             }
             calculated.exceptionOrNull()?.let { InlineNotice("Report could not be calculated", it.message ?: "A stored date or amount needs checking.", NoticeTone.Danger) }
@@ -108,6 +109,7 @@ fun ReportsScreen(repo: PosRepository, tenantId: String) {
                     LabelValueRow("Stock purchase value received in range", money(amounts.purchases))
                     LabelValueRow("Cash paid when receiving that stock", money(amounts.purchaseCash))
                     LabelValueRow("Later supplier payments made in range", money(amounts.supplierPayments))
+                    if (amounts.supplierReimbursements > 0) LabelValueRow("Cash received on supplier returns", money(amounts.supplierReimbursements))
                     LabelValueRow("Net recorded cash movements in range", money(amounts.netCash))
                     Text("Net movements include manual cash in/out and unassigned entries, but not opening cash counts. This is not the current drawer balance. Use Money → Today's cash for an active shift.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 } }
@@ -159,4 +161,4 @@ fun ReportsScreen(repo: PosRepository, tenantId: String) {
     }
 }
 
-private data class ReportAmounts(val sales: Long, val saleCash: Long, val saleCredit: Long, val currentDebt: Long, val repayments: Long, val expenses: Long, val refunds: Long, val purchases: Long, val purchaseCash: Long, val supplierPayments: Long, val netCash: Long,val externalRecorded:Long,val creditReduced:Long, val exchangeApplied: Long, val returnedValue: Long)
+private data class ReportAmounts(val sales: Long, val saleCash: Long, val saleCredit: Long, val currentDebt: Long, val repayments: Long, val expenses: Long, val refunds: Long, val purchases: Long, val purchaseCash: Long, val supplierPayments: Long, val netCash: Long,val externalRecorded:Long,val creditReduced:Long, val exchangeApplied: Long, val returnedValue: Long, val supplierReimbursements: Long)
