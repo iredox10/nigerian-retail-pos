@@ -1,5 +1,8 @@
 package pos.screens
 
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.delay
 import pos.data.orderReservationDate
 
@@ -50,6 +53,9 @@ fun SellScreen(
     imageRevision:Int=0,
     onCheckout: (List<CartLine>, Long, String?, String, String?, BasketDiscount?, List<ExternalPayment>, Long, String?) -> String?,
 ) {
+    val receiptScope = rememberCoroutineScope()
+    var receiptPrinting by remember { mutableStateOf(false) }
+    var printMessage by remember { mutableStateOf<String?>(null) }
     val draftStoreResult = remember(tenantId) { runCatching { DraftStore(tenantId) } }
     val reservationDate by produceState(orderReservationDate(java.time.Instant.now()), tenantId) {
         while (true) {
@@ -322,20 +328,41 @@ fun SellScreen(
                             if (stage == "payment") TextButton({ stage = "items"; error = null }) { Text("Back to items") }
                         }
                         if (stage == "saved") {
-                            Spacer(Modifier.height(24.dp))
-                            Text(if (savedCredit > 0) "Customer owes ${money(savedCredit)}" else if(savedExternal>0) "External payment recorded · not confirmed" else "Paid in cash", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold)
-                            if(savedCredit>0 && savedExternal>0) Text("External payment recorded · not confirmed",color=MaterialTheme.colorScheme.error)
-                            Text(money(savedTotal), fontSize = 40.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(vertical = 24.dp))
-                            Text("Receipt ${operationId.take(8)}", style = MaterialTheme.typography.bodySmall)
-                            if (savedChange > 0) {
-                                Text("Change to give", style = MaterialTheme.typography.titleMedium)
-                                Text(money(savedChange), fontSize = 28.sp, fontWeight = FontWeight.SemiBold)
+                            Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
+                                Spacer(Modifier.height(24.dp))
+                                Text(if (savedCredit > 0) "Customer owes ${money(savedCredit)}" else if(savedExternal>0) "External payment recorded · not confirmed" else "Paid in cash", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold)
+                                if(savedCredit>0 && savedExternal>0) Text("External payment recorded · not confirmed",color=MaterialTheme.colorScheme.error)
+                                Text(money(savedTotal), fontSize = 40.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(vertical = 24.dp))
+                                Text("Receipt ${operationId.take(8)}", style = MaterialTheme.typography.bodySmall)
+                                if (savedChange > 0) {
+                                    Text("Change to give", style = MaterialTheme.typography.titleMedium)
+                                    Text(money(savedChange), fontSize = 28.sp, fontWeight = FontWeight.SemiBold)
+                                }
+                                Text("Saved on this computer. Find this receipt in Sales.", Modifier.padding(top = 24.dp), style = MaterialTheme.typography.bodyMedium)
+                                Text("Print a copy now, or find this receipt in Sales anytime.", Modifier.padding(top = 12.dp), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                printMessage?.let { Text(it, Modifier.padding(top = 12.dp), style = MaterialTheme.typography.bodySmall) }
+                                error?.let { Text(it,color=MaterialTheme.colorScheme.error,modifier=Modifier.padding(top=12.dp)) }
                             }
-                            Text("Saved on this computer. Find this receipt in Sales.", Modifier.padding(top = 24.dp), style = MaterialTheme.typography.bodyMedium)
-                            Text("Print or export this receipt from Sales. Online sync is not connected yet.", Modifier.padding(top = 12.dp), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            error?.let { Text(it,color=MaterialTheme.colorScheme.error,modifier=Modifier.padding(top=12.dp)) }
-                            Spacer(Modifier.weight(1f))
-                            Button(onClick = { resetCurrent() }, shape = MaterialTheme.shapes.small, modifier = Modifier.fillMaxWidth().height(56.dp)) {
+                            Spacer(Modifier.height(16.dp))
+                            pos.ui.components.PosButton(if (receiptPrinting) "Opening printer…" else "Print receipt", {
+                                receiptPrinting = true
+                                printMessage = null
+                                receiptScope.launch {
+                                    try {
+                                        val submitted = withContext(Dispatchers.IO) {
+                                            val repo = requireNotNull(repository) { "Open Sales to print this saved receipt." }
+                                            val pdf = pos.output.savedReceiptPdf(repo, tenantId, operationId)
+                                            pos.output.ReceiptDesignPrinter.print(pdf)
+                                        }
+                                        printMessage = if (submitted) "Receipt sent to the printer. Check the printer for delivery."
+                                            else "Printing cancelled. You can print this receipt again."
+                                    } catch (e: Exception) {
+                                        printMessage = e.message ?: "Receipt printing failed. You can retry or open Sales."
+                                    } finally { receiptPrinting = false }
+                                }
+                            }, Modifier.fillMaxWidth(), enabled = !receiptPrinting && repository != null)
+                            Spacer(Modifier.height(12.dp))
+                            OutlinedButton(onClick = { printMessage = null; resetCurrent() }, enabled = !receiptPrinting, shape = MaterialTheme.shapes.small, modifier = Modifier.fillMaxWidth().height(56.dp)) {
                                 PosIcon(PosIcons.Plus)
                                 Spacer(Modifier.width(8.dp))
                                 Text("New sale")
