@@ -32,11 +32,19 @@ fun PurchaseOrdersScreen(repo:PosRepository,tenantId:String,onChanged:()->Unit) 
     var editing by remember {mutableStateOf(false)}
     var receiving by remember {mutableStateOf(false)}
     var cancelling by remember {mutableStateOf(false)}
+    var reportingDiscrepancy by remember {mutableStateOf(false)}
+    var resolvingDiscrepancy by remember {mutableStateOf<PurchaseDiscrepancy?>(null)}
     var message by remember {mutableStateOf<String?>(null)}
     var error by remember {mutableStateOf<String?>(null)}
     val loaded=remember(tenantId,revision) {runCatching {repo.purchaseOrders(tenantId)}}
     val orders=loaded.getOrDefault(emptyList())
     val selected=orders.find {it.id==selectedId}
+    val history=remember(selected,revision) {selected?.let {
+        runCatching {Triple(repo.purchaseOrderDeliveries(tenantId,it.id),repo.purchaseOrderRemaining(tenantId,it.id),repo.purchaseOrderEvents(tenantId,it.id))}
+    }}
+    val discrepancies=remember(selected,revision) {selected?.takeIf {it.approvedAt!=null}?.let {
+        runCatching {repo.purchaseDiscrepancies(tenantId,it.id)}
+    }}
     fun refresh(text:String) {revision++;message=text;error=null;onChanged()}
     Column(Modifier.fillMaxSize(),verticalArrangement=Arrangement.spacedBy(16.dp)) {
         Row(verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(12.dp)) {
@@ -58,9 +66,8 @@ fun PurchaseOrdersScreen(repo:PosRepository,tenantId:String,onChanged:()->Unit) 
                 }}}
             }
         } else if(selected!=null) {
-            val history=remember(selected,revision) {runCatching {Triple(repo.purchaseOrderDeliveries(tenantId,selected.id),repo.purchaseOrderRemaining(tenantId,selected.id),repo.purchaseOrderEvents(tenantId,selected.id))}}
-            history.exceptionOrNull()?.let {InlineNotice("Order history unavailable",it.message ?: "Refresh and try again.",NoticeTone.Danger)}
-            if(history.isSuccess) {
+            history?.exceptionOrNull()?.let {InlineNotice("Order history unavailable",it.message ?: "Refresh and try again.",NoticeTone.Danger)}
+            if(history?.isSuccess==true) {
                 val (deliveries,remaining,events)=history.getOrThrow()
                 LazyColumn(Modifier.weight(1f),verticalArrangement=Arrangement.spacedBy(16.dp)) {
                     item {Surface(shape=MaterialTheme.shapes.medium) {Column(Modifier.fillMaxWidth().padding(20.dp),verticalArrangement=Arrangement.spacedBy(10.dp)) {
@@ -101,6 +108,23 @@ fun PurchaseOrdersScreen(repo:PosRepository,tenantId:String,onChanged:()->Unit) 
                         Text("Delivery ${delivery.id.takeLast(8)} · ${delivery.createdAt}",fontWeight=FontWeight.Medium)
                         delivery.lines.forEach {received ->val line=selected.lines.single {it.id==received.lineId};Text("${quantityLabel(received.quantity.toLong(),line.quantityPrecision)} ${line.buyingUnit} ${line.productName} · Receipt ${received.receiptId}",style=MaterialTheme.typography.bodySmall)}
                     }}}
+                    if(discrepancies!=null) {
+                        item {
+                            Column(verticalArrangement=Arrangement.spacedBy(8.dp)) {
+                                SectionHeader("Delivery discrepancies", "Follow up on missing, damaged or unexpected goods.")
+                                discrepancies.exceptionOrNull()?.let { InlineNotice("Discrepancies unavailable", it.message ?: "Reopen the order.", NoticeTone.Danger) }
+                                if(selected.status==PurchaseOrderStatus.APPROVED && discrepancies.isSuccess) {
+                                    NeutralButton("Record discrepancy", { reportingDiscrepancy = true })
+                                }
+                                if(discrepancies.getOrNull()?.isEmpty()==true) {
+                                    Text("No discrepancies recorded for this order.", style=MaterialTheme.typography.bodySmall)
+                                }
+                            }
+                        }
+                        items(discrepancies.getOrDefault(emptyList()),key={"discrepancy:${it.report.id}"}) {entry ->
+                            PurchaseDiscrepancyCard(entry) { resolvingDiscrepancy = entry.report }
+                        }
+                    }
                     item {SectionHeader("Order history","Draft revisions and approvals remain recorded.")}
                     items(events.reversed(),key={it.id}) {event ->Text("Revision ${event.version} · ${event.createdAt} · ${event.reason}",style=MaterialTheme.typography.bodySmall)}
                 }
@@ -112,6 +136,18 @@ fun PurchaseOrdersScreen(repo:PosRepository,tenantId:String,onChanged:()->Unit) 
         creating=false;editing=false;selectedId=saved.id;refresh("Purchase order draft saved. Stock and money are unchanged.")
     }
     if(receiving && selected!=null) PurchaseDeliveryDialog(repo,selected,{receiving=false}) {receiving=false;refresh("Delivery received. Stock, cash applied and supplier balances were saved together.")}
+    if (reportingDiscrepancy && selected != null && history?.isSuccess == true) {
+        ReportPurchaseDiscrepancyDialog(repo, selected, history.getOrThrow().second, { reportingDiscrepancy = false }) {
+            reportingDiscrepancy = false
+            refresh("Delivery discrepancy recorded.")
+        }
+    }
+    resolvingDiscrepancy?.let { report ->
+        ResolvePurchaseDiscrepancyDialog(repo, report, { resolvingDiscrepancy = null }) {
+            resolvingDiscrepancy = null
+            refresh("Delivery discrepancy resolved.")
+        }
+    }
     if(cancelling && selected!=null) {
         var reason by remember {mutableStateOf("")};var localError by remember {mutableStateOf<String?>(null)}
         val operation=remember(selected.id,reason) {UUID.randomUUID().toString()}
@@ -190,7 +226,7 @@ private fun PurchaseDeliveryDialog(repo:PosRepository,order:PurchaseOrder,dismis
         Math.addExact(sum.first,total) to Math.addExact(sum.second,p)
     }}
     AlertDialog(onDismissRequest=dismiss,title={Text("Receive purchase order delivery")},text={Column(Modifier.widthIn(max=600.dp).heightIn(max=600.dp).verticalScroll(rememberScrollState()),verticalArrangement=Arrangement.spacedBy(12.dp)) {
-        Text("Record only accepted goods entering sellable stock. Damaged/quarantined deliveries are not supported here; leave unaccepted quantities unreceived. Blank quantities leave a line unreceived. Enter cash paid on every received line; enter 0 explicitly when the supplier is still owed.")
+        Text("Enter the goods accepted into sellable stock. Use Delivery discrepancies for shortages, damage or unexpected items. Leave quantities blank for unreceived lines. Enter the cash paid for each line, or enter 0 if you still owe the supplier.")
         loaded.exceptionOrNull()?.let {InlineNotice("Receiving unavailable",it.message ?: "Reopen the order.",NoticeTone.Danger)}
         order.lines.filter {loaded.getOrNull()?.first?.get(it.id)?.let {remaining ->remaining>0}==true}.forEach {line ->
             val remaining=loaded.getOrThrow().first.getValue(line.id)
