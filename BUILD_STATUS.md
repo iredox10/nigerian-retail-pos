@@ -2,6 +2,12 @@
 
 23 November 2026 · Orders, stock holds, promotions and purchasing
 
+## Android product quantity selector — 23 November 2026
+
+A phone user reported “Choose zero to six quantity decimal places” while adding goods. Replaced the free-text precision field with a labeled selector limited to the supported 0–6 choices. Whole quantities (0) remain the explicit default; measured options show examples such as 1.250 for three places. The existing precision/quantity persistence rules remain unchanged, including immutable product precision.
+
+Android debug build and all 6 Android JVM tests pass (`:androidApp:testDebugUnitTest :androidApp:assembleDebug --offline`, installed Gradle 8.13/JDK17, 27 seconds). Actual emulator renders verified the whole-quantity default, all seven menu choices and selected three-place measured option: [default](artifacts/android-product-precision-selector.png), [measured choice](artifacts/android-product-precision-measured.png). The emulator disconnected before the final product-save walkthrough; no completed save is claimed for this UI change. The physical phone was also disconnected, so the rebuilt APK has not yet been installed there. Saved business data was not reset or changed by this fix.
+
 ## Android build, native storage and offline phone checks — 23 November 2026
 
 **680 shared/desktop tests pass** (79 shared + 601 desktop), together with **6 Android JVM checkout tests** and **16 native Android instrumentation tests**, all without failures, errors or skips. The final build ran `:shared:jvmTest :desktopApp:jvmTest :desktopApp:createDistributable :androidApp:testDebugUnitTest :androidApp:assembleDebug :androidApp:assembleDebugAndroidTest --offline` using installed Gradle 8.13 and JDK 17, successful in 61 seconds. The wrapper declares Gradle 8.14.3 but its distribution was not locally cached; it was not used for this checkpoint. Native instrumentation ran separately in 17.306 seconds on the API 37 `sdk_gphone16k_x86_64` emulator.
