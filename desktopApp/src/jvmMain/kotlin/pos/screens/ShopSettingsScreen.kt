@@ -33,7 +33,7 @@ fun ShopSettingsScreen(repo: PosRepository, tenant: Tenant, onChanged: () -> Uni
     var address by remember(tenant.id, profile?.version) { mutableStateOf(details?.address.orEmpty()) }
     var footer by remember(tenant.id, profile?.version) { mutableStateOf(details?.footer.orEmpty()) }
     var paper by remember(tenant.id, profile?.version) { mutableStateOf(details?.receiptPaper ?: "A4") }
-    var appearance by remember(tenant.id, profile?.version) { mutableStateOf(ReceiptAppearanceDraft(details?.appearance ?: ReceiptAppearance())) }
+    var appearance by remember(tenant.id, profile?.version) { mutableStateOf(ReceiptAppearanceDraft(details?.appearance ?: ReceiptAppearance(style = "modern"))) }
     var artworkUpload by remember(tenant.id, profile?.version) { mutableStateOf<ImageUpload?>(null) }
     var artworkName by remember(tenant.id, profile?.version) { mutableStateOf<String?>(null) }
     var reason by remember(tenant.id, profile?.version) { mutableStateOf(if (profile == null) "Initial receipt setup" else "") }
@@ -174,20 +174,25 @@ fun ShopSettingsScreen(repo: PosRepository, tenant: Tenant, onChanged: () -> Uni
 private fun sampleReceipt(details: ShopDetails) = buildString {
     appendLine(details.displayName)
     details.phone?.let { appendLine("Phone: $it") }
-    details.address?.let { appendLine(it) }
+    details.address?.let { appendLine("Address: $it") }
     appendLine("SALES RECEIPT")
     appendLine("Receipt: SAMPLE-PREVIEW")
     appendLine("Sample sale for design preview")
-    appendLine()
-    appendLine("Laundry soap · 2 pieces")
-    appendLine("2 x ₦450.00 = ₦900.00")
-    appendLine("Malt drink · 1 bottle")
-    appendLine("1 x ₦500.00 = ₦500.00")
-    appendLine()
+    appendLine("----------------------------------------")
+    appendLine("Laundry soap")
+    appendLine("  2 pieces x ₦450.00")
+    appendLine("  ₦900.00")
+    appendLine("Malt drink")
+    appendLine("  1 bottle x ₦500.00")
+    appendLine("  ₦500.00")
+    appendLine("----------------------------------------")
     appendLine("Original sale total: ₦1,400.00")
-    appendLine("Paid in cash: ₦1,400.00")
-    appendLine("Cash given: ₦1,500.00")
-    appendLine("Change given: ₦100.00")
+    appendLine("Cash applied at sale: ₦1,400.00")
+    appendLine("Paid in cash")
+    appendLine("Cash given by customer: ₦1,500.00")
+    appendLine("Change at sale: ₦100.00")
+    appendLine()
+    appendLine("Sample receipt - practice only")
     details.footer?.let { appendLine(it) }
 }
 
