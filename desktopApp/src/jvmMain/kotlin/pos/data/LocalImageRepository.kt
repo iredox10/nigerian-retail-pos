@@ -6,7 +6,7 @@ import java.util.Base64
 import java.util.UUID
 
 private const val IMAGE_BUDGET=16_777_216L
-internal val localImageSnapshotTables=listOf("local_image_assets","local_image_selections","local_image_changes","sale_image_snapshots","product_gallery_events")
+internal val localImageSnapshotTables=listOf("local_image_assets","local_image_selections","local_image_changes","sale_image_snapshots","product_gallery_events","receipt_artwork_imports")
 data class LocalImageSelection(val ownerKind:String,val ownerId:String,val assetId:String?,val version:Long)
 data class LocalImageChange(val id:String,val assetId:String?,val version:Long,val reason:String,val createdAt:String)
 
@@ -17,6 +17,8 @@ internal fun PosRepository.initializeLocalImages() {
     featureSchema("CREATE TABLE IF NOT EXISTS local_image_changes(tenant_id TEXT NOT NULL REFERENCES tenants(id),id TEXT NOT NULL,owner_kind TEXT NOT NULL CHECK(owner_kind IN('shop','product')),owner_id TEXT NOT NULL,previous_asset TEXT,asset_id TEXT,version INTEGER NOT NULL CHECK(version>0),reason TEXT NOT NULL,created_at TEXT NOT NULL,PRIMARY KEY(tenant_id,id),UNIQUE(tenant_id,owner_kind,owner_id,version),FOREIGN KEY(tenant_id,asset_id) REFERENCES local_image_assets(tenant_id,id),FOREIGN KEY(tenant_id,previous_asset) REFERENCES local_image_assets(tenant_id,id))")
     featureSchema("CREATE TABLE IF NOT EXISTS sale_image_snapshots(tenant_id TEXT NOT NULL,sale_id TEXT NOT NULL,asset_id TEXT,PRIMARY KEY(tenant_id,sale_id),FOREIGN KEY(tenant_id,sale_id) REFERENCES sales(tenant_id,id),FOREIGN KEY(tenant_id,asset_id) REFERENCES local_image_assets(tenant_id,id))")
     listOf("local_image_assets","local_image_changes","sale_image_snapshots").forEach {table ->listOf("UPDATE","DELETE").forEach {action ->featureSchema("CREATE TRIGGER IF NOT EXISTS ${table}_no_${action.lowercase()} BEFORE $action ON $table BEGIN SELECT RAISE(ABORT,'Saved image history cannot be changed'); END")}}
+    featureSchema("CREATE TABLE IF NOT EXISTS receipt_artwork_imports(tenant_id TEXT NOT NULL,asset_id TEXT NOT NULL,created_at TEXT NOT NULL,PRIMARY KEY(tenant_id,asset_id),FOREIGN KEY(tenant_id,asset_id) REFERENCES local_image_assets(tenant_id,id))")
+    for(action in listOf("UPDATE","DELETE")) featureSchema("CREATE TRIGGER IF NOT EXISTS receipt_artwork_imports_no_${action.lowercase()} BEFORE $action ON receipt_artwork_imports BEGIN SELECT RAISE(ABORT,'Receipt artwork history cannot be changed'); END")
     initializeProductGallery()
 }
 private fun imagePermission(kind:String)=when(kind) {"shop" ->StaffPermission.MANAGE_SETTINGS;"product" ->StaffPermission.MANAGE_STOCK;else ->error("Unsupported image location.")}
@@ -102,7 +104,7 @@ internal fun PosRepository.validateLocalImages(tenantId:String) {
     }
     val witnesses=featureQuery("SELECT entity_id FROM outbox WHERE tenant_id=? AND kind='image.changed'",tenantId) {it.getString(1)}
     require(witnesses.size==history.size && witnesses.toSet()==history.map {it[0]}.toSet()) {"Backup image activity is incomplete."}
-    require(ids.toSet()==history.mapNotNull {it[4]}.toSet()+validateProductGallery(tenantId)) {"Backup contains image bytes without source history."}
+    require(ids.toSet()==history.mapNotNull {it[4]}.toSet()+validateProductGallery(tenantId)+validateReceiptArtworkImports(tenantId)) {"Backup contains image bytes without source history."}
     val captured=featureQuery("SELECT id FROM sales WHERE tenant_id=? AND receipt_image_captured=1",tenantId) {it.getString(1)}.toSet()
     val snapshots=featureQuery("SELECT sale_id FROM sale_image_snapshots WHERE tenant_id=?",tenantId) {it.getString(1)}.toSet()
     require(captured==snapshots) {"Backup receipt image snapshots are incomplete."}
@@ -110,4 +112,31 @@ internal fun PosRepository.validateLocalImages(tenantId:String) {
         val prior=history.filter {it[1]=="shop" && !Instant.parse(it[7]).isAfter(time)}.maxByOrNull {it[5]!!.toLong()}
         require(asset==prior?.get(4)) {"Backup receipt logo differs from its recorded shop image."}
     }
+}
+
+/** Imports immutable receipt artwork. The profile revision selects which imported image to use. */
+fun PosRepository.saveReceiptArtwork(tenantId:String, upload:ImageUpload):String = featureWrite(tenantId,StaffPermission.MANAGE_SETTINGS) {
+    val asset = upload.assetId
+    val exists = featureQuery("SELECT asset_id FROM receipt_artwork_imports WHERE tenant_id=? AND asset_id=?", tenantId, asset) {it.getString(1)}.isNotEmpty()
+    if(!exists) {
+        saveLocalImageAsset(tenantId,upload)
+        val now=Instant.now().toString()
+        featureExecute("INSERT INTO receipt_artwork_imports VALUES(?,?,?)",tenantId,asset,now)
+        featureEvent(tenantId,"receipt.artwork_imported",asset)
+    }
+    asset
+}
+
+private fun PosRepository.validateReceiptArtworkImports(tenantId:String):Set<String> {
+    val imports=featureQuery("SELECT asset_id,created_at FROM receipt_artwork_imports WHERE tenant_id=?",tenantId) {
+        it.getString(1) to Instant.parse(it.getString(2))
+    }
+    val witnesses=featureQuery("SELECT o.entity_id,o.created_at,a.id FROM outbox o LEFT JOIN activity_audit a ON a.tenant_id=o.tenant_id AND a.id=o.id AND a.kind=o.kind AND a.entity_id=o.entity_id WHERE o.tenant_id=? AND o.kind='receipt.artwork_imported'",tenantId) {
+        require(it.getString(3)!=null) {"Backup receipt artwork has no activity history."}
+        it.getString(1) to Instant.parse(it.getString(2))
+    }
+    require(witnesses.size==imports.size && witnesses.map {it.first}.toSet()==imports.map {it.first}.toSet() && witnesses.all {event -> event.second >= imports.single {it.first==event.first}.second}) {
+        "Backup receipt artwork source history is incomplete."
+    }
+    return imports.map {it.first}.toSet()
 }

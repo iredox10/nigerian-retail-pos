@@ -4,6 +4,7 @@ package pos.domain
 data class ShopDetails(
     val displayName:String, val phone:String?=null, val address:String?=null,
     val footer:String?=null, val receiptPaper:String="A4",
+    val appearance:ReceiptAppearance=ReceiptAppearance(),
 ) {
     init {
         require(displayName==displayName.trim() && displayName.length in 1..150 && displayName.none {it.isISOControl()}) {"Enter a shop name from 1 to 150 printable characters."}

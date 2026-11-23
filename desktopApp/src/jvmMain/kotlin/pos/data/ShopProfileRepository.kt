@@ -39,6 +39,7 @@ fun PosRepository.saveShopProfile(tenantId:String,details:ShopDetails,expectedVe
     require((old?.version ?: 0)==expectedVersion) {"Shop settings changed while you were editing. Reload and review them."}
     require(old?.details!=details) {"Change a receipt detail before saving."}
     val now=Instant.now()
+    validateReceiptArtwork(tenantId, details.appearance.artworkAssetId, now)
     require(old==null || !now.isBefore(Instant.parse(old.updatedAt))) {"The computer clock moved backwards. Correct it before changing shop details."}
     val change=ShopProfileChange(operationId,tenantId,old?.details,details,Math.addExact(expectedVersion,1),reason,now.toString())
     featureExecute("INSERT INTO shop_profiles VALUES(?,?,?,?) ON CONFLICT(tenant_id) DO UPDATE SET details=excluded.details,version=excluded.version,updated_at=excluded.updated_at",tenantId,encodeShopDetails(details),change.version,change.createdAt)
@@ -57,6 +58,7 @@ internal fun PosRepository.captureReceiptProfile(tenantId:String,saleId:String):
     // Legacy workspace names were unrestricted. Do not block an ordinary sale or
     // silently truncate its identity when it cannot become a new configured profile.
     val details=profile?.details ?: runCatching {ShopDetails(name)}.getOrNull() ?: return null
+    require(profile==null || !Instant.parse(saleTime).isBefore(Instant.parse(profile.updatedAt))) {"Correct the computer clock before using the saved receipt settings."}
     val snapshot=ReceiptProfileSnapshot(tenantId,saleId,details,profile?.version ?: 0,saleTime)
     featureExecute("INSERT INTO sale_receipt_profiles VALUES(?,?,?,?,?)",tenantId,saleId,encodeShopDetails(snapshot.details),snapshot.profileVersion,saleTime)
     featureExecute("UPDATE sales SET receipt_profile_captured=1 WHERE tenant_id=? AND id=?",tenantId,saleId)
@@ -90,8 +92,10 @@ internal fun PosRepository.validateShopProfileSnapshot(tenantId:String) {
         if(snapshot.profileVersion>0) {
             val source=requireNotNull(changes.singleOrNull {it.version==snapshot.profileVersion}) {"Backup receipt identity has no source settings."}
             require(source.current==snapshot.details && !Instant.parse(source.createdAt).isAfter(Instant.parse(snapshot.capturedAt))) {"Backup receipt identity differs from its captured settings."}
-        } else require(snapshot.details.phone==null && snapshot.details.address==null && snapshot.details.footer==null && snapshot.details.receiptPaper=="A4") {"Default receipt identities cannot invent contact details."}
+        } else require(snapshot.details.phone==null && snapshot.details.address==null && snapshot.details.footer==null && snapshot.details.receiptPaper=="A4" && snapshot.details.appearance==ReceiptAppearance()) {"Default receipt identities cannot invent contact details."}
     }
+    changes.forEach { validateReceiptArtwork(tenantId, it.current.appearance.artworkAssetId, Instant.parse(it.createdAt)) }
+    snapshots.forEach { validateReceiptArtwork(tenantId, it.details.appearance.artworkAssetId, Instant.parse(it.capturedAt)) }
     val events=featureQuery("SELECT entity_id FROM outbox WHERE tenant_id=? AND kind='shop.receipt_settings_changed'",tenantId) {it.getString(1)}
     require(events.toSet()==changes.map {it.id}.toSet()) {"Backup shop settings are missing source history."}
 }
@@ -101,15 +105,41 @@ private fun shopChangeRow(row:ResultSet)=ShopProfileChange(row.getString("id"),r
 private fun receiptProfileRow(row:ResultSet)=ReceiptProfileSnapshot(row.getString("tenant_id"),row.getString("sale_id"),decodeShopDetails(row.getString("details")),row.getLong("profile_version"),row.getString("captured_at"))
 private fun encodeShopDetails(value:ShopDetails):String {
     val bytes=ByteArrayOutputStream()
-    DataOutputStream(bytes).use {out ->out.writeInt(1);listOf(value.displayName,value.phone,value.address,value.footer,value.receiptPaper).forEach {out.writeBoolean(it!=null);if(it!=null)out.writeUTF(it)}}
+    DataOutputStream(bytes).use { out ->
+        out.writeInt(2)
+        listOf(value.displayName,value.phone,value.address,value.footer,value.receiptPaper).forEach { out.writeNullableText(it) }
+        val appearance = value.appearance
+        listOf(appearance.style, appearance.frame, appearance.accentHex, appearance.headerAlignment).forEach { out.writeUTF(it) }
+        out.writeBoolean(appearance.showLogo)
+        listOf(appearance.artworkAssetId, appearance.tagline, appearance.policy).forEach { out.writeNullableText(it) }
+    }
     return Base64.getEncoder().encodeToString(bytes.toByteArray())
 }
+private fun DataOutputStream.writeNullableText(value:String?) {
+    writeBoolean(value!=null)
+    if(value!=null) writeUTF(value)
+}
+private fun DataInputStream.readNullableText():String? = if(readBoolean()) readUTF() else null
+
 private fun decodeShopDetails(value:String):ShopDetails {
-    require(value.length<=10_000) {"Receipt settings are too large."}
-    return DataInputStream(ByteArrayInputStream(Base64.getDecoder().decode(value))).use {input ->
-        require(input.readInt()==1) {"Receipt settings format is unsupported."}
-        val fields=List(5) {if(input.readBoolean()) input.readUTF() else null}
+    require(value.length<=20_000) {"Receipt settings are too large."}
+    return DataInputStream(ByteArrayInputStream(Base64.getDecoder().decode(value))).use { input ->
+        val version = input.readInt()
+        require(version in 1..2) {"Receipt settings format is unsupported."}
+        val fields=List(5) { input.readNullableText() }
+        val appearance = if(version == 1) ReceiptAppearance() else ReceiptAppearance(
+            style=input.readUTF(), frame=input.readUTF(), accentHex=input.readUTF(), headerAlignment=input.readUTF(),
+            showLogo=input.readBoolean(), artworkAssetId=input.readNullableText(), tagline=input.readNullableText(), policy=input.readNullableText(),
+        )
         require(input.read()==-1) {"Receipt settings contain unsupported data."}
-        ShopDetails(requireNotNull(fields[0]),fields[1],fields[2],fields[3],requireNotNull(fields[4]))
+        ShopDetails(requireNotNull(fields[0]),fields[1],fields[2],fields[3],requireNotNull(fields[4]),appearance)
+    }
+}
+
+private fun PosRepository.validateReceiptArtwork(tenantId:String, assetId:String?, through:Instant) {
+    if(assetId == null) return
+    val imported=featureQuery("SELECT created_at FROM receipt_artwork_imports WHERE tenant_id=? AND asset_id=?",tenantId,assetId) {Instant.parse(it.getString(1))}.singleOrNull()
+    require(imported!=null && !imported.isAfter(through)) {
+        "Receipt artwork is unavailable at the recorded time in this shop. Import the image again or correct the clock."
     }
 }
