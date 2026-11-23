@@ -14,11 +14,11 @@
 
 ## Following local dependency work
 
-1. Exchanges, customer advances/store credit/change owed, repayment reversals and disputes with complete account/history integration.
+1. Exchanges involving customer credit or external payments, advances, store credit, change owed, repayment reversals and disputes.
 2. Customer disputes and merge, additional authorized account adjustments, and separately authenticated manager approvals.
-3. Supplier reimbursements and unapplied credits, damaged-delivery discrepancies, and landed-cost allocations.
+3. Unapplied supplier credits, damaged-delivery discrepancies and landed-cost allocations.
 4. Structured variant options and nested unit definitions, promotions/bundles/open-price goods and advanced replenishment.
-5. Orders/deposits/layaway/reservations, partial fulfilment and collection/dispatch; remaining invoice/delivery/credit-note documents.
+5. Orders, deposits, layaway, reservations, partial fulfilment, collection, dispatch, tax-invoice requirements and document sharing.
 6. Per-cashier/register custody, handover/sign-off, historical costing/valuation/COGS, journals and accounting periods.
 7. Local lots/expiry/serial/warranty/service/container/loyalty modules where their requirements are defined.
 8. Owner recovery, encrypted working storage, diagnostics/fault recovery, privacy/help/localization and offline release tooling.
@@ -54,3 +54,12 @@ Four subagents were launched across the available slots. The supplier return sub
 - [x] Verify completed workflows with encrypted backup recovery, regression tests, Linux packaging and disconnected native checks. Reconcile open items against the implementation checklist.
 
 Four subagents contributed sales documents, photo tools, debt corrections and purchase cost history. The reorder feature and repository integration were completed alongside their work. The checkpoint is 585 passing tests. [Build evidence](BUILD_STATUS.md)
+
+## 23 November local checkpoint
+
+- [x] Complete cash exchanges with linked return and replacement receipts, actual cash differences, stock changes and saved history.
+- [x] Record cash received during supplier returns using the original buying cost, exact returned quantity and current receipt debt.
+- [x] Review and import a folder of product photos by SKU or barcode using existing revision history.
+- [x] Run full regression tests, rebuild the Linux image and check all three journeys in the disconnected desktop app.
+
+The checkpoint is 593 passing tests. [Build evidence](BUILD_STATUS.md)

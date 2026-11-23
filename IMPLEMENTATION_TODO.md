@@ -79,7 +79,8 @@ Work is ordered by dependencies, not by hiding any part of the full specificatio
 - [x] Product photo and shop logo imports, bounded raster copies in SQLite, replacement/removal history, Stock/Sell/workspace rendering and encrypted backup/restore.
 - [x] Historical receipt logo capture and first-page PDF rendering.
 - [x] Product photo gallery with reasoned revision history, crop and rotation, and automatic JPEG orientation. Main photos and logos use the same adjustment controls.
-- [ ] Bulk photo import and broader media acceptance.
+- [x] Review and import main product photos in bulk by filename SKU or barcode, with atomic saves and existing image history.
+- [ ] Broader media acceptance.
 - [x] Checkout Favourites filter.
 - [x] Sell filter for frequently sold items ranked by retained sales in the last 30 WAT days.
 - [x] Code128 current-product/selling-pack label PNG output and native print submission, with saved barcode/unit/price snapshots and local decoding tests.
@@ -123,7 +124,8 @@ Work is ordered by dependencies, not by hiding any part of the full specificatio
 - [ ] Provider settlement batches, fees and bank reconciliation.
 - [x] Credit-sale returns reduce unpaid receipt debt first, refund paid value in cash, require reconciled repayment assignments and retain immutable source history.
 - [ ] Broader credit-return keyboard/failure acceptance and original-method external refunds.
-- [ ] Exchanges and price differences.
+- [x] Cash-funded exchanges with linked return and replacement receipts and an explicit cash difference.
+- [ ] Exchanges against credit or external payment receipts, and store-credit differences.
 - [ ] Store-credit and original-method refunds.
 - [ ] No-receipt returns policy, approval and damaged/quarantined goods.
 - [ ] Cross-device refund/credit risk controls.
@@ -160,7 +162,8 @@ Work is ordered by dependencies, not by hiding any part of the full specificatio
 - [x] Purchase-cost history and linked supplier comparisons using saved buying-unit conversions, with CSV export.
 - [ ] Landed-cost allocation.
 - [x] Reviewed purchase returns with exact removal from stock and receipt-linked credit up to the amount owed, with no drawer movement.
-- [ ] Supplier cash reimbursements, credit notes, unapplied credits and account adjustments.
+- [x] Explicit cash reimbursements on supplier returns with receipt debt reduction and drawer reconciliation.
+- [ ] Supplier credit notes, unapplied credits and account adjustments.
 - [x] Dated receipt-name supplier statements and CSV, including paid receipts, opening/closing debt and current debt; integrated automated coverage passes.
 - [ ] Complete supplier statement desktop/keyboard/failure acceptance.
 - [x] Extend dated statements to explicit stable supplier accounts, preserving historical supplier names on linked receipt activities.

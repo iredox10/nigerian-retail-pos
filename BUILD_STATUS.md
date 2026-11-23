@@ -1,8 +1,26 @@
 # Desktop build status
 
-21 November 2026 · Reordering, purchase costs, sales documents, photos and debt corrections
+23 November 2026 · Cash exchanges, supplier reimbursements and bulk photo imports
 
 ## Current integrated checkpoint
+
+**593 tests pass** (77 shared and 516 desktop) with zero failures, errors or skips. Ran `gradle :shared:jvmTest :desktopApp:jvmTest :desktopApp:createDistributable --offline`. The Linux image is at `desktopApp/build/compose/binaries/main/app/RetailPOS`.
+
+- Sales supports exchanges from cash receipts and cash-funded replacement receipts. The review uses the original saved return values and current replacement prices. The linked return, replacement sale, stock changes and cash difference save together. Receipts and sales exports show the value applied through the exchange.
+- Supplier returns can reduce outstanding receipt debt and record the excess as cash received into an open drawer. The quantity, debt, cash movement and history save together. Supplier statements and reports show the reimbursement alongside the debt reduction.
+- Stock tools can match up to 64 PNG or JPEG files to active products by SKU or barcode. Merchants preview the matches, select photos and record a reason. Selected main photos save together using the existing revision history and encrypted backup storage.
+
+### Disconnected desktop checks
+
+Used the Linux app at 1440 × 1000 in an isolated practice workspace with loopback-only networking. Used keyboard entry, Tab/Enter and pointer actions.
+
+- Exchanged a ₦500 sample malt drink for ₦450 soap. The replacement used ₦450 of return value and Money showed a single ₦50 refund. [Review](artifacts/desktop-cash-exchange-review.png), [replacement receipt](artifacts/desktop-cash-exchange-saved.png), [drawer](artifacts/desktop-cash-exchange-drawer.png)
+- Returned two sample rice bags. The return reduced supplier debt by ₦18,000 and recorded ₦2,000 received into the drawer. [Review](artifacts/desktop-supplier-reimbursement-review.png), [settled receipt](artifacts/desktop-supplier-reimbursement-saved.png), [drawer](artifacts/desktop-supplier-reimbursement-drawer.png)
+- Opened a folder in the native chooser, matched a photo to a sample barcode, skipped an unmatched file and saved the selected photo using the keyboard. Verified the thumbnail in Stock. [Review](artifacts/desktop-bulk-photo-import-review.png), [Stock](artifacts/desktop-bulk-photo-import-stock.png)
+
+Automated tests cover higher, lower and equal exchange prices, rollback, receipt linkage and encrypted restore. Supplier reimbursements have tests for fully and partly paid purchases, permission checks and recovery. Bulk import tests cover duplicate matches, shop isolation, retries and stale-review rollback. Windows, physical peripherals, full accessibility, replacement-machine recovery and merchant testing remain pending.
+
+## 21 November checkpoint — stock tools, documents and debt corrections
 
 **585 tests pass** (77 shared and 508 desktop) with zero failures, errors or skips. Ran `gradle :shared:jvmTest :desktopApp:jvmTest :desktopApp:createDistributable --offline`. The Linux image is at `desktopApp/build/compose/binaries/main/app/RetailPOS`.
 

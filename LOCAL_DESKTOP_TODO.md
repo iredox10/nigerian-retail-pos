@@ -8,7 +8,8 @@ Started 14 November 2026. Scope: the local desktop gaps listed in the conversati
 - [x] Credit-sale returns with explicit debt reduction versus refund, repayment allocation reconciliation and immutable correction history.
 - [x] Cash given and change retained on saved receipts, PDFs and CSV. Optional sale notes survive held baskets and are saved to receipt history.
 - [x] Frequent items filter in Sell ranked by recent retained sale receipts.
-- [ ] Exchanges linked to original return and replacement sale, explicit price difference.
+- [x] Cash exchanges linked to the original return and replacement sale, with an explicit cash difference.
+- [ ] Exchanges involving customer credit, external payments or store credit.
 - [ ] Customer advances, unapplied credit, change-owed liabilities and authorized settlement.
 - [ ] Payment reversals/disputes that preserve original entries.
 - [ ] Manager approvals/overrides with separate identity, reason and bounded authorization.
@@ -26,7 +27,8 @@ Started 14 November 2026. Scope: the local desktop gaps listed in the conversati
 
 - [x] Supplier invoice metadata, duplicate detection/review and preserved source history.
 - [x] Reviewed purchase returns against unpaid receipt debt, with exact stock removal, recorded credit and reconciled statements.
-- [ ] Supplier cash reimbursements, unapplied credits, supplier credit notes, account adjustments and damaged-delivery discrepancies.
+- [x] Record supplier cash reimbursements during a reviewed return and reconcile receipt debt and the drawer.
+- [ ] Unapplied supplier credits, credit notes, account adjustments and damaged-delivery discrepancies.
 - [x] Purchase cost history and latest explicitly linked supplier comparison, normalized by saved buying units with CSV export.
 - [ ] Landed costs with explicit allocation.
 - [x] Stock reorder suggestions with a configurable coverage period, saved sales, approved incoming quantities and export.
@@ -40,7 +42,8 @@ Started 14 November 2026. Scope: the local desktop gaps listed in the conversati
 - [x] Independently stocked product variants, grouped by searchable family and label. Each item retains its own SKU and barcode.
 - [ ] Structured size/colour options and matrix editing.
 - [x] Additional product photo galleries, crop and rotation controls and automatic JPEG orientation.
-- [ ] Bulk image import and full gallery/keyboard acceptance.
+- [x] Bulk import main product photos from a reviewed folder using SKU or barcode filenames.
+- [ ] Full gallery and keyboard acceptance.
 - [x] Versioned explicit input/output repacking recipes between two products, reviewed whole-batch execution, atomic paired stock changes and history.
 - [ ] Nested package definitions, multi-input assembly, costing and repacking yield/loss accounting.
 
