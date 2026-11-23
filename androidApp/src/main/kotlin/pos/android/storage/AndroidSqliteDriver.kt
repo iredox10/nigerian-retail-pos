@@ -4,6 +4,7 @@ import android.database.Cursor
 import android.database.sqlite.SQLiteCursor
 import android.database.sqlite.SQLiteDatabase
 import android.database.sqlite.SQLiteProgram
+import android.database.sqlite.SQLiteBindOrColumnIndexOutOfRangeException
 import java.io.File
 import java.lang.reflect.InvocationHandler
 import java.lang.reflect.Method
@@ -166,7 +167,7 @@ private class StatementHandler(private val owner: ConnectionHandler, private val
         ensureOpen(); result?.close(); owner.beforeSql()
         val values = parameters()
         val cursor = owner.sqlite.rawQueryWithFactory({ _, driver, editTable, query ->
-            values.forEachIndexed { index, value -> query.bindValue(index + 1, value) }
+            query.bindParameters(values)
             SQLiteCursor(driver, editTable, query)
         }, source, emptyArray(), "")
         return proxy(ResultSet::class.java, ResultHandler(cursor)).also { result = it; updateCount = -1 }
@@ -174,7 +175,7 @@ private class StatementHandler(private val owner: ConnectionHandler, private val
     private fun executeUpdate(source: String): Int {
         ensureOpen(); result?.close(); result = null; owner.beforeSql()
         owner.sqlite.compileStatement(source).use { statement ->
-            parameters().forEachIndexed { index, value -> statement.bindValue(index + 1, value) }
+            statement.bindParameters(parameters())
             updateCount = statement.executeUpdateDelete()
         }
         return updateCount
@@ -213,6 +214,23 @@ private class StatementHandler(private val owner: ConnectionHandler, private val
             else -> unsupported(method)
         }
     }
+}
+
+/** Android defaults unbound arguments to NULL; the repositories require JDBC's missing-bind error. */
+private fun SQLiteProgram.bindParameters(values: List<Any?>) {
+    values.forEachIndexed { index, value -> bindValue(index + 1, value) }
+    // Ask the compiled native program whether another parameter exists. This respects quoted
+    // question marks and comments without attempting to parse SQL or accessing hidden APIs.
+    val missing = try {
+        bindNull(values.size + 1)
+        true
+    } catch (_: SQLiteBindOrColumnIndexOutOfRangeException) {
+        false
+    } catch (_: IllegalArgumentException) {
+        // Framework SQLiteProgram checks this before JNI on newer Android releases.
+        false
+    }
+    if (missing) throw SQLException("An SQL parameter is missing")
 }
 
 private fun requireBinding(value: Any?) {

@@ -12,6 +12,32 @@ import org.junit.runner.RunWith
 
 @RunWith(AndroidJUnit4::class)
 class AndroidSqliteDriverTest {
+    @Test fun missingArgumentsCannotSilentlyBecomeNullQueriesOrFinancialWrites() {
+        AndroidSqliteDriver.open(":memory:").use { db ->
+            db.createStatement().use { it.execute("CREATE TABLE balances(id TEXT PRIMARY KEY,amount INTEGER,reference TEXT)") }
+            db.prepareStatement("INSERT INTO balances VALUES(?,?,?)").use { write ->
+                write.setString(1,"receipt"); write.setLong(2,12345)
+                assertThrows(SQLException::class.java) { write.executeUpdate() }
+                write.setNull(3,java.sql.Types.VARCHAR)
+                assertEquals(1,write.executeUpdate())
+                write.clearParameters()
+                assertThrows(SQLException::class.java) { write.executeUpdate() }
+            }
+            db.prepareStatement("SELECT COUNT(*) FROM balances WHERE reference IS ?").use { read ->
+                assertThrows(SQLException::class.java) { read.executeQuery() }
+                read.setNull(1,java.sql.Types.VARCHAR)
+                read.executeQuery().use { rows ->assertTrue(rows.next());assertEquals(1L,rows.getLong(1)) }
+                read.clearParameters()
+                assertThrows(SQLException::class.java) { read.executeQuery() }
+            }
+            // The native parameter count ignores question marks in actual data and SQL comments.
+            db.prepareStatement("SELECT amount, '?' FROM balances WHERE id=? /* ? */").use { read ->
+                read.setString(1,"receipt")
+                read.executeQuery().use { rows ->assertTrue(rows.next());assertEquals(12345L,rows.getLong(1));assertEquals("?",rows.getString(2));assertFalse(rows.next()) }
+            }
+        }
+    }
+
     @Test fun integerBlobNullAndMetadataRoundTripWithoutFloatingPointMoney() {
         AndroidSqliteDriver.open(":memory:").use { db ->
             db.createStatement().use { it.execute("CREATE TABLE values_test(id INTEGER PRIMARY KEY, amount INTEGER NOT NULL, bytes BLOB, optional TEXT)") }
