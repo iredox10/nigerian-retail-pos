@@ -8,24 +8,34 @@ import java.nio.file.Files
 import java.nio.file.Path
 import java.security.MessageDigest
 
-/** Native Android raster adapter; shares immutable asset hashes and budgets with desktop. */
+/** Native Android raster adapter; normalization strips metadata and filesystem references. */
 class ImageUpload private constructor(private val content: ByteArray) {
     val bytes get() = content.copyOf()
     val assetId get() = imageHash(content)
     fun adjust(clockwiseQuarterTurns: Int, crop: ImageCrop = ImageCrop()): ImageUpload {
         require(clockwiseQuarterTurns in 0..3)
-        val source = requireNotNull(BitmapFactory.decodeByteArray(content,0,content.size))
-        val rotated = Bitmap.createBitmap(source,0,0,source.width,source.height,Matrix().apply {postRotate(clockwiseQuarterTurns*90f)},true)
-        val left=rotated.width*crop.left/100; val top=rotated.height*crop.top/100
-        return encode(Bitmap.createBitmap(rotated,left,top,rotated.width-left-rotated.width*crop.right/100,rotated.height-top-rotated.height*crop.bottom/100))
+        if(clockwiseQuarterTurns==0 && crop==ImageCrop())return this
+        val source = requireNotNull(BitmapFactory.decodeByteArray(content,0,content.size)) {"Saved image could not be decoded."}
+        val rotated = orientAndroidPhoto(source,when(clockwiseQuarterTurns){1->6;2->3;3->8;else->1})
+        var cut:Bitmap?=null
+        try {
+            val left=rotated.width*crop.left/100; val top=rotated.height*crop.top/100
+            cut=Bitmap.createBitmap(rotated,left,top,rotated.width-left-rotated.width*crop.right/100,rotated.height-top-rotated.height*crop.bottom/100)
+            return encode(cut)
+        }finally {if(cut!=null && cut!==rotated && cut!==source)cut.recycle();if(rotated!==source)rotated.recycle();source.recycle()}
     }
     companion object {
-        fun fromFile(path: Path) = fromBytes(Files.readAllBytes(path))
+        fun fromFile(path: Path):ImageUpload {
+            require(Files.isRegularFile(path) && Files.size(path) in 1..8_388_608) {"Choose a PNG or JPEG up to 8 MB."}
+            return Files.newInputStream(path).use {fromBytes(it.readNBytes(8_388_609))}
+        }
         fun fromBytes(bytes: ByteArray): ImageUpload {
             require(bytes.size in 1..8_388_608) {"Choose a PNG or JPEG up to 8 MB."}
             val bounds=BitmapFactory.Options().apply {inJustDecodeBounds=true};BitmapFactory.decodeByteArray(bytes,0,bytes.size,bounds)
             require(bounds.outMimeType in listOf("image/png","image/jpeg") && bounds.outWidth in 1..10_000 && bounds.outHeight in 1..10_000 && bounds.outWidth.toLong()*bounds.outHeight<=12_000_000) {"Choose a bounded PNG or JPEG image."}
-            return encode(requireNotNull(BitmapFactory.decodeByteArray(bytes,0,bytes.size)))
+            val source=requireNotNull(BitmapFactory.decodeByteArray(bytes,0,bytes.size)) {"Image could not be decoded."}
+            val oriented=orientAndroidPhoto(source,jpegOrientation(bytes))
+            try {return encode(oriented)}finally {if(oriented!==source)oriented.recycle();source.recycle()}
         }
         internal fun fromStoredBytes(bytes: ByteArray):ImageUpload {validateStoredImage(bytes);return ImageUpload(bytes.copyOf())}
         private fun encode(source: Bitmap): ImageUpload {
@@ -33,7 +43,7 @@ class ImageUpload private constructor(private val content: ByteArray) {
             while(side>=64) {
                 val scale=minOf(1.0,side.toDouble()/maxOf(source.width,source.height))
                 val bitmap=Bitmap.createScaledBitmap(source,maxOf(1,(source.width*scale).toInt()),maxOf(1,(source.height*scale).toInt()),true)
-                val bytes=ByteArrayOutputStream().also {bitmap.compress(Bitmap.CompressFormat.PNG,100,it)}.toByteArray()
+                val bytes=try {ByteArrayOutputStream().also {require(bitmap.compress(Bitmap.CompressFormat.PNG,100,it)) {"Image could not be encoded."}}.toByteArray()}finally {if(bitmap!==source)bitmap.recycle()}
                 if(bytes.size<=524_288)return ImageUpload(bytes)
                 side=(side*.75).toInt()
             }
@@ -41,10 +51,27 @@ class ImageUpload private constructor(private val content: ByteArray) {
         }
     }
 }
+
+/** Same eight EXIF transforms as desktop. createBitmap translates transformed bounds to the new origin. */
+internal fun orientAndroidPhoto(source:Bitmap,orientation:Int):Bitmap {
+    val w=source.width.toFloat();val h=source.height.toFloat()
+    val values=when(orientation){
+        2->floatArrayOf(-1f,0f,w,0f,1f,0f,0f,0f,1f)
+        3->floatArrayOf(-1f,0f,w,0f,-1f,h,0f,0f,1f)
+        4->floatArrayOf(1f,0f,0f,0f,-1f,h,0f,0f,1f)
+        5->floatArrayOf(0f,1f,0f,1f,0f,0f,0f,0f,1f)
+        6->floatArrayOf(0f,-1f,h,1f,0f,0f,0f,0f,1f)
+        7->floatArrayOf(0f,-1f,h,-1f,0f,w,0f,0f,1f)
+        8->floatArrayOf(0f,1f,0f,-1f,0f,w,0f,0f,1f)
+        else->return source
+    }
+    return Bitmap.createBitmap(source,0,0,source.width,source.height,Matrix().apply {setValues(values)},false)
+}
 data class ImageCrop(val left:Int=0,val top:Int=0,val right:Int=0,val bottom:Int=0) {init {require(listOf(left,top,right,bottom).all {it in 0..99} && left+right<100 && top+bottom<100)}}
 internal fun imageHash(bytes:ByteArray)=MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") {"%02x".format(it)}
 internal fun validateStoredImage(bytes:ByteArray) {
     require(bytes.size in 1..524_288)
     val b=BitmapFactory.Options().apply {inJustDecodeBounds=true};BitmapFactory.decodeByteArray(bytes,0,bytes.size,b)
     require(b.outMimeType=="image/png" && b.outWidth in 1..768 && b.outHeight in 1..768) {"Stored image failed validation."}
+    requireNotNull(BitmapFactory.decodeByteArray(bytes,0,bytes.size)) {"Stored image could not be decoded."}.recycle()
 }

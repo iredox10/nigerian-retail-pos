@@ -38,4 +38,25 @@ class AndroidReceiptDocumentTest {
             } finally {pdf.delete()}
         }
     }
+    @Test fun maximumMoneyAndLongNamesStayInsideNativePrintableMargins() {
+        val context=ApplicationProvider.getApplicationContext<android.content.Context>()
+        val product=Product("product","shop","Very long original product name ".repeat(4).trim(),"piece",Long.MAX_VALUE,1.0)
+        val sale=Sale("max-value-saved-sale","shop",listOf(CartLine(product,1)),Long.MAX_VALUE,Long.MAX_VALUE,0,null,"2026-11-23T12:00:00Z",cashGivenMinor=Long.MAX_VALUE)
+        for(paper in listOf("A4","58mm","80mm")) {
+            val source=AndroidReceiptSource(sale,ShopDetails("Long captured merchant name ".repeat(4).trim(),receiptPaper=paper,appearance=ReceiptAppearance(style="modern",policy="A long policy sentence ".repeat(15).trim())),null,null)
+            val file=writeAndroidReceiptPdf(context,source)
+            try {ParcelFileDescriptor.open(file,ParcelFileDescriptor.MODE_READ_ONLY).use {fd->PdfRenderer(fd).use {renderer->
+                for(index in 0 until renderer.pageCount)renderer.openPage(index).use {page->
+                    val bitmap=android.graphics.Bitmap.createBitmap(page.width,page.height,android.graphics.Bitmap.Config.ARGB_8888)
+                    bitmap.eraseColor(android.graphics.Color.WHITE);page.render(bitmap,null,null,PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
+                    for(y in 0 until bitmap.height)for(x in 0..5) {
+                        assertEquals("Left margin $paper page$index at $x,$y",android.graphics.Color.WHITE,bitmap.getPixel(x,y))
+                        assertEquals("Right margin $paper page$index",android.graphics.Color.WHITE,bitmap.getPixel(bitmap.width-1-x,y))
+                    }
+                    bitmap.recycle()
+                }
+            }}}finally {file.delete()}
+        }
+    }
+
 }

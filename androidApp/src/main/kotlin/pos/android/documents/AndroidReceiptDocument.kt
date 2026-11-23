@@ -54,11 +54,11 @@ fun writeAndroidReceiptPdf(context:Context,source:AndroidReceiptSource):File {
     val accent=runCatching {Color.parseColor(source.details?.appearance?.accentHex ?: "#087F73")}.getOrDefault(Color.rgb(8,127,115))
     val usable=width-2*margin
     fun start(){pageNumber++;page=pdf.startPage(PdfDocument.PageInfo.Builder(width,height,pageNumber).create());y=margin+bodySize
-        if(pageNumber>1){paint.textSize=bodySize;paint.color=Color.GRAY;page!!.canvas.drawText("Receipt ${source.sale.id.take(12)} · continued",margin,y,paint);y+=bodySize*2;paint.color=Color.rgb(24,34,48)}
+        if(pageNumber>1){val heading=Paint(paint).apply {textSize=bodySize;color=Color.GRAY};page!!.canvas.drawText("Receipt ${source.sale.id.take(12)} · continued",margin,y,heading);y+=bodySize*2}
     }
     fun finish(){page?.let {val canvas=it.canvas;
         if(source.details?.appearance?.frame in listOf("line","double")){val border=Paint(Paint.ANTI_ALIAS_FLAG).apply {style=Paint.Style.STROKE;strokeWidth=.7f;color=accent};canvas.drawRect(4f,4f,width-4f,height-4f,border);if(source.details?.appearance?.frame=="double")canvas.drawRect(7f,7f,width-7f,height-7f,border)}
-        paint.textSize=8f;paint.color=Color.GRAY;canvas.drawText("Receipt ${source.sale.id.take(12)} · Page $pageNumber",margin,height-margin,paint);pdf.finishPage(it)};page=null}
+        val footer=Paint(paint).apply {textSize=8f;color=Color.GRAY};canvas.drawText("Receipt ${source.sale.id.take(12)} · Page $pageNumber",margin,height-margin,footer);pdf.finishPage(it)};page=null}
     fun ensure(lines:Int=1){if(page==null)start();if(y+lines*paint.textSize*1.5f>height-margin-20){finish();start()}}
     fun wrapped(value:String,bold:Boolean=false,size:Float=bodySize,color:Int=Color.rgb(24,34,48)) {
         paint.textSize=size;paint.color=color;paint.typeface=Typeface.create("sans-serif",if(bold)Typeface.BOLD else Typeface.NORMAL)
@@ -72,7 +72,23 @@ fun writeAndroidReceiptPdf(context:Context,source:AndroidReceiptSource):File {
             }
         }
     }
-    fun pair(label:String,amount:Long,strong:Boolean=false){wrapped(label,strong);paint.textSize=if(strong)bodySize+3 else bodySize;paint.typeface=Typeface.create("sans-serif",if(strong)Typeface.BOLD else Typeface.NORMAL);paint.color=if(strong)accent else Color.rgb(24,34,48);ensure();val value=money(amount);page!!.canvas.drawText(value,width-margin-paint.measureText(value),y,paint);y+=paint.textSize*1.7f}
+    fun pair(label:String,amount:Long,strong:Boolean=false){
+        val modern=strong && source.details?.appearance?.style=="modern"
+        paint.textSize=if(strong)bodySize+3 else bodySize
+        paint.typeface=Typeface.create("sans-serif",if(strong)Typeface.BOLD else Typeface.NORMAL)
+        val value=money(amount)
+        // Exact Long-range money always fits the printable width; no truncation or negative x.
+        while(paint.measureText(value)>usable-12 && paint.textSize>5f)paint.textSize-=.5f
+        val amountSize=paint.textSize
+        val separate=width<300 || paint.measureText(label)+paint.measureText(value)+20>usable
+        ensure(if(separate)4 else 2)
+        if(modern){val fill=Paint(Paint.ANTI_ALIAS_FLAG).apply {color=accent;alpha=16};page!!.canvas.drawRoundRect(margin-4,y-amountSize-4,width-margin+4,y+amountSize*(if(separate)2.5f else 1f),6f,6f,fill)}
+        paint.color=if(strong)accent else Color.rgb(24,34,48)
+        if(separate){wrapped(label,strong,bodySize,paint.color);paint.textSize=amountSize;paint.typeface=Typeface.create("sans-serif",if(strong)Typeface.BOLD else Typeface.NORMAL);paint.color=if(strong)accent else Color.rgb(24,34,48)}
+        else page!!.canvas.drawText(label,margin,y,paint)
+        page!!.canvas.drawText(value,width-margin-paint.measureText(value),y,paint)
+        y+=amountSize*1.8f
+    }
     fun image(bytes:ByteArray?,maxHeight:Float){if(bytes==null)return;val bitmap=BitmapFactory.decodeByteArray(bytes,0,bytes.size) ?: return;val scale=minOf(usable/bitmap.width,maxHeight/bitmap.height);val w=bitmap.width*scale;val h=bitmap.height*scale;paint.textSize=bodySize;ensure(kotlin.math.ceil(h/(bodySize*1.5f)).toInt()+1);page!!.canvas.drawBitmap(bitmap,null,RectF(margin,y,margin+w,y+h),null);y+=h+bodySize;bitmap.recycle()}
     try {
         start()
