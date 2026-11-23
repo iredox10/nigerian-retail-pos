@@ -199,11 +199,13 @@ private fun SupplierAccountStatementDialog(repo:PosRepository,profile:SupplierPr
             LabelValueRow("Cash paid at receipt",money(s.paidAtReceiptMinor))
             LabelValueRow("Later payments",money(s.laterPaymentsMinor))
             LabelValueRow("Purchase return credits",money(s.returnCreditsMinor))
+            if (s.returnCashMinor > 0) LabelValueRow("Cash received on returns", money(s.returnCashMinor))
             LabelValueRow("Closing amount owed",money(s.closingMinor),emphasized=true)
             LabelValueRow("Owed now, all dates",money(s.currentOutstandingMinor))
             if(s.events.isEmpty()) Text("No linked purchases, payments or returns were recorded in this period.",style=MaterialTheme.typography.bodySmall)
             s.events.forEach {event ->
-                val amount = maxOf(event.returnCreditMinor, event.laterPaymentMinor, event.purchaseMinor)
+                val amount = if (event.isReturn) Math.addExact(event.returnCreditMinor, event.returnCashMinor)
+                    else maxOf(event.laterPaymentMinor, event.purchaseMinor)
                 Text("${event.createdAt} · ${event.receiptId.takeLast(8)} · ${event.activity} ${money(amount)}",style=MaterialTheme.typography.bodySmall)
             }
         }

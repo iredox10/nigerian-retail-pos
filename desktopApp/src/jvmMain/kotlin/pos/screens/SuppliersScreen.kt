@@ -165,6 +165,7 @@ private fun SupplierStatementDialog(repo:PosRepository,tenantId:String,supplierN
                     LabelValueRow("Cash paid when receiving this stock",money(statement.paidAtReceiptMinor))
                     LabelValueRow("Later cash payments in range",money(statement.laterPaymentsMinor))
                     LabelValueRow("Purchase return credits in range",money(statement.returnCreditsMinor))
+                    if (statement.returnCashMinor > 0) LabelValueRow("Cash received on returns in range", money(statement.returnCashMinor))
                     LabelValueRow("Closing debt through ${statement.through}",money(statement.closingMinor),emphasized=true)
                     HorizontalDivider()
                     LabelValueRow("Current outstanding — all recorded dates",money(statement.currentOutstandingMinor))
@@ -176,7 +177,10 @@ private fun SupplierStatementDialog(repo:PosRepository,tenantId:String,supplierN
                         Column(verticalArrangement=Arrangement.spacedBy(4.dp)) {
                             Text(event.activity,fontWeight=FontWeight.SemiBold)
                             Text("${supplierTime(event.createdAt)} · Receipt ${event.receiptId.takeLast(8).uppercase()}",style=MaterialTheme.typography.bodySmall)
-                            if(event.returnCreditMinor>0) LabelValueRow("Supplier credit",money(event.returnCreditMinor))
+                            if (event.isReturn) {
+                                LabelValueRow("Supplier debt reduced", money(event.returnCreditMinor))
+                                if (event.returnCashMinor > 0) LabelValueRow("Cash received from supplier", money(event.returnCashMinor))
+                            }
                             else if(event.laterPaymentMinor>0) LabelValueRow("Cash paid",money(event.laterPaymentMinor))
                             else {
                                 LabelValueRow("Purchase total",money(event.purchaseMinor))
@@ -220,6 +224,8 @@ private fun SupplierReceipt(row: ReceiptBalance, canPay: Boolean, pay: () -> Uni
             val laterPaid = row.payments.fold(0L) { sum, payment -> Math.addExact(sum, payment.amountMinor) }
             LabelValueRow("Payments recorded later", money(laterPaid))
             if (row.returns.isNotEmpty()) LabelValueRow("Purchase return credits", money(row.returns.sumOf { it.creditMinor }))
+            val receivedOnReturns = row.returns.sumOf { it.cashReceivedMinor }
+            if (receivedOnReturns > 0) LabelValueRow("Cash received on returns", money(receivedOnReturns))
             LabelValueRow("Still owed on this receipt", money(row.outstanding), emphasized = true)
             Text("Originally owed ${money(receipt.unpaidMinor)} when stock arrived.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             if (row.payments.isNotEmpty()) {
@@ -233,14 +239,15 @@ private fun SupplierReceipt(row: ReceiptBalance, canPay: Boolean, pay: () -> Uni
                 HorizontalDivider()
                 Text("Purchase returns", style = MaterialTheme.typography.titleSmall)
                 row.returns.forEach { event ->
-                    LabelValueRow("${quantityLabel(event.quantity.toLong(), receipt.quantityPrecision)} ${receipt.unit} · ${supplierTime(event.createdAt)}", money(event.creditMinor))
+                    LabelValueRow("${quantityLabel(event.quantity.toLong(), receipt.quantityPrecision)} ${receipt.unit} · ${supplierTime(event.createdAt)}", money(event.returnedValueMinor))
                     Text(event.reason, style = MaterialTheme.typography.bodySmall)
                 }
             }
-            if (row.outstanding > 0) {
+            val remaining = receipt.quantity - row.returns.sumOf { it.quantity }
+            if (row.outstanding > 0 || remaining > 0) {
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    NeutralButton("Record supplier payment", pay, enabled = canPay)
-                    NeutralButton("Return to supplier", returnGoods)
+                    if (row.outstanding > 0) NeutralButton("Record supplier payment", pay, enabled = canPay)
+                    if (remaining > 0) NeutralButton("Return to supplier", returnGoods)
                 }
             }
         }
