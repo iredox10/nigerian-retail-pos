@@ -144,6 +144,7 @@ private fun activityLabel(kind: String): String = when (kind) {
     "product.restored" -> "Item restored"
     "stock.reminder_changed" -> "Low-stock reminder changed"
     "stock.adjusted" -> "Stock count saved"
+    "stock.buying_rule_changed" -> "Buying rules changed"
     "stock.received" -> "Stock received"
     "customer.created" -> "Customer added"
     "customer.updated" -> "Customer details changed"

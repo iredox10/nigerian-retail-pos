@@ -21,9 +21,11 @@ import pos.ui.components.*
 
 @Composable
 fun ReorderSuggestionsScreen(repo: PosRepository, tenantId: String) = key(tenantId) {
+    var editingPolicy by remember { mutableStateOf(false) }
     var daysText by remember { mutableStateOf("7") }
     var coverDays by remember { mutableIntStateOf(7) }
     var revision by remember { mutableIntStateOf(0) }
+    if (editingPolicy) ReplenishmentPolicyDialog(repo, tenantId, { editingPolicy = false }) { editingPolicy = false; revision++ }
     var search by remember { mutableStateOf("") }
     var savedMessage by remember { mutableStateOf<String?>(null) }
     var exportError by remember { mutableStateOf<String?>(null) }
@@ -45,12 +47,13 @@ fun ReorderSuggestionsScreen(repo: PosRepository, tenantId: String) = key(tenant
                 exportError = null
                 revision++
             }, enabled = enteredDays != null)
+            NeutralButton("Buying rules", { editingPolicy = true })
         }
         review?.let {
             Text("Sales kept by customers from ${it.from} to ${it.through} (WAT). Recent returns reduce the quantities used.")
             Text(
                 "The target covers ${it.coverDays} days at this sales rate, with at least one sellable increment above any reorder level. " +
-                    "Suggested quantities allow for stock on hand and goods still expected on approved orders.",
+                    "Suggestions include saved lead times and safety stock, subtract reserved quantities, allow for approved incoming goods and round up to saved buying multiples.",
                 style = MaterialTheme.typography.bodySmall,
             )
         }
@@ -61,7 +64,7 @@ fun ReorderSuggestionsScreen(repo: PosRepository, tenantId: String) = key(tenant
                 val csv = CsvService.encode(listOf(
                     "Item", "Product ID", "SKU", "Stock unit", "On hand", "Still on approved orders",
                     "Retained sales quantity", "Target", "Suggested quantity to buy", "Sales from WAT",
-                    "Sales through WAT", "Days of stock cover",
+                    "Sales through WAT", "Days of stock cover", "Reserved for orders", "Supplier lead days", "Safety stock", "Buying multiple",
                 ), visible.map { row ->
                     val product = row.product
                     fun quantity(amount: Long) = CsvCell.Number(quantityLabel(amount, product.quantityPrecision))
@@ -70,7 +73,9 @@ fun ReorderSuggestionsScreen(repo: PosRepository, tenantId: String) = key(tenant
                         CsvCell.Text(product.unit), CsvCell.Number(product.stockLabel), quantity(row.approvedIncoming),
                         quantity(row.retainedSales), quantity(row.target), quantity(row.shortage),
                         CsvCell.Text(displayed.from.toString()), CsvCell.Text(displayed.through.toString()),
-                        CsvCell.Number(displayed.coverDays.toString()),
+                        CsvCell.Number(displayed.coverDays.toString()), quantity(row.reserved),
+                        CsvCell.Number((row.policy?.leadDays ?: 0).toString()),
+                        quantity(row.policy?.safetyScaled ?: 0), quantity(row.policy?.multipleScaled ?: 1),
                     )
                 })
                 CsvService.save(csv, "reorder-suggestions-${displayed.through}.csv")?.let {
@@ -103,6 +108,8 @@ fun ReorderSuggestionsScreen(repo: PosRepository, tenantId: String) = key(tenant
                     if (compact) Surface(shape = MaterialTheme.shapes.medium) {
                         Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                             Text(product.name, fontWeight = FontWeight.SemiBold)
+                            if (row.reserved > 0) Text("${display(row.reserved)} reserved for orders", style = MaterialTheme.typography.bodySmall)
+                            row.policy?.let { Text("${it.leadDays} lead days · ${display(it.safetyScaled)} safety stock · buy in ${display(it.multipleScaled)}", style = MaterialTheme.typography.bodySmall) }
                             LabelValueRow("On hand", quantities[0])
                             LabelValueRow("On order", quantities[1])
                             LabelValueRow("Sold in 30 days", quantities[2])
