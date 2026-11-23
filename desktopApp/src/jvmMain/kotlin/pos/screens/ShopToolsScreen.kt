@@ -34,6 +34,7 @@ fun ShopToolsScreen(allowed: (StaffPermission) -> Boolean, open: (String) -> Uni
             ShopTool("Shop & receipt details", "Shop identity, logo and receipt wording", "Shop settings", PosIcons.Store, StaffPermission.MANAGE_SETTINGS),
             ShopTool("Owner recovery", "Set up a recovery code for this shop", "Owner recovery", PosIcons.LockKeyhole, StaffPermission.MANAGE_STAFF),
             ShopTool("Staff & permissions", "Manage the people who use this shop", "Staff", PosIcons.ShieldCheck, StaffPermission.MANAGE_STAFF),
+            ShopTool("Local app checks", "Review and save private diagnostic results", "Diagnostics", PosIcons.ShieldCheck, StaffPermission.BACKUP),
             ShopTool("Help & practice", "Find guidance and try sample sales", "Help", PosIcons.CircleHelp))
     )
     Column(verticalArrangement = Arrangement.spacedBy(20.dp)) {
