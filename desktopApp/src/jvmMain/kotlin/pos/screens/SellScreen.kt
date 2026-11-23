@@ -484,7 +484,10 @@ fun SellScreen(
                                     Text(if (cashGiven!! >= cashNeeded) "Change to give ${money(cashGiven!! - cashNeeded)}" else "Still to pay ${money(cashNeeded - cashGiven!!)}", fontWeight = FontWeight.SemiBold)
                                 }
                             }
-                            if (forbiddenDraft) Text("This saved sale needs a manager or owner because it contains credit or a discount. Sign in with that account, or remove discounted items and choose Cash.",color=MaterialTheme.colorScheme.error)
+                            if (forbiddenDraft) Text(
+                                if (!allowCredit && method in setOf("credit", "split_credit")) "This sale includes customer credit. Sign in with an account allowed to grant credit, or choose a fully funded payment method."
+                                else "Ask a manager to approve this sale price, or remove its discounts before payment.",
+                                color=MaterialTheme.colorScheme.error)
                             if(staleBasket) Text("This basket changed after its discount was reviewed. Review or remove the basket discount before payment.",color=MaterialTheme.colorScheme.error)
                             if (reservedDraftItems) Text("Some goods in this sale are reserved for orders. Reduce or remove those quantities before payment.", color = MaterialTheme.colorScheme.error)
                             if (staleDiscounts) Text("A discounted item's catalogue price changed. Review its discount before payment, or remove the item.", color = MaterialTheme.colorScheme.error)

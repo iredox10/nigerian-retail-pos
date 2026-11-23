@@ -201,7 +201,8 @@ private fun ColumnScope.CustomerHistory(statement: CustomerStatement, pay: () ->
                     }
                     LabelValueRow("Original sales total — before any cash returns", money(statement.originalSalesMinor))
                     LabelValueRow("Credit added on original sales", money(statement.creditGrantedMinor))
-                    LabelValueRow("Cash debt repayments received later", money(statement.repaidMinor))
+                    LabelValueRow("Cash debt repayments received later", money(statement.events.filter { !it.advanceFunded }.mapNotNull { it.repayment }.sumOf { it.amountMinor }))
+                    LabelValueRow("Customer advances applied to debt", money(statement.events.filter { it.advanceFunded }.mapNotNull { it.repayment }.sumOf { it.amountMinor }))
                     Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         if (customer.balanceMinor > 0) PosButton("Record payment", pay)
                         NeutralButton("Assign payments to receipts", assign)
@@ -255,7 +256,7 @@ private fun ColumnScope.CustomerHistory(statement: CustomerStatement, pay: () ->
                         if(sale.creditMinor>0) Text(sale.dueDate?.let { "Agreed repayment due date: $it · WAT" } ?: "No repayment due date recorded",style=MaterialTheme.typography.bodySmall)
                         if (adjust != null && sale.id in adjustableReceipts) NeutralButton("Write off debt", { adjust(sale.id, null) })
                     }
-                    event.repayment?.let { LabelValueRow("Cash received against debt", money(it.amountMinor), emphasized = true) }
+                    event.repayment?.let { LabelValueRow(if (event.advanceFunded) "Customer advance applied to debt" else "Cash received against debt", money(it.amountMinor), emphasized = true) }
                     event.creditReturn?.let {
                         Text("Original sale ${it.saleId}",style=MaterialTheme.typography.bodySmall)
                         LabelValueRow("Customer debt reduced",money(it.amountMinor),emphasized=true)
