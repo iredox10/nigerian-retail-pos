@@ -164,6 +164,7 @@ class PosRepository(path: String = File(System.getProperty("user.home"), ".niger
         initializeOrderReservations()
         initializeLandedCosts()
         initializePromotions()
+        initializeReplenishmentPolicies()
         execute("CREATE TRIGGER IF NOT EXISTS activity_audit_no_update BEFORE UPDATE ON activity_audit BEGIN SELECT RAISE(ABORT,'Activity history cannot be edited'); END")
         execute("CREATE TRIGGER IF NOT EXISTS activity_audit_no_delete BEFORE DELETE ON activity_audit BEGIN SELECT RAISE(ABORT,'Activity history cannot be removed'); END")
     }
@@ -1075,7 +1076,7 @@ class PosRepository(path: String = File(System.getProperty("user.home"), ".niger
     }
     private fun supplierPayment(r:ResultSet)=SupplierPayment(r.getString("id"),r.getString("tenant_id"),r.getString("receipt_id"),r.getString("supplier_name"),r.getLong("amount_minor"),r.getString("created_at"))
 
-    private val snapshotTableOrder get() = listOf("products","product_metadata_changes","selling_units","stock_settings_changes","purchase_units","customers","customer_changes","cash_shifts","sales","sale_lines","repayments","repayment_allocations","allocation_reversals","stock_receipts","expenses","sale_returns","return_lines","supplier_payments","cash_entries","catalogue_changes","stock_adjustments","outbox","activity_audit") + supplierProfileSnapshotTables + purchaseOrderSnapshotTables + purchaseDiscrepancySnapshotTables + inventoryDispositionSnapshotTables + stockCountSessionSnapshotTables + shopProfileSnapshotTables + externalPaymentSnapshotTables + priceListSnapshotTables + bulkCatalogueUpdateSnapshotTables + supplierInvoiceSnapshotTables + creditReturnSnapshotTables + quotationSnapshotTables + localImageSnapshotTables + ownerCashSnapshotTables + minimumPriceSnapshotTables + repackingSnapshotTables + expenseAttachmentSnapshotTables + saleTenderSnapshotTables + reminderSnapshotTables + variantSnapshotTables + purchaseReturnSnapshotTables + debtAdjustmentSnapshotTables + cashExchangeSnapshotTables + customerOrderSnapshotTables + orderReservationSnapshotTables + landedCostSnapshotTables + promotionSnapshotTables
+    private val snapshotTableOrder get() = listOf("products","product_metadata_changes","selling_units","stock_settings_changes","purchase_units","customers","customer_changes","cash_shifts","sales","sale_lines","repayments","repayment_allocations","allocation_reversals","stock_receipts","expenses","sale_returns","return_lines","supplier_payments","cash_entries","catalogue_changes","stock_adjustments","outbox","activity_audit") + supplierProfileSnapshotTables + purchaseOrderSnapshotTables + purchaseDiscrepancySnapshotTables + inventoryDispositionSnapshotTables + stockCountSessionSnapshotTables + shopProfileSnapshotTables + externalPaymentSnapshotTables + priceListSnapshotTables + bulkCatalogueUpdateSnapshotTables + supplierInvoiceSnapshotTables + creditReturnSnapshotTables + quotationSnapshotTables + localImageSnapshotTables + ownerCashSnapshotTables + minimumPriceSnapshotTables + repackingSnapshotTables + expenseAttachmentSnapshotTables + saleTenderSnapshotTables + reminderSnapshotTables + variantSnapshotTables + purchaseReturnSnapshotTables + debtAdjustmentSnapshotTables + cashExchangeSnapshotTables + customerOrderSnapshotTables + orderReservationSnapshotTables + landedCostSnapshotTables + promotionSnapshotTables + replenishmentPolicySnapshotTables
     @Synchronized fun exportTenantSnapshot(tenantId:String):TenantSnapshot = transaction {
         requirePermission(tenantId, StaffPermission.BACKUP)
         requireTenant(tenantId)
@@ -1284,6 +1285,7 @@ class PosRepository(path: String = File(System.getProperty("user.home"), ".niger
         validateOrderReservationSnapshot(tenant.id)
         validateLandedCostSnapshot(tenant.id)
         validatePromotionHistory(tenant.id)
+        validateReplenishmentPolicies(tenant.id)
         provisionOwner(tenant)
         tenant
     }

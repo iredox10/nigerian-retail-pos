@@ -14,6 +14,8 @@ data class ReorderSuggestion(
     val approvedIncoming: Long,
     val target: Long,
     val shortage: Long,
+    val reserved: Long = 0L,
+    val policy: ReplenishmentPolicy? = null,
 )
 
 data class ReorderReview(val from: LocalDate, val through: LocalDate, val coverDays: Int, val rows: List<ReorderSuggestion>)
@@ -69,18 +71,25 @@ fun PosRepository.reorderSuggestions(
         row.getString("product_id") to Quantity(count, row.getInt("quantity_precision"))
             .rescale(row.getInt("base_precision")).timesWhole(row.getLong("base_units_per_unit")).scaledUnits
     }.quantityByProduct()
+    val policies = replenishmentPolicies(tenantId)
+    val reserved = orderReservedQuantities(tenantId, permission = StaffPermission.MANAGE_STOCK)
     val rows = products(tenantId).mapNotNull { product ->
+        val policy = policies[product.id]
+        val held = reserved[product.id] ?: 0L
+        val available = product.unreservedStock(held)
         val sold = retained[product.id] ?: 0L
         val pending = incoming[product.id] ?: 0L
         val scale = quantityScaleFactor(product.quantityPrecision)
         val threshold = product.reorderLevel?.let { Math.multiplyExact(it.toLong(), scale) }
         val minimum = if (threshold == null) 0L else Math.addExact(threshold, 1L)
-        val demandTarget = (BigInteger.valueOf(sold) * BigInteger.valueOf(coverDays.toLong()) +
+        val demandTarget = (BigInteger.valueOf(sold) * BigInteger.valueOf(coverDays.toLong() + (policy?.leadDays ?: 0)) +
             BigInteger.valueOf(observationDays - 1)).divide(BigInteger.valueOf(observationDays)).longValueExact()
-        val target = maxOf(minimum, demandTarget)
-        val shortage = ((target - product.exactStockScaled).coerceAtLeast(0) - pending).coerceAtLeast(0)
-        if (shortage == 0L && (threshold == null || product.exactStockScaled > threshold)) null
-        else ReorderSuggestion(product, sold, pending, target, shortage)
+        val target = maxOf(minimum, Math.addExact(demandTarget, policy?.safetyScaled ?: 0L))
+        val need = ((target - available).coerceAtLeast(0) - pending).coerceAtLeast(0)
+        val multiple = policy?.multipleScaled ?: 1L
+        val shortage = if (need == 0L) 0L else Math.multiplyExact(Math.addExact((need - 1) / multiple, 1), multiple)
+        if (shortage == 0L && (threshold == null || available > threshold)) null
+        else ReorderSuggestion(product, sold, pending, target, shortage, held, policy)
     }.sortedWith(compareBy<ReorderSuggestion> { it.shortage == 0L }
         .thenBy { it.product.name.lowercase(java.util.Locale.ROOT) }.thenBy { it.product.id })
     ReorderReview(from, today, coverDays, rows)
