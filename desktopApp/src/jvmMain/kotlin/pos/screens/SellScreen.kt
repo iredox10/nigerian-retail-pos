@@ -4,6 +4,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.delay
+import pos.data.minimumPriceApprovalRequest
 import pos.data.orderReservationDate
 
 import androidx.compose.foundation.background
@@ -51,7 +52,8 @@ fun SellScreen(
     allowDiscounts: Boolean = true,
     repository:pos.data.PosRepository?=null,
     imageRevision:Int=0,
-    onCheckout: (List<CartLine>, Long, String?, String, String?, BasketDiscount?, List<ExternalPayment>, Long, String?) -> String?,
+    onRequestApproval: ((List<CartLine>, String, (String) -> Unit) -> Unit)? = null,
+    onCheckout: (List<CartLine>, Long, String?, String, String?, BasketDiscount?, List<ExternalPayment>, Long, String?, String?) -> String?,
 ) {
     val receiptScope = rememberCoroutineScope()
     var receiptPrinting by remember { mutableStateOf(false) }
@@ -88,6 +90,8 @@ fun SellScreen(
     var selectingPrices by remember {mutableStateOf(false)}
     var selectingPromotion by remember { mutableStateOf<String?>(null) }
     var selectingPriceCustomer by remember {mutableStateOf(false)}
+    var approvalToken by remember(tenantId) { mutableStateOf<String?>(null) }
+    var approvalFingerprint by remember(tenantId) { mutableStateOf<String?>(null) }
     var changingPrice by remember { mutableStateOf<String?>(null) }
     var agreedPrice by remember { mutableStateOf("") }
     var percentageMode by remember { mutableStateOf(false) }
@@ -136,7 +140,7 @@ fun SellScreen(
             cashText=cash;selectedCustomer=customerId;method=paymentMethod;dueDateText=due;error=null
         } catch(e:Exception) { error="Payment details not saved: ${e.message}" }
     }
-    fun resetCurrent() { basketKind="";basketValue=0;basketReason="";basketBasis="";encodedCart="";encodedDiscounts="";changingPrice=null;operationId=UUID.randomUUID().toString();stage="items";cashText="";selectedCustomer=null;method="cash";externalMethod="transfer";externalAmountText="";externalReference="";externalAccount="";note="";dueDateText="";search="";showSaleOnly=false;error=null;reviewNotice=null }
+    fun resetCurrent() { approvalToken=null;approvalFingerprint=null; basketKind="";basketValue=0;basketReason="";basketBasis="";encodedCart="";encodedDiscounts="";changingPrice=null;operationId=UUID.randomUUID().toString();stage="items";cashText="";selectedCustomer=null;method="cash";externalMethod="transfer";externalAmountText="";externalReference="";externalAccount="";note="";dueDateText="";search="";showSaleOnly=false;error=null;reviewNotice=null }
     val quantities = remember(encodedCart) {
         encodedCart.split(';').mapNotNull { item ->
             val index = item.lastIndexOf(':')
@@ -209,7 +213,12 @@ fun SellScreen(
         catch(e: Exception) { error = "Item change not saved: ${e.message}" }
     }
 
-    val forbiddenDraft = (!allowCredit && method in setOf("credit","split_credit")) || (!allowDiscounts && (discounts.isNotEmpty() || basketRule!=null))
+    val approvalReview = remember(repository, tenantId, operationId, lines, imageRevision) {
+        runCatching { repository?.minimumPriceApprovalRequest(tenantId, operationId, lines) }
+    }
+    val validApprovalToken = approvalToken?.takeIf { approvalFingerprint == approvalReview.getOrNull()?.fingerprint }
+    val approvalNeeded = lines.isNotEmpty() && ((!allowDiscounts && (discounts.isNotEmpty() || basketRule != null)) || approvalReview.getOrNull()?.belowFloor == true)
+    val forbiddenDraft = (!allowCredit && method in setOf("credit","split_credit")) || (!allowDiscounts && validApprovalToken == null && (discounts.isNotEmpty() || basketRule!=null))
     val cashGiven = parseNaira(cashText)
     val isSplit=method in setOf("split","split_credit")
     val externalResult=runCatching {if(isSplit) listOf(ExternalPayment(externalMethod,requireNotNull(parseNaira(externalAmountText)) {"Enter a valid external payment amount."},externalReference.trim(),externalAccount.trim())) else emptyList()}
@@ -402,7 +411,7 @@ fun SellScreen(
                                             Text("Reason: ${line.discountReason?.let(::displayPriceListReason)}", style = MaterialTheme.typography.bodySmall)
                                         }
                                         }
-                                        if (allowDiscounts) Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                        if (allowDiscounts || onRequestApproval != null) Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                                             TextButton({
                                                 changingPrice = line.key
                                                 percentageMode = false
@@ -516,6 +525,15 @@ fun SellScreen(
                                 Row(Modifier.fillMaxWidth()) { Text("Discount", Modifier.weight(1f)); Text("−${money(cartDiscountTotal(lines))}") }
                             }
                             Text(money(total), fontSize = 40.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(bottom = 16.dp))
+                            if (approvalNeeded && onRequestApproval != null) {
+                                TextButton({
+                                    val request = approvalReview.getOrNull()
+                                    if (request != null) onRequestApproval(lines, operationId) { token ->
+                                        approvalToken = token; approvalFingerprint = request.fingerprint
+                                    } else error = approvalReview.exceptionOrNull()?.message ?: "Review the sale before requesting approval."
+                                }, modifier = Modifier.fillMaxWidth()) { Text(if (validApprovalToken == null) "Ask manager to approve price" else "Request fresh price approval") }
+                            }
+                            if (validApprovalToken != null) Text("Price approval ready for this sale", style = MaterialTheme.typography.bodySmall)
                             Button(shape = MaterialTheme.shapes.small, onClick = {
                                 if (stage == "items") { stage = "payment"; return@Button }
                                 if (stage != "payment" || currentDraft() != reviewedPayment) return@Button
@@ -530,7 +548,7 @@ fun SellScreen(
                                     method in setOf("credit","split_credit") && credit>0 && dueDateText.isNotBlank() && runCatching { val date=java.time.LocalDate.parse(dueDateText.trim()); require(date.toString()==dueDateText.trim() && !date.isBefore(java.time.LocalDate.now(java.time.ZoneId.of("Africa/Lagos")))) }.isFailure -> error="Use YYYY-MM-DD for a due date today or later."
                                     else -> {
                                         committing = true
-                                        val result = try { onCheckout(lines, appliedCash, customer?.id, operationId, if(credit>0) dueDateText.trim().ifBlank { null } else null,basketRule,externalPayments,cash,note.ifEmpty { null }) } catch (e: Exception) { e.message ?: "Sale not saved" }
+                                        val result = try { onCheckout(lines, appliedCash, customer?.id, operationId, if(credit>0) dueDateText.trim().ifBlank { null } else null,basketRule,externalPayments,cash,note.ifEmpty { null },validApprovalToken) } catch (e: Exception) { e.message ?: "Sale not saved" }
                                         committing = false
                                         if (result == null) {
                                             error = null

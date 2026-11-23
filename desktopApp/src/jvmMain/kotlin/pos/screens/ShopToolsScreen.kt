@@ -19,6 +19,8 @@ private data class ShopTool(val title: String, val detail: String, val route: St
 fun ShopToolsScreen(allowed: (StaffPermission) -> Boolean, open: (String) -> Unit) {
     val groups = listOf(
         "Trading & customers" to listOf(
+            ShopTool("Bundles", "Sell a saved group of stock items", "Bundles", PosIcons.Package, StaffPermission.SELL),
+            ShopTool("Cash handover", "Count and pass the shared drawer to another person", "Cash handover", PosIcons.Users, StaffPermission.MANAGE_MONEY),
             ShopTool("Customer orders", "Deposits, stock holds and collections", "Orders", PosIcons.ClipboardList, StaffPermission.MANAGE_CUSTOMERS),
             ShopTool("Quotations", "Prepare and review agreed prices", "Quotations", PosIcons.FileText, StaffPermission.VIEW_SALES),
             ShopTool("Suppliers & payments", "Purchases, deliveries and supplier balances", "Suppliers", PosIcons.Truck, StaffPermission.MANAGE_SUPPLIERS),
@@ -30,6 +32,7 @@ fun ShopToolsScreen(allowed: (StaffPermission) -> Boolean, open: (String) -> Uni
             ShopTool("Import new items from CSV", "Review your catalogue before importing", "Import", PosIcons.Upload, StaffPermission.MANAGE_STOCK)),
         "Your workspace" to listOf(
             ShopTool("Shop & receipt details", "Shop identity, logo and receipt wording", "Shop settings", PosIcons.Store, StaffPermission.MANAGE_SETTINGS),
+            ShopTool("Owner recovery", "Set up a recovery code for this shop", "Owner recovery", PosIcons.LockKeyhole, StaffPermission.MANAGE_STAFF),
             ShopTool("Staff & permissions", "Manage the people who use this shop", "Staff", PosIcons.ShieldCheck, StaffPermission.MANAGE_STAFF),
             ShopTool("Help & practice", "Find guidance and try sample sales", "Help", PosIcons.CircleHelp))
     )

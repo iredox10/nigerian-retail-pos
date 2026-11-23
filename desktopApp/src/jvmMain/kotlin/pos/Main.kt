@@ -27,6 +27,17 @@ import pos.screens.SellScreen
 import pos.screens.StockScreen
 import pos.screens.ShopSettingsScreen
 import pos.screens.QuotationsScreen
+import pos.data.minimumPriceApprovalRequest
+import pos.screens.BundlesScreen
+import pos.screens.CashHandoverScreen
+import pos.screens.MinimumPriceApprovalDialog
+import pos.screens.CostingScreen
+import pos.screens.CustomerAdvancesScreen
+import pos.screens.OwnerRecoveryScreen
+import pos.screens.OwnerRecoveryDialog
+import pos.screens.VariantMatrixScreen
+import pos.screens.CustomerDisputesScreen
+import pos.screens.OrderDispatchScreen
 import pos.screens.CustomerOrdersScreen
 import pos.screens.LandedCostsScreen
 import pos.screens.PromotionsScreen
@@ -85,6 +96,16 @@ fun main(args: Array<String>) {
     DisposableEffect(session?.token) {automaticBackups.lock();onDispose {automaticBackups.lock()}}
     // Only the isolated preview may run without a credential-issued session.
     val isolatedPreview = initialTenant != null && initialSession == null
+    repo.setMinimumPriceApprovalCheck { tenantId, grantId, request ->
+        val active = requireNotNull(session) { "Sign in to use a manager approval." }
+        require(active.tenantId == tenantId) { "Approval belongs to another shop." }
+        staffAccess.requireMinimumPriceApproval(active, grantId, request)
+    }
+    repo.setCashHandoverAuthorizationCheck { tenantId, grantId, request ->
+        val active = requireNotNull(session) { "Sign in to hand over cash." }
+        require(active.tenantId == tenantId)
+        staffAccess.requireCashHandover(active, grantId, request)
+    }
     repo.setPermissionCheck { tenantId, permission ->
         if (!isolatedPreview) {
             val active = requireNotNull(session) { "Unlock this shop before making changes." }
@@ -109,20 +130,27 @@ fun main(args: Array<String>) {
         return
     }
     val current = tenant!!
+    var disputeCustomerId by remember(current.id) { mutableStateOf<String?>(null) }
+    var priceApprovalRequest by remember(current.id) { mutableStateOf<MinimumPriceApprovalRequest?>(null) }
+    var priceApprovalResponse by remember(current.id) { mutableStateOf<((String) -> Unit)?>(null) }
+    var dispatchOrderId by remember(current.id) { mutableStateOf<String?>(null) }
     fun allowed(permission: StaffPermission) = isolatedPreview || session?.role?.allows(permission)==true
     fun routeAllowed(destination: String): Boolean = when(destination) {
         "Sell" -> allowed(StaffPermission.SELL)
         "Sales" -> allowed(StaffPermission.VIEW_SALES)
         "Quotations" -> allowed(StaffPermission.VIEW_SALES)
-        "Stock","Import","Stock counts","Stock removed","Bulk update","Import product photos","Price lists","Promotions","Repacking","Reorder suggestions" -> allowed(StaffPermission.MANAGE_STOCK)
+        "Stock","Import","Stock counts","Stock removed","Bulk update","Import product photos","Price lists","Promotions","Repacking","Reorder suggestions","Variant matrix" -> allowed(StaffPermission.MANAGE_STOCK)
         "Purchase cost history" -> allowed(StaffPermission.MANAGE_STOCK) && allowed(StaffPermission.MANAGE_SUPPLIERS)
+        "Bundles" -> allowed(StaffPermission.SELL)
+        "Cash handover" -> allowed(StaffPermission.MANAGE_MONEY)
+        "Stock value & costs" -> allowed(StaffPermission.MANAGE_STOCK) && allowed(StaffPermission.VIEW_REPORTS)
         "Landed costs" -> allowed(StaffPermission.MANAGE_STOCK) && allowed(StaffPermission.MANAGE_MONEY)
-        "Customers","Credit review","Repayment follow-ups","Orders" -> allowed(StaffPermission.MANAGE_CUSTOMERS)
+        "Customers","Credit review","Repayment follow-ups","Orders","Customer disputes","Order dispatch","Customer advances" -> allowed(StaffPermission.MANAGE_CUSTOMERS)
         "Money" -> allowed(StaffPermission.MANAGE_MONEY)
         "Reports","Audit" -> allowed(StaffPermission.VIEW_REPORTS)
         "Suppliers" -> allowed(StaffPermission.MANAGE_SUPPLIERS)
         "Backup" -> allowed(StaffPermission.BACKUP)
-        "Staff" -> allowed(StaffPermission.MANAGE_STAFF)
+        "Staff","Owner recovery" -> allowed(StaffPermission.MANAGE_STAFF)
         "Shop settings","Minimum prices" -> allowed(StaffPermission.MANAGE_SETTINGS)
         else -> true
     }
@@ -178,6 +206,13 @@ fun main(args: Array<String>) {
     }
     val products = remember(current.id, revision) { repo.products(current.id) }
     val customers = remember(current.id, revision) { if (allowed(StaffPermission.SELL_CREDIT) || allowed(StaffPermission.MANAGE_CUSTOMERS)) repo.customers(current.id) else emptyList() }
+    priceApprovalRequest?.let { request ->
+        session?.takeIf { it.tenantId == request.tenantId }?.let { requester ->
+            MinimumPriceApprovalDialog(staffAccess, requester, request,
+                onDismiss={priceApprovalRequest=null;priceApprovalResponse=null},
+                onApproved={proof -> priceApprovalResponse?.invoke(proof.id);priceApprovalRequest=null;priceApprovalResponse=null})
+        }
+    }
     Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
         Row(Modifier.weight(1f)) {
             Column(Modifier.width(208.dp).fillMaxHeight().background(MaterialTheme.colorScheme.surface).padding(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -194,7 +229,7 @@ fun main(args: Array<String>) {
                 Text(session?.let { "${it.name} · ${it.role.name.lowercase().replaceFirstChar { c -> c.uppercaseChar() }}" } ?: "Isolated owner preview", style = MaterialTheme.typography.labelMedium)
                 Spacer(Modifier.height(20.dp))
                 listOf("Sell", "Sales", "Stock", "Customers", "Money", "More").filter { routeAllowed(it) }.forEach { item ->
-                    val selected = route == item || (item == "Customers" && route == "Repayment follow-ups") || (item == "Stock" && route in setOf("Stock counts","Stock removed","Bulk update","Import product photos","Price lists","Repacking","Reorder suggestions","Purchase cost history","Landed costs","Promotions","Minimum prices")) || (item == "More" && route in setOf("Reports","Suppliers","Backup","Import","Credit review","Staff","Audit","Help","Shop settings","Quotations","Orders"))
+                    val selected = route == item || (item == "Customers" && route in setOf("Repayment follow-ups", "Customer disputes", "Customer advances")) || (item == "Stock" && route in setOf("Stock counts","Stock removed","Bulk update","Import product photos","Price lists","Repacking","Reorder suggestions","Purchase cost history","Landed costs","Promotions","Minimum prices","Variant matrix","Stock value & costs")) || (item == "More" && route in setOf("Reports","Suppliers","Backup","Import","Credit review","Staff","Audit","Help","Shop settings","Quotations","Orders","Order dispatch","Owner recovery","Bundles","Cash handover"))
                     Surface(onClick = {
                         try {
                             session?.let { staffAccess.requireSession(it,StaffPermission.SELL) }
@@ -214,9 +249,10 @@ fun main(args: Array<String>) {
             Column(Modifier.weight(1f).fillMaxHeight()) {
                 Row(Modifier.fillMaxWidth().height(64.dp).padding(horizontal = 24.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text(if(route=="Audit") "Activity history" else route, style = MaterialTheme.typography.headlineSmall)
-                    if (route == "Repayment follow-ups") TextButton({route="Customers"}) {Text("Back to customers")}
-                    else if(route in setOf("Stock counts","Stock removed","Bulk update","Import product photos","Price lists","Repacking","Reorder suggestions","Purchase cost history","Landed costs","Promotions","Minimum prices")) TextButton({route="Stock"}) {Text("Back to stock")}
-                    else if (route in setOf("Reports","Suppliers","Backup","Import","Credit review","Staff","Audit","Help","Shop settings","Quotations","Orders")) TextButton({ route = if(route=="Import") "Stock" else "More" }) { Text(if(route=="Import") "Back to stock" else "Back to shop tools") }
+                    if (route in setOf("Repayment follow-ups", "Customer disputes", "Customer advances")) TextButton({route="Customers"}) {Text("Back to customers")}
+                    else if(route in setOf("Stock counts","Stock removed","Bulk update","Import product photos","Price lists","Repacking","Reorder suggestions","Purchase cost history","Landed costs","Promotions","Minimum prices","Variant matrix","Stock value & costs")) TextButton({route="Stock"}) {Text("Back to stock")}
+                    else if (route == "Order dispatch") TextButton({route="Orders"}) {Text("Back to orders")}
+                    else if (route in setOf("Reports","Suppliers","Backup","Import","Credit review","Staff","Audit","Help","Shop settings","Quotations","Orders","Order dispatch","Owner recovery","Bundles","Cash handover")) TextButton({ route = if(route=="Import") "Stock" else "More" }) { Text(if(route=="Import") "Back to stock" else "Back to shop tools") }
                     Spacer(Modifier.weight(1f))
                     if (route == "Sell" && allowed(StaffPermission.MANAGE_MONEY)) {
                         val activeShift = remember(current.id, revision) { repo.activeCashShift(current.id) }
@@ -231,10 +267,14 @@ fun main(args: Array<String>) {
                 Box(Modifier.weight(1f).padding(24.dp)) {
                     if (!routeAllowed(route)) Text("Your role cannot open this workspace. Lock the shop to sign in with another account.")
                     else when (route) {
-                        "Sell" -> saleStates.SaveableStateProvider(current.id) { SellScreen(current.id, products, customers, remember(current.id, revision) { repo.sellingUnits(current.id) }, allowCredit = allowed(StaffPermission.SELL_CREDIT), allowDiscounts = allowed(StaffPermission.DISCOUNT),repository=repo,imageRevision=revision) { lines, cash, customer, operationId, dueDate, basketDiscount, externalPayments, cashGiven, note ->
-                            try { repo.checkout(current.id, lines, cash, customer, operationId,dueDate,basketDiscount,externalPayments,cashGiven,note); revision++; null } catch (e: Exception) { e.message ?: "Sale not saved" }
+                        "Sell" -> saleStates.SaveableStateProvider(current.id) { SellScreen(current.id, products, customers, remember(current.id, revision) { repo.sellingUnits(current.id) }, allowCredit = allowed(StaffPermission.SELL_CREDIT), allowDiscounts = allowed(StaffPermission.DISCOUNT),repository=repo,imageRevision=revision,
+                            onRequestApproval=if(session!=null) ({ lines, operation, approved ->
+                                try { priceApprovalRequest=repo.minimumPriceApprovalRequest(current.id,operation,lines);priceApprovalResponse=approved }
+                                catch(e:Exception) {notice=e.message ?: "Price approval could not be requested."}
+                            }) else null) { lines, cash, customer, operationId, dueDate, basketDiscount, externalPayments, cashGiven, note, priceApproval ->
+                            try { repo.checkout(current.id, lines, cash, customer, operationId,dueDate,basketDiscount,externalPayments,cashGiven,note,priceApproval); revision++; null } catch (e: Exception) { e.message ?: "Sale not saved" }
                         } }
-                        "Stock" -> StockScreen(repo, current.id, onChanged={ revision++ }, onImport={ route="Import" }, onCounts={route="Stock counts"}, onDispositions={route="Stock removed"}, onBulkUpdate={route="Bulk update"}, onPriceLists={route="Price lists"}, onMinimumPrices=if(allowed(StaffPermission.MANAGE_SETTINGS)) ({route="Minimum prices"}) else null, onRepacking={route="Repacking"}, onReorder={route="Reorder suggestions"}, onPurchaseCosts=if(allowed(StaffPermission.MANAGE_SUPPLIERS)) ({route="Purchase cost history"}) else null, onPhotoImport={route="Import product photos"}, onPromotions={route="Promotions"}, onLandedCosts=if(allowed(StaffPermission.MANAGE_MONEY)) ({route="Landed costs"}) else null)
+                        "Stock" -> StockScreen(repo, current.id, onChanged={ revision++ }, onImport={ route="Import" }, onCounts={route="Stock counts"}, onDispositions={route="Stock removed"}, onBulkUpdate={route="Bulk update"}, onPriceLists={route="Price lists"}, onMinimumPrices=if(allowed(StaffPermission.MANAGE_SETTINGS)) ({route="Minimum prices"}) else null, onRepacking={route="Repacking"}, onReorder={route="Reorder suggestions"}, onPurchaseCosts=if(allowed(StaffPermission.MANAGE_SUPPLIERS)) ({route="Purchase cost history"}) else null, onPhotoImport={route="Import product photos"}, onPromotions={route="Promotions"}, onLandedCosts=if(allowed(StaffPermission.MANAGE_MONEY)) ({route="Landed costs"}) else null, onVariants={route="Variant matrix"},onCosting=if(allowed(StaffPermission.VIEW_REPORTS)) ({route="Stock value & costs"}) else null)
                         "Reorder suggestions" -> ReorderSuggestionsScreen(repo,current.id)
                         "Purchase cost history" -> PurchaseCostHistoryScreen(repo,current.id)
                         "Landed costs" -> LandedCostsScreen(repo,current.id)
@@ -246,13 +286,21 @@ fun main(args: Array<String>) {
                         "Price lists" -> PriceListsScreen(repo,current.id) {revision++}
                         "Minimum prices" -> MinimumPricesScreen(repo,current.id) {revision++}
                         "Repacking" -> RepackingScreen(repo,current.id) {revision++}
-                        "Customers" -> CustomerWorkspace(repo,current.id,onFollowUps={route="Repayment follow-ups"}) { revision++ }
+                        "Customers" -> CustomerWorkspace(repo,current.id,onFollowUps={route="Repayment follow-ups"},onDisputes={disputeCustomerId=it;route="Customer disputes"},onAdvances={disputeCustomerId=it;route="Customer advances"}) { revision++ }
                         "Repayment follow-ups" -> RepaymentRemindersScreen(repo,current.id)
                         "Sales" -> SalesScreen(repo, current.id, allowReturns = allowed(StaffPermission.RETURN_SALE)) { revision++ }
                         "Credit review" -> CreditReviewScreen(repo,current.id)
                         "Reports" -> ReportsScreen(repo, current.id)
                         "Audit" -> AuditScreen(repo,current.id,staffAccess,session)
-                        "Orders" -> CustomerOrdersScreen(repo,current.id) { revision++ }
+                        "Orders" -> CustomerOrdersScreen(repo,current.id,onDispatch={dispatchOrderId=it;route="Order dispatch"},onChanged={ revision++ })
+                        "Bundles" -> BundlesScreen(repo,current.id,canManage=allowed(StaffPermission.MANAGE_STOCK)) {revision++}
+                        "Cash handover" -> session?.let { CashHandoverScreen(repo,current.id,staffAccess,it) {revision++} } ?: Text("Sign in to hand over the drawer.")
+                        "Stock value & costs" -> CostingScreen(repo,current.id) {revision++}
+                        "Variant matrix" -> VariantMatrixScreen(repo,current.id) {revision++}
+                        "Owner recovery" -> session?.let { OwnerRecoveryScreen(staffAccess,it) } ?: Text("Sign in as the owner to set up recovery.")
+                        "Customer advances" -> CustomerAdvancesScreen(repo,current.id,customerId=disputeCustomerId) {revision++}
+                        "Customer disputes" -> CustomerDisputesScreen(repo,current.id,customerId=disputeCustomerId) { revision++ }
+                        "Order dispatch" -> OrderDispatchScreen(repo,current.id,onChanged={revision++},orderId=dispatchOrderId)
                         "Quotations" -> QuotationsScreen(repo,current.id,onChanged={revision++},canManage=allowed(StaffPermission.DISCOUNT))
                         "Suppliers" -> SuppliersScreen(repo, current.id) { revision++ }
                         "Backup" -> BackupPanel(repo, current,automaticBackups)
@@ -282,6 +330,7 @@ fun main(args: Array<String>) {
     var password by remember { mutableStateOf("") }
     var error by remember { mutableStateOf<String?>(null) }
     var restoring by remember { mutableStateOf(false) }
+    var recovering by remember { mutableStateOf(false) }
     var staffId by remember { mutableStateOf<String?>(null) }
     var usePin by remember { mutableStateOf(false) }
     var configuringPin by remember { mutableStateOf(false) }
@@ -304,6 +353,8 @@ fun main(args: Array<String>) {
             error="Backup restored. Sign in with the new owner password."
         }
     }
+    if (recovering && selected != null) OwnerRecoveryDialog(staffAccess, selected!!.id,
+        onDismiss={recovering=false}, onRecovered={recovering=false;password="";pinNotice="Owner access recovered. Sign in with your new password."})
     Row(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).padding(64.dp), horizontalArrangement=Arrangement.spacedBy(64.dp), verticalAlignment=Alignment.CenterVertically) {
         Column(Modifier.weight(1f), verticalArrangement=Arrangement.spacedBy(24.dp)) {
             Surface(color = PosPalette.AccentTint, shape = MaterialTheme.shapes.large) { Box(Modifier.size(80.dp), contentAlignment = Alignment.Center) { PosIcon(PosIcons.Store, Modifier.size(36.dp), PosPalette.Accent) } }
@@ -340,6 +391,7 @@ fun main(args: Array<String>) {
                     onEnter(selected!!,active);password=""
                 }
             } catch(e:Exception) {error=e.message ?: "Could not open shop"}},modifier=Modifier.fillMaxWidth().height(52.dp)) { Text(if(selected==null) "Create shop workspace" else "Unlock shop") }
+            if(selected!=null && staffId==null) TextButton({recovering=true}) {Text("Recover owner access")}
             if(selected!=null) TextButton(shape=MaterialTheme.shapes.small,onClick={selected=null;staffId=null;password=""}) { Text("Create another shop") }
             TextButton({ restoring=true }) { Text("Restore an encrypted backup") }
             Text("No online account is created. Use a trusted computer; local database encryption is not yet enabled.",style=MaterialTheme.typography.bodySmall)
