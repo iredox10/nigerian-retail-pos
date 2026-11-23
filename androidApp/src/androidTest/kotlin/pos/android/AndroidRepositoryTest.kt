@@ -127,4 +127,23 @@ class AndroidRepositoryTest {
         }
     }
 
+    @Test fun measuredAndPackMovementsUseExactPortableIntegerScaling()=fixture {dir ->
+        PosRepository(dir.resolve("pos.db").path).use {repo ->
+            val shop=repo.createTenant("Measured shop")
+            val product=repo.addProduct(shop.id,"Rice","kg",100000,10.0,quantityPrecision=3)
+            val pack=repo.addSellingUnit(shop.id,product.id,"bag",2,190000)
+            val drawer=repo.openCashShift(shop.id,0)
+            val lines=listOf(CartLine(product,125),CartLine(product,1,pack.id,pack.name,pack.priceMinor,pack.baseUnitsPerUnit))
+            val sale=repo.checkout(shop.id,lines,202500,operationId="mixed")
+            assertEquals(7875L,repo.products(shop.id).single().exactStockScaled)
+            val sold=repo.inventoryMovements(shop.id,product.id).single {it.kind=="sale"}
+            assertEquals(-2.125,sold.quantityDelta,0.0)
+            val returned=repo.returnItems(shop.id,sale.id,mapOf(product.id to 125),true,"Unopened rice","return")
+            assertEquals(12500L,returned.refundMinor)
+            assertEquals(8000L,repo.products(shop.id).single().exactStockScaled)
+            assertEquals(0.125,repo.inventoryMovements(shop.id,product.id).single {it.kind=="return"}.quantityDelta,0.0)
+            assertEquals(190000L,repo.expectedCash(shop.id,drawer.id))
+        }
+    }
+
 }
