@@ -146,8 +146,8 @@ fun PosTheme(content: @Composable () -> Unit) {
         typography = typography,
         shapes = Shapes(
             extraSmall = RoundedCornerShape(6.dp),
-            small = RoundedCornerShape(6.dp),
-            medium = RoundedCornerShape(8.dp),
+            small = RoundedCornerShape(8.dp),
+            medium = RoundedCornerShape(12.dp),
             large = RoundedCornerShape(12.dp),
             extraLarge = RoundedCornerShape(12.dp),
         ),

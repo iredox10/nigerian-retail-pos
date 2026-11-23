@@ -1,13 +1,7 @@
 package pos.ui.components
 
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.defaultMinSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -39,7 +33,7 @@ fun PosButton(
         onClick = onClick,
         enabled = enabled,
         modifier = modifier.defaultMinSize(minHeight = PosSpacing.ActionHeight),
-        shape = RoundedCornerShape(6.dp),
+        shape = RoundedCornerShape(8.dp),
         contentPadding = PaddingValues(horizontal = 20.dp, vertical = 12.dp),
         elevation = null,
         colors = ButtonDefaults.buttonColors(
@@ -49,6 +43,10 @@ fun PosButton(
             disabledContentColor = PosPalette.Secondary,
         ),
     ) {
+        actionIcon(text)?.let {
+            PosIcon(it)
+            Spacer(Modifier.width(8.dp))
+        }
         Text(text, style = MaterialTheme.typography.labelLarge, color = Color.Unspecified)
     }
 }
@@ -65,11 +63,15 @@ fun NeutralButton(
         onClick = onClick,
         enabled = enabled,
         modifier = modifier.defaultMinSize(minHeight = PosSpacing.ControlHeight),
-        shape = RoundedCornerShape(6.dp),
+        shape = RoundedCornerShape(8.dp),
         border = BorderStroke(1.dp, if (enabled) PosPalette.ControlBorder else PosPalette.Border),
         colors = ButtonDefaults.outlinedButtonColors(contentColor = PosPalette.Ink),
         contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
     ) {
+        actionIcon(text)?.let {
+            PosIcon(it)
+            Spacer(Modifier.width(8.dp))
+        }
         Text(text, style = MaterialTheme.typography.labelLarge, color = Color.Unspecified)
     }
 }
@@ -92,10 +94,17 @@ fun MoneyText(
 
 @Composable
 fun SectionHeader(title: String, subtitle: String = "", modifier: Modifier = Modifier) {
-    Column(modifier, verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        Text(title, style = MaterialTheme.typography.titleLarge)
-        if (subtitle.isNotBlank()) {
-            Text(subtitle, style = MaterialTheme.typography.bodySmall, color = PosPalette.Secondary)
+    Row(modifier, horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+        Surface(color = PosPalette.AccentTint, shape = RoundedCornerShape(12.dp)) {
+            Box(Modifier.size(44.dp), contentAlignment = Alignment.Center) {
+                PosIcon(destinationIcon(title), tint = PosPalette.Accent)
+            }
+        }
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text(title, style = MaterialTheme.typography.titleLarge)
+            if (subtitle.isNotBlank()) {
+                Text(subtitle, style = MaterialTheme.typography.bodySmall, color = PosPalette.Secondary)
+            }
         }
     }
 }
@@ -106,6 +115,11 @@ fun EmptyState(title: String, detail: String, modifier: Modifier = Modifier) {
         modifier = modifier.padding(vertical = 32.dp, horizontal = 24.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
+        Surface(color = PosPalette.AccentTint, shape = RoundedCornerShape(16.dp)) {
+            Box(Modifier.size(64.dp), contentAlignment = Alignment.Center) {
+                PosIcon(PosIcons.Inbox, Modifier.size(28.dp), PosPalette.Accent)
+            }
+        }
         Text(title, style = MaterialTheme.typography.titleMedium)
         Text(detail, style = MaterialTheme.typography.bodyMedium, color = PosPalette.Secondary)
     }
@@ -132,8 +146,9 @@ fun PosTextField(
             modifier = Modifier.fillMaxWidth().defaultMinSize(minHeight = PosSpacing.ControlHeight),
             textStyle = MaterialTheme.typography.bodyLarge,
             placeholder = if (hint.isBlank()) null else ({ Text(hint, color = PosPalette.Secondary) }),
+            leadingIcon = if (label.contains("search", true) || label.contains("find", true)) ({ PosIcon(PosIcons.Search) }) else null,
             isError = error != null,
-            shape = RoundedCornerShape(6.dp),
+            shape = RoundedCornerShape(8.dp),
             colors = OutlinedTextFieldDefaults.colors(
                 focusedBorderColor = PosPalette.Focus,
                 unfocusedBorderColor = PosPalette.ControlBorder,
@@ -180,10 +195,21 @@ fun InlineNotice(
 ) {
     val (foreground, background) = noticeColors(tone)
     Surface(modifier = modifier, color = background, shape = RoundedCornerShape(8.dp)) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Text(title, style = MaterialTheme.typography.labelLarge, color = foreground)
-            if (detail.isNotBlank()) {
-                Text(detail, style = MaterialTheme.typography.bodySmall, color = foreground)
+        Row(Modifier.padding(16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            PosIcon(
+                when (tone) {
+                    NoticeTone.Success -> PosIcons.CircleCheck
+                    NoticeTone.Warning, NoticeTone.Danger -> PosIcons.TriangleAlert
+                    else -> PosIcons.Info
+                },
+                modifier = Modifier.padding(top = 2.dp),
+                tint = foreground,
+            )
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(title, style = MaterialTheme.typography.labelLarge, color = foreground)
+                if (detail.isNotBlank()) {
+                    Text(detail, style = MaterialTheme.typography.bodySmall, color = foreground)
+                }
             }
         }
     }

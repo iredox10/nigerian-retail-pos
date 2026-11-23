@@ -703,3 +703,11 @@ Checked 11 November 2026. These references inform patterns; they do not imply en
 - **R9:** GOV.UK Design System, Question pages: https://design-system.service.gov.uk/patterns/question-pages/
 
 When references change, preserve the product's documented behavioral requirements and review any proposed design-system changes explicitly.
+
+## 24. Icon and navigation refinement — 23 November 2026
+
+The merchant requested icons and a more intuitive, polished interface. The existing light counter direction remains the reference lock. Lucide outline artwork uses a 24-unit grid, 2-unit stroke and round caps. Navigation pairs 20-unit icons with persistent text. Selected destinations use the teal tint. Shared action buttons pair recognizable icons with their existing labels. Control corners use 8 units, working panels use 12, and empty-state icon plates use 16.
+
+Shop tools use responsive grouped cards for trading, records and workspace settings. Each card provides an icon, task name, short purpose and forward arrow. Permission filtering applies before rendering. Product-photo placeholders use package or shop symbols. Checkout retains its left goods area, right sale panel and fixed-width amount hierarchy.
+
+Reference ledger follows Carbon R1 for repeated aligned work surfaces, Shopify R2 for recognizable task entry, Square R3 for the stable payment panel and local Refero icon guidance R4 for a single outline family, visible labels and semantic color. Tokens are recorded in design/tokens.json. These changes require rendered desktop and keyboard checks. Merchant comprehension research remains pending.
