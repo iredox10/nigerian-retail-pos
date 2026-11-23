@@ -25,6 +25,8 @@ import pos.data.SaleDraft
 import pos.data.HeldSale
 import androidx.compose.ui.input.key.*
 import java.math.BigDecimal
+import java.time.LocalDate
+import java.time.ZoneId
 import java.util.UUID
 
 /** Callback is a durable commit: null means saved, otherwise the returned error stays visible. */
@@ -59,6 +61,7 @@ fun SellScreen(
     var editingBasket by remember { mutableStateOf(false) }
     val quantityErrors = remember(tenantId) { mutableStateMapOf<String,Boolean>() }
     var selectingPrices by remember {mutableStateOf(false)}
+    var selectingPromotion by remember { mutableStateOf<String?>(null) }
     var selectingPriceCustomer by remember {mutableStateOf(false)}
     var changingPrice by remember { mutableStateOf<String?>(null) }
     var agreedPrice by remember { mutableStateOf("") }
@@ -122,6 +125,12 @@ fun SellScreen(
     }.associateBy { it.key }
     val selectedUnits = remember(tenantId) { mutableStateMapOf<String, String>() }
     val staleDiscounts = discounts.any { (key, discount) -> options[key]?.unitPriceMinor != discount.cataloguePriceMinor }
+    val promotions = discounts.filterValues { it.reason.startsWith("@promotion/") }
+    val todayInWat = LocalDate.now(ZoneId.of("Africa/Lagos")).toString()
+    val stalePromotions = promotions.any { (key, discount) ->
+        val source = runCatching { PromotionSource.decode(discount.reason) }.getOrNull()
+        source == null || source.quantity != quantities[key] || source.reviewedOn != todayInWat
+    }
     val rawLines = quantities.mapNotNull { (key, quantity) ->
         options[key]?.takeIf { quantity > 0 }?.let { option ->
             val discount = discounts[key]?.takeIf { it.cataloguePriceMinor == option.unitPriceMinor }
@@ -331,14 +340,20 @@ fun SellScreen(
                                             Text("Was ${money(line.unitPriceMinor)} · Now ${money(line.netUnitPriceMinor)} / ${line.sellingUnit}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
                                             Text("Reason: ${line.discountReason?.let(::displayPriceListReason)}", style = MaterialTheme.typography.bodySmall)
                                         }
-                                        if (allowDiscounts) TextButton({
-                                            changingPrice = line.key
-                                            percentageMode = false
-                                            percentageText = ""
-                                            agreedPrice = BigDecimal(line.netUnitPriceMinor).movePointLeft(2).toPlainString()
-                                            discountReason = discounts[line.key]?.reason.orEmpty()
-                                            priceError = null
-                                        }) { Text(if (discounts.containsKey(line.key)) "Review discount" else "Change price") }
+                                        if (allowDiscounts) Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                            TextButton({
+                                                changingPrice = line.key
+                                                percentageMode = false
+                                                percentageText = ""
+                                                agreedPrice = BigDecimal(line.netUnitPriceMinor).movePointLeft(2).toPlainString()
+                                                discountReason = discounts[line.key]?.reason
+                                                    ?.takeUnless { it.startsWith("@promotion/") }.orEmpty()
+                                                priceError = null
+                                            }) { Text(if (discounts.containsKey(line.key)) "Review discount" else "Change price") }
+                                            if (repository != null) TextButton({ selectingPromotion = line.key }) {
+                                                Text(if (line.key in promotions) "Review promotion" else "Choose promotion")
+                                            }
+                                        }
                                         if (line.baseUnitsPerUnit > 1) Text("${quantityLabel(line.baseQuantity,line.product.quantityPrecision)} ${line.product.unit} from stock", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                         val wholeStep=quantityScaleFactor(line.quantityPrecision).toInt()
                                         var quantityText by remember(line.key,line.quantity) { mutableStateOf(line.quantityLabel) }
@@ -401,6 +416,8 @@ fun SellScreen(
                             if (forbiddenDraft) Text("This saved sale needs a manager or owner because it contains credit or a discount. Sign in with that account, or remove discounted items and choose Cash.",color=MaterialTheme.colorScheme.error)
                             if(staleBasket) Text("This basket changed after its discount was reviewed. Review or remove the basket discount before payment.",color=MaterialTheme.colorScheme.error)
                             if (staleDiscounts) Text("A discounted item's catalogue price changed. Review its discount before payment, or remove the item.", color = MaterialTheme.colorScheme.error)
+                            if (stalePromotions) Text("The promotion's date or quantity changed. Review the promotion or remove its discount.",
+                                color = MaterialTheme.colorScheme.error)
                             if (unavailableDraftItems) {
                                 Text("Some saved items are archived or unavailable. Restore them under Stock or remove them before payment.",color=MaterialTheme.colorScheme.error)
                                 TextButton({
@@ -420,7 +437,10 @@ fun SellScreen(
                                         Text(if (note.isEmpty()) "Add sale note" else "Edit sale note")
                                     }
                                     if (allowDiscounts) TextButton(
-                                        { editingBasket = true },
+                                        {
+                                            if (promotions.isEmpty()) editingBasket = true
+                                            else error = "Remove the promotion discounts before adding a basket discount."
+                                        },
                                         enabled = quantityErrors.none { it.key in quantities && it.value }
                                     ) {
                                         Text(if (basketRule == null) "Basket discount" else "Review basket discount")
@@ -456,7 +476,7 @@ fun SellScreen(
                                         } else error = result
                                     }
                                 }
-                            }, modifier = Modifier.fillMaxWidth().height(56.dp), enabled = quantityErrors.none {it.key in quantities && it.value} && lines.isNotEmpty() && !committing && totalResult.isSuccess && !unavailableDraftItems && !staleDiscounts && !staleBasket && (!forbiddenDraft || stage=="items") && draftStore != null && restoredDraft.isSuccess) {
+                            }, modifier = Modifier.fillMaxWidth().height(56.dp), enabled = quantityErrors.none {it.key in quantities && it.value} && lines.isNotEmpty() && !committing && totalResult.isSuccess && !unavailableDraftItems && !staleDiscounts && !stalePromotions && !staleBasket && (!forbiddenDraft || stage=="items") && draftStore != null && restoredDraft.isSuccess) {
                                 Text(if (committing) "Saving…" else if (stage == "items") "Take payment" else if (method in setOf("credit","split_credit") && credit > 0) "Save with ${money(credit)} owed" else if(isSplit) "Save without bank confirmation" else "Finish sale")
                             }
                             if (stage == "items" && lines.isEmpty()) Text("Add an item to take payment", Modifier.padding(top = 8.dp), style = MaterialTheme.typography.bodySmall)
@@ -613,6 +633,16 @@ fun SellScreen(
     if(selectingPrices && repository!=null) PriceListSelectionDialog(repository,tenantId,rawLines,selectedCustomer,onApply={quotes ->
         try {val next=discounts.toMutableMap();quotes.forEach {quote ->val discount=quote.discount();if(discount==null) next.remove(quote.lineKey) else next[quote.lineKey]=discount};persistBasket(quantities,next);selectingPrices=false;reviewNotice="Price list applied. Review quantities and total before payment."} catch(e:Exception) {error="Prices not applied: ${e.message}";selectingPrices=false}
     },onDismiss={selectingPrices=false})
+    if (repository != null) {
+        rawLines.find { it.key == selectingPromotion }?.let { line ->
+            PromotionSelectionDialog(repository, tenantId, line, basketRule != null, apply = { quote ->
+                require(basketRule == null) { "Remove the basket discount to apply this promotion." }
+                persistBasket(quantities, discounts + (quote.lineKey to quote.discount))
+                selectingPromotion = null
+                reviewNotice = "Promotion applied. Review the total before payment."
+            }, dismiss = { selectingPromotion = null })
+        }
+    }
     discard?.let { held -> AlertDialog(onDismissRequest={discard=null},title={Text("Remove ${held.name}?")},text={Text("This removes the unfinished basket only. No sale, stock movement or payment will be recorded.")},confirmButton={TextButton({
         try {requireNotNull(draftStore).discardHeld(held.id);heldSales=draftStore.heldSales();discard=null;heldError=null} catch(e:Exception) {heldError=e.message;discard=null}
     }) {Text("Remove saved sale")}},dismissButton={TextButton({discard=null}) {Text("Keep sale")}}) }
