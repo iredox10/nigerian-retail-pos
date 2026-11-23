@@ -2,6 +2,17 @@
 
 23 November 2026 · Orders, stock holds, promotions and purchasing
 
+## Desktop visual refinement — 23 November 2026
+
+The merchant requested clearer icons and a more intuitive, attractive interface. The shared controls now use locally bundled Lucide outline icons with persistent text, icon-backed headings and empty states, and semantic notice symbols. Navigation has matching destination icons and a shop mark. Product image placeholders use package symbols. More presents permission-filtered tools as grouped responsive cards. Checkout keeps the goods, sale and payment hierarchy with clearer search and receipt cues. The design guide and token file record the updated corner and icon roles. Lucide attribution is retained in design/licenses/lucide.txt.
+
+
+All **608 tests pass** (77 shared and 531 desktop), with no failures, errors or skips. Rebuilt the Linux application using `gradle :shared:jvmTest :desktopApp:jvmTest :desktopApp:createDistributable --offline`.
+
+Checked actual Linux Compose screens in isolated practice with loopback-only networking at 1440 × 1000. Reviewed Sell, Stock, Customers, Sales, Money, shop tools and an empty order list. Tab/Enter opened Customer orders from the tool cards. Also checked Sell and Money in a 1100 × 800 window. Widened the repeated Add stock action after its added icon caused wrapping. These are selected visual and keyboard checks. Full accessibility and merchant comprehension testing remain pending.
+
+[Sell](artifacts/desktop-ui-sell.png), [shop tools](artifacts/desktop-ui-shop-tools.png), [Stock](artifacts/desktop-ui-stock.png), [Customers](artifacts/desktop-ui-customers.png), [Sales](artifacts/desktop-ui-sales.png), [Money](artifacts/desktop-ui-money.png), [smaller Sell window](artifacts/desktop-ui-sell-compact.png), [order empty state](artifacts/desktop-ui-orders-empty.png).
+
 ## Current integrated checkpoint
 
 **608 tests pass** (77 shared and 531 desktop) with zero failures, errors or skips. Ran `gradle :shared:jvmTest :desktopApp:jvmTest :desktopApp:createDistributable --offline`. The Linux image rebuilt successfully.
