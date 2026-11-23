@@ -145,5 +145,14 @@
     "ownerCashReview": "Review cash movement",
     "expenseReceipt": "Expense receipt",
     "repackingRecipe": "New repacking recipe"
+  },
+  "receiptDesign": {
+    "title": "Receipt design",
+    "preview": "Receipt preview",
+    "save": "Save receipt details",
+    "savedPreview": "Saved receipt design",
+    "artwork": "Additional receipt image",
+    "tagline": "Tagline below the heading (optional)",
+    "policy": "Returns policy or receipt note (optional)"
   }
 }

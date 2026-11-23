@@ -63,6 +63,8 @@ Started 14 November 2026. Scope: the local desktop gaps listed in the conversati
 
 ## 5. Documents and optional local trade modules
 
+- [x] Receipt style/frame/colour editor, logo visibility, additional artwork and policy text, actual PDF preview, saved-sale preservation and designed printer submission.
+
 - [x] Quotations with fixed terms/expiry, immutable revisions, PDF/text and explicitly reviewed full-cash conversion.
 - [x] Sales invoice, pre-handover delivery note and credit note PDF copies from saved records.
 - [ ] Quotation conversion to credit/electronic payment or orders, and sales document sharing.

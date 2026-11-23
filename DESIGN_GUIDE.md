@@ -711,3 +711,11 @@ The merchant requested icons and a more intuitive, polished interface. The exist
 Shop tools use responsive grouped cards for trading, records and workspace settings. Each card provides an icon, task name, short purpose and forward arrow. Permission filtering applies before rendering. Product-photo placeholders use package or shop symbols. Checkout retains its left goods area, right sale panel and fixed-width amount hierarchy.
 
 Reference ledger follows Carbon R1 for repeated aligned work surfaces, Shopify R2 for recognizable task entry, Square R3 for the stable payment panel and local Refero icon guidance R4 for a single outline family, visible labels and semantic color. Tokens are recorded in design/tokens.json. These changes require rendered desktop and keyboard checks. Merchant comprehension research remains pending.
+
+## 25. Merchant receipt design and money entry — 23 November 2026
+
+Receipt appearance is controlled contextually in Shop & receipt details. Retain the app's established light/teal interface while the merchant chooses document-specific colours, Classic/Modern/Compact styles, None/Single/Double frames, heading alignment, logo visibility, tagline, returns note and additional artwork. The side-by-side preview uses the export renderer and clearly identifies its sample sale. Narrow layouts stack the form and preview. Keep recorded goods, totals, tender and payment status in text. Artwork follows the document content with its own reserved page space. Each sale captures the settings and references immutable artwork bytes.
+
+The existing Carbon R1 form hierarchy and Refero R4 component guidance remain the editor's references. Merchant branding colours belong to the document. Thermal decoration uses black strokes and text so colour does not carry essential meaning. Physical printer acceptance remains required. Receipt corners and in-app previews use shared surface and overlay tokens.
+
+Display saved money as naira with grouped thousands and two decimal places. Money entry shows a naira prefix and live grouping, preserving the raw entered digits, caret mapping and kobo precision. Counts, quantities, percentages and denomination counts keep their own numeric semantics.

@@ -207,7 +207,8 @@ Work is ordered by dependencies, not by hiding any part of the full specificatio
 
 - [x] Versioned shop/contact/footer settings with actor history, optimistic edit checks and backup inclusion; new completed sales capture immutable receipt identity. Legacy receipts explicitly lack captured contacts.
 - [x] Shop logo editor and immutable new-sale logo snapshots for PDF receipts.
-- [ ] Broader templates, branded quotations/statements and historical tax/contact requirements beyond captured receipt identity.
+- [x] Merchant receipt appearance with styles, frames, colour, additional artwork, actual PDF preview and immutable sale snapshots.
+- [ ] Branded quotation/statement templates and historical tax/contact requirements beyond captured receipt identity.
 - [x] Branded offline PDF sales receipts and dated customer/supplier statements with embedded fonts, wrapping, pagination and guarded file replacement.
 - [x] Frozen quotation PDF/text including historical revision output.
 - [x] PDF copies of saved sales invoices, pre-handover delivery notes and credit notes for recorded sale returns.

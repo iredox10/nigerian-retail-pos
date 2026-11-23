@@ -2,6 +2,22 @@
 
 23 November 2026 · Orders, stock holds, promotions and purchasing
 
+## Receipt customization and money entry — 23 November 2026
+
+**617 tests pass** (79 shared and 538 desktop), with zero failures, errors or skips. The Linux image rebuilt with `gradle :shared:jvmTest :desktopApp:jvmTest :desktopApp:createDistributable --offline`.
+
+- More → Shop & receipt details → Receipt design offers Classic, Modern and Compact, no/single/double frames, preset or custom accent colour, heading alignment, logo visibility, tagline, policy and an additional PNG/JPEG image. Actual PDF pages provide the preview, including pagination. Rendering runs off the UI thread after a short edit delay.
+- New sales capture their design and immutable image references. Saved Sales can preview/export the captured design and submit that PDF through the native printer dialog. Existing version-one settings remain readable with the classic left-aligned default. Encrypted backup includes artwork bytes and import history.
+- Shared monetary inputs show a naira prefix and live thousands grouping, including cash, prices, deposits, repayments and credit limits. Displayed amounts use naira, grouping and two decimal places. Input preserves entered decimal digits and integer kobo semantics. Quantity, percentage and denomination-count fields keep numeric entry.
+
+### Actual visual and desktop checks
+
+Used isolated Linux Compose at 1440 × 1000 with sample records and loopback-only networking. Selected Modern, Double line and Blue, entered a tagline and policy, imported a sample PNG through the native chooser, chose A4 and saved with a reason using Tab/Enter. A subsequent ₦14,000 sample sale received ₦15,000 with ₦1,000 change. Its saved receipt preview showed the captured design and artwork. [Editor](artifacts/desktop-receipt-design-modern.png), [artwork](artifacts/desktop-receipt-artwork-preview.png), [saved settings](artifacts/desktop-receipt-design-saved.png), [saved receipt](artifacts/desktop-saved-receipt-design.png), [money entry](artifacts/desktop-money-input-grouping.png).
+
+Generated nine renderer fixtures across three styles and A4/58/80 mm. Inspected rendered first pages for A4 Modern and 58 mm Compact, plus the last page of an 80 mm Modern receipt. Frames, text, continuation identity, policy and artwork stayed within their page bounds. [A4 render](artifacts/receipt-design-a4-render.png), [thermal render](artifacts/receipt-design-thermal-render.png).
+
+Tests cover old settings, immutable sale appearance, recovery, image provenance, tenant permissions, all style/width combinations, preserved unconfirmed-payment/debt text, pagination, failed-export preservation and input cursor mappings. Physical printing, Windows/native printer compatibility and merchant usability testing remain unperformed. Text export retains its plain-text format. Design customization applies to sales receipts. Other document templates retain their existing layouts.
+
 ## Desktop visual refinement — 23 November 2026
 
 The merchant requested clearer icons and a more intuitive, attractive interface. The shared controls now use locally bundled Lucide outline icons with persistent text, icon-backed headings and empty states, and semantic notice symbols. Navigation has matching destination icons and a shop mark. Product image placeholders use package symbols. More presents permission-filtered tools as grouped responsive cards. Checkout keeps the goods, sale and payment hierarchy with clearer search and receipt cues. The design guide and token file record the updated corner and icon roles. Lucide attribution is retained in design/licenses/lucide.txt.
