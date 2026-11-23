@@ -161,6 +161,7 @@ class PosRepository(path: String = File(System.getProperty("user.home"), ".niger
         initializeDebtAdjustments()
         initializeCashExchanges()
         initializeCustomerOrders()
+        initializeOrderReservations()
         initializeLandedCosts()
         initializePromotions()
         execute("CREATE TRIGGER IF NOT EXISTS activity_audit_no_update BEFORE UPDATE ON activity_audit BEGIN SELECT RAISE(ABORT,'Activity history cannot be edited'); END")
@@ -344,6 +345,7 @@ class PosRepository(path: String = File(System.getProperty("user.home"), ".niger
             require(previous.product.id==productId && previous.kind=="archive" && previous.product.archived==archived) { "This archive action was already saved with different details." }
             return@transaction
         }
+        require(!archived || reservedStock(tenantId, productId) == 0L) { "Release this item's order reservations before archiving it." }
         val changeId=operationId ?: id()
         execute("UPDATE products SET archived=? WHERE tenant_id=? AND id=?",if(archived) 1 else 0,tenantId,productId)
         recordCatalogueChange(changeId,item.copy(archived=archived),item.priceMinor,"archive")
@@ -552,9 +554,12 @@ class PosRepository(path: String = File(System.getProperty("user.home"), ".niger
         }
         val normalized = normalizeCheckoutLines(tenantId, requested, customerId)
         require(if(basketDiscount==null) normalized.all {it.basketDiscountMinor==0L} else allocateBasketDiscount(normalized,basketDiscount).map {it.basketDiscountMinor}==normalized.map {it.basketDiscountMinor}) { "Basket discount changed. Review the sale before payment." }
+        val now = Instant.now()
         val stockUpdates=normalized.groupBy { it.product.id }.map { (productId,group) ->
             val quantity=group.fold(0L) { sum,line -> Math.addExact(sum,line.baseQuantity) }
-            productId to scaledStock(requireProduct(tenantId,productId),Math.negateExact(quantity))
+            val product = requireProduct(tenantId, productId)
+            requireUnreservedStock(tenantId, product, quantity, orderPayment?.orderId, now)
+            productId to scaledStock(product, Math.negateExact(quantity))
         }
         validateMinimumPricesAtCheckout(tenantId,normalized)
         val total=cartTotal(normalized)
@@ -572,7 +577,6 @@ class PosRepository(path: String = File(System.getProperty("user.home"), ".niger
                 require(customer.creditLimitMinor?.let { debt<=it } != false) { "This sale would exceed the customer's credit limit of ${customer.creditLimitMinor?.let(::money)}. Reduce the credit or review the customer limit." }
             }
         } else null
-        val now = Instant.now()
         validatePromotionDiscounts(tenantId, normalized, basketDiscount, now)
         if (credit > 0) checkDebtAdjustmentClock(tenantId, requireNotNull(customerId), now)
         val sale=Sale(operationId ?: id(),tenantId,normalized,total,cashMinor,credit,customerId,now.toString(),dueDate,basketDiscount,externalPayments,cashGivenMinor,note,exchange,orderPayment)
@@ -959,7 +963,10 @@ class PosRepository(path: String = File(System.getProperty("user.home"), ".niger
         for ((productId, quantity) in stockReturned) scaledStock(requireProduct(tenantId, productId), quantity)
         for ((productId, lines) in replacementLines.groupBy { it.product.id }) {
             val needed = lines.fold(0L) { total, line -> Math.addExact(total, line.baseQuantity) }
-            scaledStock(requireProduct(tenantId, productId), Math.subtractExact(stockReturned[productId] ?: 0L, needed))
+            val product = requireProduct(tenantId, productId)
+            val netUsed = Math.subtractExact(needed, stockReturned[productId] ?: 0L)
+            requireUnreservedStock(tenantId, product, netUsed)
+            scaledStock(product, Math.negateExact(netUsed))
         }
         val review = CashExchangeReview(saleId, returned, replacementLines, restock, cleanReason, null)
         require(review.appliedMinor > 0L) { "Both the returned goods and the replacement need a positive value." }
@@ -1068,7 +1075,7 @@ class PosRepository(path: String = File(System.getProperty("user.home"), ".niger
     }
     private fun supplierPayment(r:ResultSet)=SupplierPayment(r.getString("id"),r.getString("tenant_id"),r.getString("receipt_id"),r.getString("supplier_name"),r.getLong("amount_minor"),r.getString("created_at"))
 
-    private val snapshotTableOrder get() = listOf("products","product_metadata_changes","selling_units","stock_settings_changes","purchase_units","customers","customer_changes","cash_shifts","sales","sale_lines","repayments","repayment_allocations","allocation_reversals","stock_receipts","expenses","sale_returns","return_lines","supplier_payments","cash_entries","catalogue_changes","stock_adjustments","outbox","activity_audit") + supplierProfileSnapshotTables + purchaseOrderSnapshotTables + purchaseDiscrepancySnapshotTables + inventoryDispositionSnapshotTables + stockCountSessionSnapshotTables + shopProfileSnapshotTables + externalPaymentSnapshotTables + priceListSnapshotTables + bulkCatalogueUpdateSnapshotTables + supplierInvoiceSnapshotTables + creditReturnSnapshotTables + quotationSnapshotTables + localImageSnapshotTables + ownerCashSnapshotTables + minimumPriceSnapshotTables + repackingSnapshotTables + expenseAttachmentSnapshotTables + saleTenderSnapshotTables + reminderSnapshotTables + variantSnapshotTables + purchaseReturnSnapshotTables + debtAdjustmentSnapshotTables + cashExchangeSnapshotTables + customerOrderSnapshotTables + landedCostSnapshotTables + promotionSnapshotTables
+    private val snapshotTableOrder get() = listOf("products","product_metadata_changes","selling_units","stock_settings_changes","purchase_units","customers","customer_changes","cash_shifts","sales","sale_lines","repayments","repayment_allocations","allocation_reversals","stock_receipts","expenses","sale_returns","return_lines","supplier_payments","cash_entries","catalogue_changes","stock_adjustments","outbox","activity_audit") + supplierProfileSnapshotTables + purchaseOrderSnapshotTables + purchaseDiscrepancySnapshotTables + inventoryDispositionSnapshotTables + stockCountSessionSnapshotTables + shopProfileSnapshotTables + externalPaymentSnapshotTables + priceListSnapshotTables + bulkCatalogueUpdateSnapshotTables + supplierInvoiceSnapshotTables + creditReturnSnapshotTables + quotationSnapshotTables + localImageSnapshotTables + ownerCashSnapshotTables + minimumPriceSnapshotTables + repackingSnapshotTables + expenseAttachmentSnapshotTables + saleTenderSnapshotTables + reminderSnapshotTables + variantSnapshotTables + purchaseReturnSnapshotTables + debtAdjustmentSnapshotTables + cashExchangeSnapshotTables + customerOrderSnapshotTables + orderReservationSnapshotTables + landedCostSnapshotTables + promotionSnapshotTables
     @Synchronized fun exportTenantSnapshot(tenantId:String):TenantSnapshot = transaction {
         requirePermission(tenantId, StaffPermission.BACKUP)
         requireTenant(tenantId)
@@ -1274,6 +1281,7 @@ class PosRepository(path: String = File(System.getProperty("user.home"), ".niger
         validateDebtAdjustments(tenant.id)
         validateCashExchanges(tenant.id)
         validateCustomerOrders(tenant.id)
+        validateOrderReservationSnapshot(tenant.id)
         validateLandedCostSnapshot(tenant.id)
         validatePromotionHistory(tenant.id)
         provisionOwner(tenant)

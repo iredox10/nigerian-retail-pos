@@ -110,7 +110,7 @@ fun PosRepository.recordCustomerOrderDeposit(
     require(state.open && state.history.size == historySize) { "Review the current order before recording a deposit." }
     require(amountMinor in 1..state.balanceMinor) { "Enter cash received up to the remaining amount on this order." }
     val shift = requireNotNull(activeCashShift(tenantId)) { "Open today's drawer before receiving a deposit." }
-    val event = CustomerOrderEvent(operationId, orderId, "deposit", amountMinor, null, shift.id, "Cash deposit received", orderTime(state))
+    val event = CustomerOrderEvent(operationId, orderId, "deposit", amountMinor, null, shift.id, "Cash deposit received", orderTime(state).toString())
     recordOrderDrawerCash(tenantId, event)
     recordOrderEvent(tenantId, event)
     event
@@ -134,7 +134,7 @@ fun PosRepository.cancelCustomerOrder(
     val shift = if (reviewedRefundMinor == 0L) null else requireNotNull(activeCashShift(tenantId)) {
         "Open today's drawer before refunding the deposit."
     }
-    val event = CustomerOrderEvent(operationId, orderId, "cancelled", reviewedRefundMinor, null, shift?.id, cleanReason, orderTime(state))
+    val event = CustomerOrderEvent(operationId, orderId, "cancelled", reviewedRefundMinor, null, shift?.id, cleanReason, orderTime(state).toString())
     if (reviewedRefundMinor > 0) recordOrderDrawerCash(tenantId, event)
     recordOrderEvent(tenantId, event)
     event
@@ -171,9 +171,12 @@ fun PosRepository.reviewCustomerOrderCollection(
         }
         line
     }
+    val stockCheckedAt = Instant.now()
     lines.groupBy { it.product.id }.forEach { (id, group) ->
         val needed = group.fold(0L) { total, line -> Math.addExact(total, line.baseQuantity) }
-        require(needed <= products.getValue(id).exactStockScaled) { "There is not enough of ${products.getValue(id).name} in stock." }
+        val product = products.getValue(id)
+        require(needed <= product.exactStockScaled) { "There is not enough of ${product.name} in stock." }
+        requireUnreservedStock(tenantId, product, needed, excludingOrderId = orderId, now = stockCheckedAt)
     }
     validateMinimumPricesAtCheckout(tenantId, lines)
     val total = cartTotal(lines)
@@ -204,7 +207,7 @@ fun PosRepository.collectCustomerOrder(
     val id = UUID.nameUUIDFromBytes("customer-order-pickup:$operationId".toByteArray()).toString()
     val now = orderTime(state)
     val sale = checkoutCustomerOrder(tenantId, state.order.customerId, id, checked)
-    require(Instant.parse(sale.createdAt) >= Instant.parse(now)) { "Correct the clock before saving this collection." }
+    require(Instant.parse(sale.createdAt) >= now) { "Correct the clock before saving this collection." }
     val event = CustomerOrderEvent(operationId, checked.orderId, "collected", checked.depositMinor, sale.id,
         checked.shiftId, "Goods collected", sale.createdAt)
     recordOrderEvent(tenantId, event)
@@ -217,14 +220,20 @@ internal fun PosRepository.orderPaymentForSale(tenantId: String, saleId: String)
 
 private val orderZone = ZoneId.of("Africa/Lagos")
 
-private fun validateOrderReference(value: String) {
+internal fun validateOrderReference(value: String) {
     require(value.isNotBlank() && value.length <= 150 && value.none { it.isISOControl() }) { "Invalid order reference." }
 }
 
-private fun orderTime(state: CustomerOrderState): String = Instant.now().also { now ->
-    val previous = state.history.lastOrNull()?.createdAt ?: state.order.createdAt
-    require(now > Instant.parse(previous)) { "Correct the clock before changing this order." }
-}.toString()
+internal fun PosRepository.orderTime(state: CustomerOrderState): Instant = Instant.now().also { now ->
+    val lastOrderChange = state.history.lastOrNull()?.createdAt ?: state.order.createdAt
+    val lastHoldChange = latestOrderReservation(state.order.tenantId, state.order.id)?.createdAt
+    require(listOfNotNull(lastOrderChange, lastHoldChange).all { now > Instant.parse(it) }) {
+        "Correct the clock before changing this order."
+    }
+}
+
+internal fun PosRepository.customerOrderState(tenantId: String, orderId: String): CustomerOrderState =
+    orderState(requireCustomerOrder(tenantId, orderId))
 
 private fun marginalOrderValue(line: QuotationLine, prior: Int, quantity: Int): Long =
     Quantity((prior + quantity).toLong(), line.quantityPrecision).lineTotalMinor(line.agreedUnitPriceMinor) -

@@ -108,6 +108,7 @@ private fun PosRepository.reviewRepacking(tenantId:String,recipeId:String,batche
     val source=requireRepackItem(tenantId,d.sourceId);val destination=requireRepackItem(tenantId,d.destinationId)
     val used=d.sourceQuantity(batches);val made=d.destinationQuantity(batches)
     require(used<=source.exactStockScaled) {"There is not enough ${source.name} for this many batches."}
+    requireUnreservedStock(tenantId, source, used)
     val after=Math.addExact(destination.exactStockScaled,made)
     require(after<=9_007_199_254_740_991L && repackProjectionExact(after,d.destinationPrecision) && repackProjectionExact(source.exactStockScaled-used,d.sourcePrecision)) {"The resulting stock exceeds the exact supported range."}
     val fields=mutableListOf(recipe.id,recipe.version.toString(),encodeRecipe(d),batches.toString())

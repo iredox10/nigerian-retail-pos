@@ -260,6 +260,7 @@ private fun PosRepository.purchaseReturnCandidate(
     }
     val removed = receipt.purchaseReturnBaseQuantity(quantity)
     require(removed <= stock) { "There is not enough of this item in stock to return that quantity." }
+    requireUnreservedStock(tenantId, item, removed)
     val after = stock - removed
     require(exactReturnProjection(after, item.quantityPrecision)) { "The remaining stock exceeds the supported exact range." }
     val movements = inventoryMovements(tenantId, item.id)
