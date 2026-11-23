@@ -719,3 +719,9 @@ Receipt appearance is controlled contextually in Shop & receipt details. Retain 
 The existing Carbon R1 form hierarchy and Refero R4 component guidance remain the editor's references. Merchant branding colours belong to the document. Thermal decoration uses black strokes and text so colour does not carry essential meaning. Physical printer acceptance remains required. Receipt corners and in-app previews use shared surface and overlay tokens.
 
 Display saved money as naira with grouped thousands and two decimal places. Money entry shows a naira prefix and live grouping, preserving the raw entered digits, caret mapping and kobo precision. Counts, quantities, percentages and denomination counts keep their own numeric semantics.
+
+## 26. Modern receipt composition — 23 November 2026
+
+The merchant requested a stronger modern document treatment after reviewing the first receipt editor. Modern now prioritizes a branded shop masthead, a clear receipt identity, aligned prices and a prominent total. Use typography and spacing to separate goods from payment details. Keep quantities, discounts, unconfirmed payment wording and return history readable. Classic remains the familiar template; Compact serves narrow formats.
+
+Reference lock uses the existing Carbon R1 numeric alignment rule and Refero R4 typography guidance. The receipt's shop name and total form the two strongest levels. The merchant's chosen accent belongs to the masthead and total treatment. Body text uses dark ink, supporting detail uses a legible secondary tone, and thermal decoration works in monochrome. Artwork retains its footer role. Style selector thumbnails illustrate the resulting hierarchy, and preview zoom supports checking real print detail.

@@ -1,6 +1,6 @@
 # Retail POS implementation status
 
-Source audit updated 23 November 2026. The latest verified checkpoint is 617 tests. BUILD_STATUS.md records current native evidence. Historical details below retain wider outstanding scope.
+Source audit updated 23 November 2026. The latest verified checkpoint is 621 tests. BUILD_STATUS.md records current native evidence. Historical details below retain wider outstanding scope.
 
 This document compares the **entire** [feature specification](FEATURE_SPECIFICATION.md) with the source currently present. It is not a claim that the desktop application, long-term specification, or multi-tenant SaaS is complete.
 

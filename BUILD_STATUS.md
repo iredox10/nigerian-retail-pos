@@ -2,6 +2,24 @@
 
 23 November 2026 · Orders, stock holds, promotions and purchasing
 
+## Modern receipt refinement and checkout printing — 23 November 2026
+
+**621 tests pass** (79 shared and 542 desktop) with zero failures, errors or skips. Ran `gradle :shared:jvmTest :desktopApp:jvmTest :desktopApp:createDistributable --offline` and rebuilt the Linux image.
+
+Modern receipts now use a larger shop masthead, real divider rules, semibold item names, aligned monetary columns, supporting detail tones and a rounded accented total panel. A realistic three-item sale with discounts, part cash, an unconfirmed transfer, debt and policy fits one A4 page. Narrow receipts paginate with their identity and preserve financial status. Short single-page Modern thermal receipts fit their content with an 80 mm minimum height. Wrapped policy paragraphs stay together when they fit on a fresh page.
+
+The editor has illustrated style choices and Fit/150%/200% PDF preview controls with horizontal panning. Fresh unsaved profiles start with Modern. Existing profile choices remain selected.
+
+Sell now offers **Print receipt** immediately after durable checkout, above New sale. It reads the completed sale and captured design before opening the native printer flow. Print failure or cancellation leaves the saved sale intact. The saved-state details can scroll while both actions remain reachable in smaller windows.
+
+### Rendered and native evidence
+
+Generated actual BrandedReceiptService PDFs for A4, 58 mm and 80 mm with a ₦14,750 sale, ₦150 discount, ₦5,000 cash, ₦5,000 unconfirmed transfer and ₦4,750 original credit. Inspected the rendered A4 page, 80 mm first page and 58 mm continuation. [A4](artifacts/receipt-modern-redesign-a4.png), [80 mm](artifacts/receipt-modern-redesign-80mm.png).
+
+Used isolated practice with loopback-only networking. Reviewed the illustrated selector and Modern PDF preview. Completed a ₦14,000 sample cash sale with ₦15,000 given, then saw the print option and ₦1,000 change. Clicking Print receipt opened the native print workflow, which reported no print service. Dismissal returned to the saved sale with retry available. Also checked the saved-screen actions at 1100 × 800. [Editor](artifacts/desktop-modern-receipt-editor.png), [print option](artifacts/desktop-checkout-print-option.png), [smaller window](artifacts/desktop-checkout-print-compact.png).
+
+Regression tests cover wrapped policy pagination, long merchant/product names, maximum-range money, preserved unconfirmed-payment wording, text bounds, short thermal height and repeated print preparation using captured branding without another sale. Physical printing and merchant usability remain unperformed.
+
 ## Receipt customization and money entry — 23 November 2026
 
 **617 tests pass** (79 shared and 538 desktop), with zero failures, errors or skips. The Linux image rebuilt with `gradle :shared:jvmTest :desktopApp:jvmTest :desktopApp:createDistributable --offline`.
