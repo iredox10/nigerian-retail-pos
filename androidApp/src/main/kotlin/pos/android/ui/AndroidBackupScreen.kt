@@ -57,7 +57,7 @@ fun AndroidBackupScreen(repo:PosRepository,tenantId:String,access:WorkspaceAcces
                     }}
                     val snapshot=BackupService.read(file.toPath(),password)
                     // Explicit trusted recovery connection. Never disable the live shop's session guard.
-                    PosRepository(context.filesDir.resolve("pos.db").path).use {recovery->recovery.restoreTenantSnapshot(snapshot,newName.trim()){access.register(it.id,ownerPassword)}}
+                    pos.android.backup.restoreAndroidBackup(repo,tenantId,snapshot,context.filesDir.resolve("pos.db").path,newName,ownerPassword,access)
                 }
                 notice="Backup restored as a new shop. Lock and select it to sign in. Verify its historical drawer count before trading."
                 onRestored()

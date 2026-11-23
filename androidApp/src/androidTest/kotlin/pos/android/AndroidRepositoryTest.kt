@@ -75,4 +75,56 @@ class AndroidRepositoryTest {
             }
         }
     }
+    @Test fun actualAndroidManagerSignatureAuthorizesOnlyTheReviewedCashierSale()=fixture {dir ->
+        org.junit.Assume.assumeTrue(android.os.Build.VERSION.SDK_INT>=33)
+        PosRepository(dir.resolve("pos.db").path).use {repo ->
+            val shop=repo.createTenant("Approval shop")
+            val product=repo.addProduct(shop.id,"Rice","bag",1000,10.0)
+            repo.openCashShift(shop.id,0)
+            WorkspaceAccess(dir.toPath()).register(shop.id,"Owner-password-2026")
+            StaffAccess(dir.toPath()).use {access ->
+                val owner=requireNotNull(access.unlockOwner(shop.id,"Owner-password-2026"))
+                val manager=access.addMember(owner,"Manager",StaffRole.MANAGER,"Manager-password-2026")
+                val member=access.addMember(owner,"Cashier",StaffRole.CASHIER,"Cashier-password-2026")
+                val cashier=requireNotNull(access.unlockStaff(shop.id,member.id,"Cashier-password-2026"))
+                repo.setPermissionCheck {id,p ->require(id==cashier.tenantId);access.requireSession(cashier,p)}
+                repo.setMinimumPriceApprovalCheck {_,id,request ->access.requireMinimumPriceApproval(cashier,id,request)}
+                val lines=listOf(CartLine(product,1,discountPerUnitMinor=100,discountReason="Agreed clearance"))
+                try {repo.checkout(shop.id,lines,900,operationId="approved");fail("Unauthenticated cashier discount")}catch(_:IllegalArgumentException){}
+                val request=repo.minimumPriceApprovalRequest(shop.id,"approved",lines)
+                val proof=requireNotNull(access.authorizeMinimumPrice(cashier,request,manager.id,"Manager-password-2026","Agreed clearance"))
+                val saved=repo.checkout(shop.id,lines,900,operationId="approved",priceApprovalId=proof.id)
+                assertEquals(900L,saved.totalMinor)
+                assertEquals(proof,repo.minimumPriceApprovalForSale(shop.id,saved.id))
+                assertEquals(9L,repo.products(shop.id).single().exactStockScaled)
+            }
+        }
+    }
+
+    @Test fun restoreRechecksRevokedBackupAuthorityBeforeAndDuringTrustedImport()=fixture {dir ->
+        val database=dir.resolve("pos.db").path
+        PosRepository(database).use {repo ->
+            val shop=repo.createTenant("Source shop")
+            repo.addProduct(shop.id,"Soap","piece",100,2.0)
+            val snapshot=repo.exportTenantSnapshot(shop.id)
+            val owners=WorkspaceAccess(dir.toPath())
+            repo.setPermissionCheck {_,_ ->throw IllegalArgumentException("Owner session revoked")}
+            try {
+                pos.android.backup.restoreAndroidBackup(repo,shop.id,snapshot,database,"Denied restore","New-owner-password",owners)
+                fail("Revoked restore accepted")
+            } catch(_:IllegalArgumentException) {}
+            assertEquals(listOf(shop),repo.tenants())
+            var checks=0
+            repo.setPermissionCheck {_,permission ->if(permission==StaffPermission.BACKUP) {checks++;require(checks==1) {"Revoked during restore"}}}
+            try {
+                pos.android.backup.restoreAndroidBackup(repo,shop.id,snapshot,database,"Revoked during import","New-owner-password",owners)
+                fail("Revoked owner provision accepted")
+            } catch(_:IllegalArgumentException) {}
+            repo.setPermissionCheck(null)
+            assertEquals(2,checks)
+            assertEquals(listOf(shop),repo.tenants())
+            assertEquals(snapshot,repo.exportTenantSnapshot(shop.id))
+        }
+    }
+
 }
