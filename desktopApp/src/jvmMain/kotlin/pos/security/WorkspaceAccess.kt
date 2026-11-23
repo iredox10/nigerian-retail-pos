@@ -192,7 +192,7 @@ class WorkspaceAccess(
     private fun validateTenant(tenantId: String) { require(validTenant(tenantId)) { "Invalid shop identifier" } }
     private fun validatePassword(password: String) { require(password.length in 8..1024) { "Use a password between 8 and 1024 characters" } }
     private fun restrictPermissions(path: Path, mode: String) {
-        if (Files.getFileStore(path).supportsFileAttributeView("posix")) Files.setPosixFilePermissions(path, PosixFilePermissions.fromString(mode))
+        LocalFilePermissions.restrict(path, mode)
     }
     private companion object {
         const val ITERATIONS = 210_000

@@ -1,0 +1,150 @@
+package pos.android
+
+import android.os.Bundle
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.rememberScrollState
+import kotlinx.coroutines.launch
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.unit.dp
+import androidx.activity.compose.BackHandler
+import pos.android.storage.AndroidSqliteDriver
+import pos.android.ui.*
+import pos.data.*
+import pos.domain.*
+import pos.security.*
+import pos.ui.theme.PosTheme
+import pos.ui.components.*
+
+class MainActivity : ComponentActivity() {
+    private lateinit var repo: PosRepository
+    private lateinit var access: StaffAccess
+    private val backgroundHandler = android.os.Handler(android.os.Looper.getMainLooper())
+    private val backgroundLock = Runnable { lockAction?.invoke() }
+    private var lockAction: (() -> Unit)? = null
+    override fun onCreate(savedInstanceState:Bundle?) {
+        super.onCreate(savedInstanceState)
+        enableEdgeToEdge()
+        System.setProperty("pos.dataDir",filesDir.absolutePath)
+        LocalSqlite.installPlatformAdapter(AndroidSqliteDriver::open)
+        pos.android.platform.AndroidPrivateFiles.install()
+        repo=PosRepository(filesDir.resolve("pos.db").path)
+        access=StaffAccess(filesDir.toPath())
+        setContent {PosTheme {AndroidApp(repo,access) {lockAction=it}}}
+    }
+    override fun onStart() {super.onStart();backgroundHandler.removeCallbacks(backgroundLock)}
+    override fun onStop() {backgroundHandler.postDelayed(backgroundLock,60_000);super.onStop()}
+    override fun onDestroy() {backgroundHandler.removeCallbacks(backgroundLock);access.close();repo.close();super.onDestroy()}
+}
+
+@Composable
+private fun AndroidApp(repo:PosRepository,access:StaffAccess,installLock:((()->Unit))->Unit) {
+    var session by remember {mutableStateOf<StaffSession?>(null)}
+    var tenant by remember {mutableStateOf<Tenant?>(null)}
+    var revision by remember {mutableIntStateOf(0)}
+    var route by remember {mutableStateOf("Sell")}
+    var receipt by remember {mutableStateOf<String?>(null)}
+    var approvalRequest by remember {mutableStateOf<MinimumPriceApprovalRequest?>(null)}
+    var approvalResponse by remember {mutableStateOf<((String)->Unit)?>(null)}
+    fun lock(){session?.let(access::logout);session=null;tenant=null;receipt=null;route="Sell";approvalRequest=null;approvalResponse=null}
+    SideEffect {
+        installLock(::lock)
+        repo.setPermissionCheck {id,permission ->
+            val active=requireNotNull(session) {"Sign in to use this shop."}
+            require(active.tenantId==id) {"Sign in to this shop."};access.requireSession(active,permission)
+        }
+        repo.setActorProvider {id ->session?.takeIf {it.tenantId==id}?.let {AuditActor(id,it.staffId,it.name,it.role)}}
+        repo.setMinimumPriceApprovalCheck {id,grant,request -> val active=requireNotNull(session);require(active.tenantId==id);access.requireMinimumPriceApproval(active,grant,request)}
+        repo.setCashHandoverAuthorizationCheck {id,grant,request ->val active=requireNotNull(session);require(active.tenantId==id);access.requireCashHandover(active,grant,request)}
+    }
+    LaunchedEffect(session?.token) {while(session!=null) {kotlinx.coroutines.delay(15_000);if(runCatching {access.requireSession(requireNotNull(session),StaffPermission.SELL,false)}.isFailure)lock()}}
+    val current=tenant;val active=session
+    if(current==null || active==null) {
+        AndroidSignIn(repo,access) {shop,identity ->tenant=shop;session=identity;revision++}
+        return
+    }
+    fun allowed(p:StaffPermission)=runCatching {access.requireSession(active,p,false)}.isSuccess
+    approvalRequest?.let {request -> AndroidPriceApprovalDialog(access,active,request,
+        dismiss={approvalRequest=null;approvalResponse=null},
+        approved={token ->approvalResponse?.invoke(token);approvalRequest=null;approvalResponse=null}) }
+    BackHandler(receipt!=null || route!="Sell") {if(receipt!=null)receipt=null else route="Sell"}
+    Column(Modifier.fillMaxSize().safeDrawingPadding().imePadding()) {
+        Row(Modifier.fillMaxWidth().padding(horizontal=16.dp,vertical=8.dp),horizontalArrangement=Arrangement.SpaceBetween) {
+            Column(Modifier.weight(1f)) {Text(current.name,style=MaterialTheme.typography.titleMedium);Text("${active.name} · Saved on this device",style=MaterialTheme.typography.bodySmall)}
+            TextButton({lock()}) {Text("Lock")}
+        }
+        HorizontalDivider()
+        Box(Modifier.weight(1f).padding(16.dp)) {key(current.id,route) {
+            if(receipt!=null) AndroidReceiptScreen(repo,current.id,requireNotNull(receipt),onBack={receipt=null})
+            else when(route) {
+                "Sell" -> AndroidSellScreen(repo,current.id,{revision++},{receipt=it},
+                    onRequestApproval=if(android.os.Build.VERSION.SDK_INT>=33) ({lines,operation,response ->
+                        approvalRequest=repo.minimumPriceApprovalRequest(current.id,operation,lines);approvalResponse=response
+                    }) else null, allowDiscounts=allowed(StaffPermission.DISCOUNT))
+                "Sales" -> if(allowed(StaffPermission.VIEW_SALES)) AndroidSalesScreen(repo,current.id) {receipt=it} else Text("Your role cannot view sales.")
+                "Stock" -> if(allowed(StaffPermission.MANAGE_STOCK)) AndroidStockScreen(repo,current.id) {revision++} else Text("Your role cannot manage stock.")
+                "Customers" -> if(allowed(StaffPermission.MANAGE_CUSTOMERS)) AndroidCustomersScreen(repo,current.id) {revision++} else Text("Your role cannot manage customers.")
+                "Money" -> if(allowed(StaffPermission.MANAGE_MONEY)) AndroidMoneyScreen(repo,current.id) {revision++} else Text("Your role cannot manage money.")
+                else -> AndroidMoreScreen(repo,current.id,access,active,{revision++})
+            }
+        }}
+        HorizontalDivider()
+        Column {
+          listOf("Sell","Sales","Stock","Customers","Money","More").chunked(3).forEach { destinations ->
+          Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.SpaceEvenly) {
+            destinations.forEach {item ->
+                TextButton({route=item;receipt=null},contentPadding=PaddingValues(horizontal=3.dp,vertical=12.dp),modifier=Modifier.weight(1f)) {
+                    Text(item,style=MaterialTheme.typography.labelLarge,color=if(route==item)MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,maxLines=1)
+                }
+            }
+          }
+          }
+        }
+    }
+}
+
+@Composable
+private fun AndroidSignIn(repo:PosRepository,access:StaffAccess,onEnter:(Tenant,StaffSession)->Unit) {
+    var shops by remember {mutableStateOf(repo.tenants())}
+    var selected by remember {mutableStateOf(shops.firstOrNull())}
+    var create by remember {mutableStateOf(shops.isEmpty())}
+    var name by remember {mutableStateOf("")}
+    var password by remember {mutableStateOf("")}
+    var memberId by remember {mutableStateOf<String?>(null)}
+    var error by remember {mutableStateOf<String?>(null)}
+    val owners=remember {WorkspaceAccess()}
+    val scope=rememberCoroutineScope()
+    var busy by remember {mutableStateOf(false)}
+    val members=remember(selected?.id) {selected?.let {access.signInMembers(it.id)}.orEmpty()}
+    Column(Modifier.fillMaxSize().safeDrawingPadding().imePadding().padding(24.dp).verticalScroll(rememberScrollState()),verticalArrangement=Arrangement.spacedBy(16.dp)) {
+        SectionHeader("Retail POS", "Sell and keep shop records without internet")
+        Text("Records stay on this Android device. Cloud sync is not connected.")
+        if(!create) {
+            shops.forEach {shop -> FilterChip(selected?.id==shop.id,{selected=shop;memberId=null;password=""},label={Text(shop.name)})}
+            FilterChip(memberId==null,{memberId=null;password=""},label={Text("Owner")})
+            members.forEach {member ->FilterChip(memberId==member.id,{memberId=member.id;password=""},label={Text("${member.name} · ${member.role}")})}
+        } else PosTextField(name,{name=it},"Shop name")
+        OutlinedTextField(password,{password=it},label={Text(if(create)"Owner password (at least 8 characters)" else "Password")},visualTransformation=PasswordVisualTransformation(),modifier=Modifier.fillMaxWidth(),singleLine=true)
+        error?.let {InlineNotice("Could not sign in",it,NoticeTone.Danger)}
+        Button(onClick={
+            busy=true;error=null
+            scope.launch {
+                try {
+                    val result=kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                        val shop=if(create) {require(name.isNotBlank());require(password.length in 8..1024);repo.createTenant(name.trim()) {owners.register(it.id,password)}} else requireNotNull(selected)
+                        val identity=if(create || memberId==null) access.unlockOwner(shop.id,password) else access.unlockStaff(shop.id,requireNotNull(memberId),password)
+                        shop to requireNotNull(identity) {"Password was not accepted or sign-in is temporarily locked."}
+                    }
+                    password="";onEnter(result.first,result.second)
+                } catch(e:Exception){error=e.message ?: "Try again."} finally {busy=false}
+            }
+        },enabled=!busy,modifier=Modifier.fillMaxWidth().heightIn(min=56.dp)) {Text(if(busy)"Opening shop…" else if(create)"Create shop" else "Open shop")}
+        TextButton({create=!create;error=null;password=""}) {Text(if(create && shops.isNotEmpty())"Use an existing shop" else "Create another shop")}
+    }
+}

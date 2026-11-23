@@ -78,7 +78,7 @@ class StaffAccess(
             if (fingerprint == null) execute("DELETE FROM staff_pins WHERE tenant_id=?", tenantId)
             else execute("UPDATE staff_pins SET owner_fingerprint=? WHERE tenant_id=? AND owner_fingerprint IS NULL", fingerprint, tenantId)
         }
-        if(Files.getFileStore(file).supportsFileAttributeView("posix")) Files.setPosixFilePermissions(file,PosixFilePermissions.fromString("rw-------"))
+        LocalFilePermissions.restrict(file,"rw-------")
     }
 
     @Synchronized fun unlockOwner(tenantId:String,password:String):StaffSession? {

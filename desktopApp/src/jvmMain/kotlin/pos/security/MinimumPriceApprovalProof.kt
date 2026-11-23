@@ -151,7 +151,7 @@ internal class MinimumPriceApprovalSigner(directory: Path) {
         }
     }
     private fun restrict(path: Path, mode: String) {
-        if (Files.getFileStore(path).supportsFileAttributeView("posix")) Files.setPosixFilePermissions(path, PosixFilePermissions.fromString(mode))
+        LocalFilePermissions.restrict(path, mode)
     }
     companion object { private val locks = ConcurrentHashMap<String, Any>() }
 }

@@ -1,0 +1,78 @@
+package pos.android
+
+import androidx.test.core.app.ApplicationProvider
+import android.content.Context
+import androidx.test.ext.junit.runners.AndroidJUnit4
+import org.junit.Test
+import org.junit.Assert.*
+import org.junit.runner.RunWith
+import pos.android.storage.AndroidSqliteDriver
+import pos.data.*
+import pos.domain.*
+import pos.security.*
+import pos.output.BackupService
+import java.nio.file.Files
+import java.util.UUID
+
+@RunWith(AndroidJUnit4::class)
+class AndroidRepositoryTest {
+    private fun fixture(block:(java.io.File)->Unit) {
+        val context=ApplicationProvider.getApplicationContext<Context>()
+        val dir=java.io.File(context.cacheDir,"repository-test-${UUID.randomUUID()}").apply {mkdirs()}
+        LocalSqlite.installPlatformAdapter(AndroidSqliteDriver::open)
+        pos.android.platform.AndroidPrivateFiles.install()
+        System.setProperty("pos.dataDir",dir.path)
+        try {block(dir)} finally {dir.deleteRecursively()}
+    }
+    @Test fun realRepositoryNativeSqlitePersistsCashDebtAndReturnsAndRestoresHistory()=fixture {dir ->
+        var tenant="";var item="";var customer=""
+        PosRepository(dir.resolve("pos.db").path).use {repo ->
+            tenant=repo.createTenant("Android shop").id
+            val product=repo.addProduct(tenant,"Soap","piece",12345,10.0);item=product.id
+            customer=repo.addCustomer(tenant,"Ada").id
+            val shift=repo.openCashShift(tenant,100000)
+            val sale=repo.checkout(tenant,listOf(CartLine(product,2)),20000,customer,"cash-credit",cashGivenMinor=20000)
+            assertEquals(24690L,sale.totalMinor);assertEquals(4690L,repo.customers(tenant).single().balanceMinor)
+            assertEquals(120000L,repo.expectedCash(tenant,shift.id));assertEquals(8L,repo.products(tenant).single().exactStockScaled)
+            val pixels=android.graphics.Bitmap.createBitmap(12,12,android.graphics.Bitmap.Config.ARGB_8888)
+            pixels.eraseColor(android.graphics.Color.BLUE)
+            val png=java.io.ByteArrayOutputStream().also {pixels.compress(android.graphics.Bitmap.CompressFormat.PNG,100,it)}.toByteArray()
+            val image=ImageUpload.fromBytes(png)
+            repo.saveImage(tenant,"product",item,image,0,"Photo of counted goods","product-image")
+            assertArrayEquals(image.bytes,repo.imageBytes(tenant,image.assetId))
+            val before=repo.exportTenantSnapshot(tenant)
+            try {repo.checkout(tenant,listOf(CartLine(product,100)),0,customer,"oversell");fail("oversell accepted")}catch(_:IllegalArgumentException){}
+            assertEquals(before,repo.exportTenantSnapshot(tenant))
+            repo.receiveCustomerAdvance(tenant,customer,3000,0,0,"Funds held","advance")
+            assertEquals(3000L,repo.customerAdvanceBalance(tenant,customer))
+            val backup=dir.resolve("backup.rpos")
+            BackupService.create(repo,tenant,"backup-test-password",backup.toPath())
+            val decoded=BackupService.read(backup.toPath(),"backup-test-password")
+            val restored=repo.restoreTenantSnapshot(decoded,"Recovered")
+            assertEquals(4690L,repo.customers(restored.id).single().balanceMinor)
+            assertEquals(3000L,repo.customerAdvanceBalance(restored.id,customer))
+            assertArrayEquals(image.bytes,repo.imageBytes(restored.id,image.assetId))
+        }
+        PosRepository(dir.resolve("pos.db").path).use {repo ->
+            assertEquals(8L,repo.products(tenant).single {it.id==item}.exactStockScaled)
+            assertEquals(1,repo.sales(tenant).size)
+        }
+    }
+    @Test fun ownerAndStaffUseRealAndroidCredentialsAndPersistentPermissionDenial()=fixture {dir ->
+        PosRepository(dir.resolve("pos.db").path).use {repo ->
+            val shop=repo.createTenant("Shop")
+            WorkspaceAccess(dir.toPath()).register(shop.id,"Owner-password-2026")
+            StaffAccess(dir.toPath()).use {access ->
+                val owner=requireNotNull(access.unlockOwner(shop.id,"Owner-password-2026"))
+                val member=access.addMember(owner,"Cashier",StaffRole.CASHIER,"Cashier-password-2026")
+                val cashier=requireNotNull(access.unlockStaff(shop.id,member.id,"Cashier-password-2026"))
+                repo.setPermissionCheck {id,p ->require(id==cashier.tenantId);access.requireSession(cashier,p)}
+                try {repo.addProduct(shop.id,"Denied","piece",100,2.0);fail("cashier added stock")}catch(_:IllegalArgumentException){}
+                repo.setPermissionCheck(null)
+                assertTrue(repo.products(shop.id).isEmpty())
+                access.logout(cashier)
+                try {access.requireSession(cashier,StaffPermission.SELL);fail("revoked session")}catch(_:IllegalArgumentException){}
+            }
+        }
+    }
+}
