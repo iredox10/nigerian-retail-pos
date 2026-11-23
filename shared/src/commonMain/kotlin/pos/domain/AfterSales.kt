@@ -1,5 +1,12 @@
 package pos.domain
 
+/** Value carried directly between a return and its replacement sale. */
+data class ExchangePortion(val exchangeId: String, val linkedReceiptId: String, val amountMinor: Long) {
+    init {
+        require(exchangeId.isNotBlank() && linkedReceiptId.isNotBlank() && amountMinor > 0)
+    }
+}
+
 data class ReturnLine(
     val productId: String, val name: String, val unit: String, val quantity: Int, val unitPriceMinor: Long,
     val sellingUnitId: String? = null, val baseUnitsPerUnit: Int = 1, val baseUnit: String = unit,
@@ -19,13 +26,15 @@ data class SaleReturn(
     val id: String, val tenantId: String, val saleId: String, val lines: List<ReturnLine>,
     val refundMinor: Long, val restock: Boolean, val reason: String, val createdAt: String,
     val creditReductionMinor: Long = 0,
+    val exchange: ExchangePortion? = null,
 ) {
     init {
         require(id.isNotBlank() && tenantId.isNotBlank() && saleId.isNotBlank() && reason.isNotBlank() && createdAt.isNotBlank())
         require(lines.isNotEmpty() && lines.map { it.key }.distinct().size == lines.size)
-        require(refundMinor >= 0 && creditReductionMinor >= 0 && addMoney(refundMinor,creditReductionMinor) == lines.fold(0L) { total, line -> addMoney(total, line.totalMinor) })
+        require(exchange == null || creditReductionMinor == 0L)
+        require(refundMinor >= 0 && creditReductionMinor >= 0 && returnedValueMinor == lines.fold(0L) { total, line -> addMoney(total, line.totalMinor) })
     }
-    val returnedValueMinor:Long get()=addMoney(refundMinor,creditReductionMinor)
+    val returnedValueMinor:Long get()=addMoney(addMoney(refundMinor,creditReductionMinor),exchange?.amountMinor ?: 0L)
 }
 
 data class SupplierPayment(val id: String, val tenantId: String, val receiptId: String, val supplierName: String, val amountMinor: Long, val createdAt: String) {

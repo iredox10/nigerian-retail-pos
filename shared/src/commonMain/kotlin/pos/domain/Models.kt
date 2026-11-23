@@ -110,6 +110,7 @@ data class Sale(
     val externalPayments: List<ExternalPayment> = emptyList(),
     val cashGivenMinor: Long? = null,
     val note: String? = null,
+    val exchange: ExchangePortion? = null,
 ) {
     val externalRecordedMinor:Long get()=externalPaymentTotal(externalPayments)
     val changeMinor: Long? get() = cashGivenMinor?.minus(cashMinor)
@@ -121,8 +122,10 @@ data class Sale(
         require(lines.map { it.key }.distinct().size == lines.size) { "Combine repeated items into one line." }
         require(if(basketDiscount==null) lines.all {it.basketDiscountMinor==0L} else allocateBasketDiscount(lines,basketDiscount).map {it.basketDiscountMinor}==lines.map {it.basketDiscountMinor}) { "Basket discount allocations do not match the saved rule." }
         require(totalMinor >= 0 && totalMinor == cartTotal(lines)) { "Sale total does not match its items." }
-        require(cashMinor >= 0 && creditMinor >= 0 && addMoney(addMoney(cashMinor, creditMinor),externalRecordedMinor) == totalMinor) {
-            "Cash, recorded external portions and credit must cover the sale exactly."
+        require(exchange == null || (creditMinor == 0L && externalPayments.isEmpty()))
+        val recordedPayment = addMoney(addMoney(cashMinor, creditMinor), externalRecordedMinor)
+        require(cashMinor >= 0 && creditMinor >= 0 && addMoney(recordedPayment, exchange?.amountMinor ?: 0L) == totalMinor) {
+            "The recorded payment portions must cover the sale exactly."
         }
         cashGivenMinor?.let { tender ->
             require(tender >= cashMinor && (cashMinor > 0L || tender == 0L)) {

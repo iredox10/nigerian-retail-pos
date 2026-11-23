@@ -158,6 +158,7 @@ class PosRepository(path: String = File(System.getProperty("user.home"), ".niger
         initializeProductVariants()
         initializePurchaseReturns()
         initializeDebtAdjustments()
+        initializeCashExchanges()
         execute("CREATE TRIGGER IF NOT EXISTS activity_audit_no_update BEFORE UPDATE ON activity_audit BEGIN SELECT RAISE(ABORT,'Activity history cannot be edited'); END")
         execute("CREATE TRIGGER IF NOT EXISTS activity_audit_no_delete BEFORE DELETE ON activity_audit BEGIN SELECT RAISE(ABORT,'Activity history cannot be removed'); END")
     }
@@ -512,11 +513,20 @@ class PosRepository(path: String = File(System.getProperty("user.home"), ".niger
         return query("SELECT * FROM sales WHERE tenant_id=? ORDER BY created_at DESC",tenantId,map=::sale)
     }
     /** cashMinor is applied cash, excluding change. Caller must explicitly choose a customer for credit. */
-    @Synchronized fun checkout(tenantId: String, lines: List<CartLine>, cashMinor: Long, customerId: String? = null, operationId: String? = null, dueDate: String? = null,basketDiscount:BasketDiscount?=null,externalPayments:List<ExternalPayment> = emptyList(), cashGivenMinor: Long? = null, note: String? = null): Sale = transaction {
+    @Synchronized fun checkout(tenantId: String, lines: List<CartLine>, cashMinor: Long, customerId: String? = null, operationId: String? = null, dueDate: String? = null,basketDiscount:BasketDiscount?=null,externalPayments:List<ExternalPayment> = emptyList(), cashGivenMinor: Long? = null, note: String? = null): Sale =
+        checkoutWithPayment(tenantId, lines, cashMinor, customerId, operationId, dueDate, basketDiscount,
+            externalPayments, cashGivenMinor, note, exchange = null)
+
+    private fun checkoutWithPayment(
+        tenantId: String, lines: List<CartLine>, cashMinor: Long, customerId: String?, operationId: String?,
+        dueDate: String?, basketDiscount: BasketDiscount?, externalPayments: List<ExternalPayment>,
+        cashGivenMinor: Long?, note: String?, exchange: ExchangePortion?,
+    ): Sale = transaction {
         requirePermission(tenantId, StaffPermission.SELL)
         if (basketDiscount!=null || lines.any { it.discountPerUnitMinor > 0 || it.basketDiscountMinor>0 }) requirePermission(tenantId, StaffPermission.DISCOUNT)
         val externalRecorded=externalPaymentTotal(externalPayments)
-        if (Math.addExact(cashMinor,externalRecorded) < cartTotal(lines)) requirePermission(tenantId, StaffPermission.SELL_CREDIT)
+        val recordedPayment = Math.addExact(Math.addExact(cashMinor, externalRecorded), exchange?.amountMinor ?: 0L)
+        if (recordedPayment < cartTotal(lines)) requirePermission(tenantId, StaffPermission.SELL_CREDIT)
         requireTenant(tenantId)
         require(lines.isNotEmpty()) { "Choose an item before taking payment." }
         require(cashMinor >= 0) { "Cash cannot be negative." }
@@ -531,21 +541,11 @@ class PosRepository(path: String = File(System.getProperty("user.home"), ".niger
         if (operationId != null) {
             val existing=sales(tenantId).find { it.id==operationId }
             if (existing!=null) {
-                require(existing.cashMinor==cashMinor && existing.cashGivenMinor==cashGivenMinor && existing.note==note && existing.customerId==customerId && existing.dueDate==dueDate && existing.basketDiscount==basketDiscount && existing.externalPayments==externalPayments && existing.lines.sortedBy { it.key }.map(::lineDetails)==requested.sortedBy { it.key }.map(::lineDetails)) { "This operation was already saved with different details." }
+                require(existing.cashMinor==cashMinor && existing.cashGivenMinor==cashGivenMinor && existing.note==note && existing.exchange==exchange && existing.customerId==customerId && existing.dueDate==dueDate && existing.basketDiscount==basketDiscount && existing.externalPayments==externalPayments && existing.lines.sortedBy { it.key }.map(::lineDetails)==requested.sortedBy { it.key }.map(::lineDetails)) { "This operation was already saved with different details." }
                 return@transaction existing
             }
         }
-        val normalized=requested.map { line ->
-            val current=requireProduct(tenantId,line.product.id)
-            require(!current.archived) { "${current.name} has been archived. Remove it from this sale." }
-            require(line.product.priceMinor==current.priceMinor && line.product.unit==current.unit && line.product.name==current.name) { "Item details changed. Review the sale." }
-            val unit=line.sellingUnitId?.let { requireSellingUnit(tenantId,it) }
-            require(unit==null || (!unit.archived && unit.productId==current.id && unit.baseUnit==current.unit)) { "Choose an active selling unit belonging to this item." }
-            val normalizedLine=CartLine(current.copy(stockScaled=null),line.quantity,unit?.id,unit?.name ?: current.unit,unit?.priceMinor ?: current.priceMinor,unit?.baseUnitsPerUnit ?: 1,line.discountPerUnitMinor,line.discountReason,line.quantityPrecision,line.basketDiscountMinor)
-            validatePriceListDiscount(tenantId,normalizedLine,customerId)
-            require(lineDetails(line)==lineDetails(normalizedLine)) { "Selling unit details changed. Review the sale." }
-            normalizedLine
-        }
+        val normalized = normalizeCheckoutLines(tenantId, requested, customerId)
         require(if(basketDiscount==null) normalized.all {it.basketDiscountMinor==0L} else allocateBasketDiscount(normalized,basketDiscount).map {it.basketDiscountMinor}==normalized.map {it.basketDiscountMinor}) { "Basket discount changed. Review the sale before payment." }
         val stockUpdates=normalized.groupBy { it.product.id }.map { (productId,group) ->
             val quantity=group.fold(0L) { sum,line -> Math.addExact(sum,line.baseQuantity) }
@@ -553,8 +553,8 @@ class PosRepository(path: String = File(System.getProperty("user.home"), ".niger
         }
         validateMinimumPricesAtCheckout(tenantId,normalized)
         val total=cartTotal(normalized)
-        require(Math.addExact(cashMinor,externalRecorded)<=total) { "Record applied cash only; return extra cash as change." }
-        val credit=total-cashMinor-externalRecorded
+        require(recordedPayment<=total) { "Record applied cash only; return extra cash as change." }
+        val credit=total-recordedPayment
         if (customerId!=null) require(query("SELECT id FROM customers WHERE tenant_id=? AND id=?",tenantId,customerId) { it.getString(1) }.isNotEmpty()) { "Customer does not belong to this shop." }
         require(credit==0L || customerId!=null) { "Choose who will pay the remaining balance." }
         if(dueDate!=null) {
@@ -569,7 +569,7 @@ class PosRepository(path: String = File(System.getProperty("user.home"), ".niger
         } else null
         val now = Instant.now()
         if (credit > 0) checkDebtAdjustmentClock(tenantId, requireNotNull(customerId), now)
-        val sale=Sale(operationId ?: id(),tenantId,normalized,total,cashMinor,credit,customerId,now.toString(),dueDate,basketDiscount,externalPayments,cashGivenMinor,note)
+        val sale=Sale(operationId ?: id(),tenantId,normalized,total,cashMinor,credit,customerId,now.toString(),dueDate,basketDiscount,externalPayments,cashGivenMinor,note,exchange)
         execute("INSERT INTO sales(id,tenant_id,total_minor,cash_minor,credit_minor,customer_id,created_at,due_date,basket_discount_kind,basket_discount_value,basket_discount_reason,sale_note) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)",sale.id,tenantId,total,cashMinor,credit,customerId,sale.createdAt,dueDate,basketDiscount?.kind,basketDiscount?.value,basketDiscount?.reason,note)
         normalized.forEach { l ->
             execute("INSERT INTO sale_lines(sale_id,tenant_id,product_id,name,unit,price_minor,quantity,selling_unit_id,selling_unit,unit_price_minor,base_units_per_unit,discount_per_unit_minor,discount_reason,quantity_precision,base_precision,basket_discount_minor) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",sale.id,tenantId,l.product.id,l.product.name,l.product.unit,l.product.priceMinor,l.quantity,l.sellingUnitId,l.sellingUnit,l.unitPriceMinor,l.baseUnitsPerUnit,l.discountPerUnitMinor,l.discountReason,l.quantityPrecision,l.product.quantityPrecision,l.basketDiscountMinor)
@@ -662,6 +662,19 @@ class PosRepository(path: String = File(System.getProperty("user.home"), ".niger
     }
     private fun sellingUnit(r:ResultSet)=SellingUnit(r.getString("id"),r.getString("tenant_id"),r.getString("product_id"),r.getString("name"),r.getString("base_unit"),r.getInt("base_units_per_unit"),r.getLong("price_minor"),r.getString("barcode"),r.getInt("archived")==1,r.getString("created_at"))
     private fun requireSellingUnit(tenantId:String,unitId:String)=query("SELECT * FROM selling_units WHERE tenant_id=? AND id=?",tenantId,unitId,map=::sellingUnit).singleOrNull() ?: throw IllegalArgumentException("Selling unit not found in this shop.")
+    private fun normalizeCheckoutLines(tenantId: String, requested: List<CartLine>, customerId: String?): List<CartLine> =
+        requested.map { line ->
+            val current=requireProduct(tenantId,line.product.id)
+            require(!current.archived) { "${current.name} has been archived. Remove it from this sale." }
+            require(line.product.priceMinor==current.priceMinor && line.product.unit==current.unit && line.product.name==current.name) { "Item details changed. Review the sale." }
+            val unit=line.sellingUnitId?.let { requireSellingUnit(tenantId,it) }
+            require(unit==null || (!unit.archived && unit.productId==current.id && unit.baseUnit==current.unit)) { "Choose an active selling unit belonging to this item." }
+            val normalizedLine=CartLine(current.copy(stockScaled=null),line.quantity,unit?.id,unit?.name ?: current.unit,unit?.priceMinor ?: current.priceMinor,unit?.baseUnitsPerUnit ?: 1,line.discountPerUnitMinor,line.discountReason,line.quantityPrecision,line.basketDiscountMinor)
+            validatePriceListDiscount(tenantId,normalizedLine,customerId)
+            require(lineDetails(line)==lineDetails(normalizedLine)) { "Selling unit details changed. Review the sale." }
+            normalizedLine
+        }
+
     private fun lineDetails(line:CartLine)=listOf(line.key,line.product.id,line.sellingUnitId,line.quantity,line.product.name,line.product.unit,line.product.priceMinor,line.sellingUnit,line.unitPriceMinor,line.baseUnitsPerUnit,line.discountPerUnitMinor,line.discountReason,line.quantityPrecision,line.product.quantityPrecision,line.basketDiscountMinor)
     private data class StockUpdate(val stock:Double,val scaled:Long?)
     private fun exactProjection(scaled:Long, precision:Int):Boolean =
@@ -858,7 +871,13 @@ class PosRepository(path: String = File(System.getProperty("user.home"), ".niger
             line.key to (line.quantity - (returned[line.key]?.fold(0) { sum,item -> Math.addExact(sum,item.quantity) } ?: 0))
         }
     }
-    @Synchronized fun returnItems(tenantId:String,saleId:String,quantities:Map<String,Int>,restock:Boolean,reason:String,operationId:String?=null):SaleReturn = transaction {
+    @Synchronized fun returnItems(tenantId:String,saleId:String,quantities:Map<String,Int>,restock:Boolean,reason:String,operationId:String?=null):SaleReturn =
+        saveReturn(tenantId, saleId, quantities, restock, reason, operationId, exchange = null)
+
+    private fun saveReturn(
+        tenantId: String, saleId: String, quantities: Map<String, Int>, restock: Boolean,
+        reason: String, operationId: String?, exchange: ExchangePortion?,
+    ): SaleReturn = transaction {
         requirePermission(tenantId, StaffPermission.RETURN_SALE)
         requireTenant(tenantId)
         require(reason.isNotBlank() && quantities.isNotEmpty() && quantities.all { it.key.isNotBlank() && it.value>0 }) { "Select returned quantities and enter a reason." }
@@ -869,23 +888,16 @@ class PosRepository(path: String = File(System.getProperty("user.home"), ".niger
         if(operationId!=null) {
             val previous=saleReturns(tenantId).find { it.id==operationId }
             if(previous!=null) {
-                require(previous.saleId==saleId && previous.restock==restock && previous.reason==reason.trim() && previous.lines.associate { it.key to it.quantity }==quantities) { "This return was already recorded with different details." }
+                require(previous.saleId==saleId && previous.restock==restock && previous.reason==reason.trim() && previous.exchange==exchange && previous.lines.associate { it.key to it.quantity }==quantities) { "This return was already recorded with different details." }
                 return@transaction previous
             }
         }
-        val remaining=returnableQuantities(tenantId,saleId)
-        require(quantities.all { (productId,quantity) -> quantity <= (remaining[productId] ?: 0) }) { "A return cannot exceed the quantity still returnable on this receipt." }
-        val lines=quantities.entries.sortedBy { it.key }.map { (productId,quantity) ->
-            val original=sale.lines.single { it.key==productId }
-            val already=original.quantity-requireNotNull(remaining[productId])
-            val previousAmount=original.cumulativeRefundMinor(already)
-            val cumulative=original.cumulativeRefundMinor(Math.addExact(already,quantity))
-            ReturnLine(original.product.id,original.product.name,original.sellingUnit,quantity,original.netUnitPriceMinor,original.sellingUnitId,original.baseUnitsPerUnit,original.product.unit,original.quantityPrecision,original.product.quantityPrecision,cumulative-previousAmount)
-        }
+        val lines = prepareReturnLines(sale, quantities)
         val returnedValue=lines.fold(0L) { total,line -> Math.addExact(total,line.totalMinor) }
         val creditPlan=if(sale.creditMinor>0) planCreditReturn(tenantId,saleId,returnedValue) else null
-        val refund=creditPlan?.cashRefundMinor ?: returnedValue
-        val shift=if(sale.creditMinor==0L || refund>0) requireCashShift(tenantId) else null
+        require(exchange == null || (creditPlan == null && exchange.amountMinor <= returnedValue))
+        val refund=creditPlan?.cashRefundMinor ?: (returnedValue - (exchange?.amountMinor ?: 0L))
+        val shift=if((exchange == null && sale.creditMinor==0L) || refund>0) requireCashShift(tenantId) else null
         if(refund>0) requireCashAvailable(tenantId,requireNotNull(shift).id,refund)
         // Validate all stock updates before mutating the ledger; damaged goods never re-enter saleable stock.
         val stockUpdates=if(restock) lines.groupBy { it.productId }.map { (productId,group) ->
@@ -893,7 +905,7 @@ class PosRepository(path: String = File(System.getProperty("user.home"), ".niger
             require(group.all { item.unit==it.baseUnit }) { "Base unit changed since the sale. Review the stock correction." }
             productId to scaledStock(item,group.fold(0L) { sum,line -> Math.addExact(sum,line.baseQuantity) })
         } else emptyList()
-        val result=SaleReturn(operationId?:id(),tenantId,saleId,lines,refund,restock,reason.trim(),creditPlan?.createdAt ?: Instant.now().toString(),creditPlan?.amountMinor ?: 0L)
+        val result=SaleReturn(operationId?:id(),tenantId,saleId,lines,refund,restock,reason.trim(),creditPlan?.createdAt ?: Instant.now().toString(),creditPlan?.amountMinor ?: 0L, exchange)
         execute("INSERT INTO sale_returns VALUES(?,?,?,?,?,?,?)",result.id,tenantId,saleId,refund,if(restock) 1 else 0,result.reason,result.createdAt)
         lines.forEach { line -> execute("INSERT INTO return_lines(return_id,tenant_id,product_id,name,unit,quantity,unit_price_minor,selling_unit_id,base_units_per_unit,base_unit,quantity_precision,base_precision,refund_override_minor) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)",result.id,tenantId,line.productId,line.name,line.unit,line.quantity,line.unitPriceMinor,line.sellingUnitId,line.baseUnitsPerUnit,line.baseUnit,line.quantityPrecision,line.basePrecision,line.refundOverrideMinor) }
         stockUpdates.forEach { (productId,quantity) -> saveScaledStock(tenantId,productId,quantity) }
@@ -902,6 +914,90 @@ class PosRepository(path: String = File(System.getProperty("user.home"), ".niger
         enqueue(tenantId,"sale.returned",result.id)
         result
     }
+    private fun prepareReturnLines(sale: Sale, quantities: Map<String, Int>): List<ReturnLine> {
+        val remaining=returnableQuantities(sale.tenantId,sale.id)
+        require(quantities.all { (productId,quantity) -> quantity <= (remaining[productId] ?: 0) }) { "A return cannot exceed the quantity still returnable on this receipt." }
+        return quantities.entries.sortedBy { it.key }.map { (productId,quantity) ->
+            val original=sale.lines.single { it.key==productId }
+            val already=original.quantity-requireNotNull(remaining[productId])
+            val previousAmount=original.cumulativeRefundMinor(already)
+            val cumulative=original.cumulativeRefundMinor(Math.addExact(already,quantity))
+            ReturnLine(original.product.id,original.product.name,original.sellingUnit,quantity,original.netUnitPriceMinor,original.sellingUnitId,original.baseUnitsPerUnit,original.product.unit,original.quantityPrecision,original.product.quantityPrecision,cumulative-previousAmount)
+        }
+    }
+
+    @Synchronized fun reviewCashExchange(
+        tenantId: String, saleId: String, quantities: Map<String, Int>, replacements: List<CartLine>,
+        restock: Boolean, reason: String,
+    ): CashExchangeReview = featureRead(tenantId, StaffPermission.RETURN_SALE) {
+        requirePermission(tenantId, StaffPermission.SELL)
+        val original = requireSale(tenantId, saleId)
+        require(original.creditMinor == 0L && original.externalPayments.isEmpty()) {
+            "Choose a receipt paid with cash or an earlier cash exchange."
+        }
+        require(quantities.isNotEmpty() && quantities.values.all { it > 0 }) { "Enter the quantity being returned." }
+        val cleanReason = reason.trim()
+        require(cleanReason.length in 3..250 && cleanReason.none { it.isISOControl() }) {
+            "Enter a reason from 3 to 250 printable characters."
+        }
+        require(replacements.isNotEmpty() && replacements.map { it.key }.distinct().size == replacements.size &&
+            replacements.all { it.product.tenantId == tenantId && it.discountTotalMinor == 0L }) {
+            "Choose replacement items at their current selling prices."
+        }
+        val returned = prepareReturnLines(original, quantities)
+        val replacementLines = normalizeCheckoutLines(tenantId, replacements, original.customerId)
+        validateMinimumPricesAtCheckout(tenantId, replacementLines)
+        val stockReturned = if (restock) returned.groupBy { it.productId }
+            .mapValues { (_, group) -> group.fold(0L) { total, line -> Math.addExact(total, line.baseQuantity) } }
+        else emptyMap()
+        for ((productId, quantity) in stockReturned) scaledStock(requireProduct(tenantId, productId), quantity)
+        for ((productId, lines) in replacementLines.groupBy { it.product.id }) {
+            val needed = lines.fold(0L) { total, line -> Math.addExact(total, line.baseQuantity) }
+            scaledStock(requireProduct(tenantId, productId), Math.subtractExact(stockReturned[productId] ?: 0L, needed))
+        }
+        val review = CashExchangeReview(saleId, returned, replacementLines, restock, cleanReason, null)
+        require(review.appliedMinor > 0L) { "Both the returned goods and the replacement need a positive value." }
+        if (review.cashToCollectMinor == 0L && review.cashToRefundMinor == 0L) return@featureRead review
+        val shift = requireCashShift(tenantId)
+        if (review.cashToRefundMinor > 0L) requireCashAvailable(tenantId, shift.id, review.cashToRefundMinor)
+        review.copy(shiftId = shift.id)
+    }
+
+    @Synchronized fun saveCashExchange(
+        tenantId: String, review: CashExchangeReview, operationId: String,
+    ): CashExchange = featureWrite(tenantId, StaffPermission.RETURN_SALE) {
+        requirePermission(tenantId, StaffPermission.SELL)
+        require(operationId.isNotBlank() && operationId.length <= 150 && operationId.none { it.isISOControl() }) {
+            "Exchange reference is invalid."
+        }
+        cashExchange(tenantId, operationId)?.let { saved ->
+            val returned = saleReturns(tenantId, saved.originalReceiptId).single { it.id == saved.returnId }
+            val replacement = requireSale(tenantId, saved.replacementReceiptId)
+            require(saved.originalReceiptId == review.originalReceiptId && saved.appliedMinor == review.appliedMinor &&
+                returned.lines == review.returned && returned.restock == review.restock && returned.reason == review.reason &&
+                replacement.lines.map(::lineDetails) == review.replacements.map(::lineDetails)) {
+                "This exchange was already saved with different details."
+            }
+            return@featureWrite saved
+        }
+        val original = requireSale(tenantId, review.originalReceiptId)
+        val checked = reviewCashExchange(tenantId, original.id, review.returned.associate { it.key to it.quantity },
+            review.replacements, review.restock, review.reason)
+        require(checked == review) { "The exchange changed. Review the items, stock and payment again." }
+        val returnId = UUID.nameUUIDFromBytes("exchange:return:$operationId".toByteArray()).toString()
+        val replacementId = UUID.nameUUIDFromBytes("exchange:sale:$operationId".toByteArray()).toString()
+        val returned = saveReturn(tenantId, original.id, review.returned.associate { it.key to it.quantity },
+            review.restock, review.reason, returnId, ExchangePortion(operationId, replacementId, review.appliedMinor))
+        val replacement = checkoutWithPayment(tenantId, review.replacements, review.cashToCollectMinor, original.customerId,
+            replacementId, null, null, emptyList(), null, null, ExchangePortion(operationId, original.id, review.appliedMinor))
+        require(Instant.parse(original.createdAt) < Instant.parse(returned.createdAt) &&
+            Instant.parse(returned.createdAt) <= Instant.parse(replacement.createdAt)) {
+            "Correct the computer clock before saving the exchange."
+        }
+        CashExchange(operationId, original.id, returned.id, replacement.id, review.appliedMinor, replacement.createdAt)
+            .also { recordCashExchange(tenantId, it) }
+    }
+
     @Synchronized fun supplierPayments(tenantId:String,receiptId:String?=null):List<SupplierPayment> {
         requireTenant(tenantId)
         if(receiptId!=null) requireStockReceipt(tenantId,receiptId)
@@ -948,7 +1044,7 @@ class PosRepository(path: String = File(System.getProperty("user.home"), ".niger
         val lines=query("SELECT * FROM sale_lines WHERE tenant_id=? AND sale_id=? ORDER BY id",tenantId,saleId) { line ->
             CartLine(Product(line.getString("product_id"),tenantId,line.getString("name"),line.getString("unit"),line.getLong("price_minor"),0.0,quantityPrecision=line.getInt("base_precision")),line.getInt("quantity"),line.getString("selling_unit_id"),line.getString("selling_unit") ?: line.getString("unit"),(line.getObject("unit_price_minor") as? Number)?.toLong() ?: line.getLong("price_minor"),line.getInt("base_units_per_unit"),line.getLong("discount_per_unit_minor"),line.getString("discount_reason"),line.getInt("quantity_precision"),line.getLong("basket_discount_minor"))
         }
-        return Sale(saleId,tenantId,lines,r.getLong("total_minor"),r.getLong("cash_minor"),r.getLong("credit_minor"),r.getString("customer_id"),r.getString("created_at"),r.getString("due_date"),r.getString("basket_discount_kind")?.let {BasketDiscount(it,r.getLong("basket_discount_value"),requireNotNull(r.getString("basket_discount_reason")))},externalPaymentsUnchecked(tenantId,saleId),saleTenderUnchecked(tenantId,saleId),r.getString("sale_note"))
+        return Sale(saleId,tenantId,lines,r.getLong("total_minor"),r.getLong("cash_minor"),r.getLong("credit_minor"),r.getString("customer_id"),r.getString("created_at"),r.getString("due_date"),r.getString("basket_discount_kind")?.let {BasketDiscount(it,r.getLong("basket_discount_value"),requireNotNull(r.getString("basket_discount_reason")))},externalPaymentsUnchecked(tenantId,saleId),saleTenderUnchecked(tenantId,saleId),r.getString("sale_note"), exchangeForSale(tenantId,saleId))
     }
     private fun requireSale(tenantId:String,saleId:String):Sale {
         requireTenant(tenantId)
@@ -962,11 +1058,11 @@ class PosRepository(path: String = File(System.getProperty("user.home"), ".niger
     private fun saleReturn(r:ResultSet):SaleReturn {
         val tenantId=r.getString("tenant_id"); val returnId=r.getString("id")
         val lines=query("SELECT * FROM return_lines WHERE tenant_id=? AND return_id=? ORDER BY id",tenantId,returnId) { line -> ReturnLine(line.getString("product_id"),line.getString("name"),line.getString("unit"),line.getInt("quantity"),line.getLong("unit_price_minor"),line.getString("selling_unit_id"),line.getInt("base_units_per_unit"),line.getString("base_unit") ?: line.getString("unit"),line.getInt("quantity_precision"),line.getInt("base_precision"),(line.getObject("refund_override_minor") as? Number)?.toLong()) }
-        return SaleReturn(returnId,tenantId,r.getString("sale_id"),lines,r.getLong("refund_minor"),r.getInt("restock")==1,r.getString("reason"),r.getString("created_at"),creditReturnAmount(tenantId,returnId))
+        return SaleReturn(returnId,tenantId,r.getString("sale_id"),lines,r.getLong("refund_minor"),r.getInt("restock")==1,r.getString("reason"),r.getString("created_at"),creditReturnAmount(tenantId,returnId), exchangeForReturn(tenantId,returnId))
     }
     private fun supplierPayment(r:ResultSet)=SupplierPayment(r.getString("id"),r.getString("tenant_id"),r.getString("receipt_id"),r.getString("supplier_name"),r.getLong("amount_minor"),r.getString("created_at"))
 
-    private val snapshotTableOrder get() = listOf("products","product_metadata_changes","selling_units","stock_settings_changes","purchase_units","customers","customer_changes","cash_shifts","sales","sale_lines","repayments","repayment_allocations","allocation_reversals","stock_receipts","expenses","sale_returns","return_lines","supplier_payments","cash_entries","catalogue_changes","stock_adjustments","outbox","activity_audit") + supplierProfileSnapshotTables + purchaseOrderSnapshotTables + inventoryDispositionSnapshotTables + stockCountSessionSnapshotTables + shopProfileSnapshotTables + externalPaymentSnapshotTables + priceListSnapshotTables + bulkCatalogueUpdateSnapshotTables + supplierInvoiceSnapshotTables + creditReturnSnapshotTables + quotationSnapshotTables + localImageSnapshotTables + ownerCashSnapshotTables + minimumPriceSnapshotTables + repackingSnapshotTables + expenseAttachmentSnapshotTables + saleTenderSnapshotTables + reminderSnapshotTables + variantSnapshotTables + purchaseReturnSnapshotTables + debtAdjustmentSnapshotTables
+    private val snapshotTableOrder get() = listOf("products","product_metadata_changes","selling_units","stock_settings_changes","purchase_units","customers","customer_changes","cash_shifts","sales","sale_lines","repayments","repayment_allocations","allocation_reversals","stock_receipts","expenses","sale_returns","return_lines","supplier_payments","cash_entries","catalogue_changes","stock_adjustments","outbox","activity_audit") + supplierProfileSnapshotTables + purchaseOrderSnapshotTables + inventoryDispositionSnapshotTables + stockCountSessionSnapshotTables + shopProfileSnapshotTables + externalPaymentSnapshotTables + priceListSnapshotTables + bulkCatalogueUpdateSnapshotTables + supplierInvoiceSnapshotTables + creditReturnSnapshotTables + quotationSnapshotTables + localImageSnapshotTables + ownerCashSnapshotTables + minimumPriceSnapshotTables + repackingSnapshotTables + expenseAttachmentSnapshotTables + saleTenderSnapshotTables + reminderSnapshotTables + variantSnapshotTables + purchaseReturnSnapshotTables + debtAdjustmentSnapshotTables + cashExchangeSnapshotTables
     @Synchronized fun exportTenantSnapshot(tenantId:String):TenantSnapshot = transaction {
         requirePermission(tenantId, StaffPermission.BACKUP)
         requireTenant(tenantId)
@@ -1163,6 +1259,7 @@ class PosRepository(path: String = File(System.getProperty("user.home"), ".niger
         validateProductVariants(tenant.id)
         validatePurchaseReturns(tenant.id)
         validateDebtAdjustments(tenant.id)
+        validateCashExchanges(tenant.id)
         provisionOwner(tenant)
         tenant
     }
