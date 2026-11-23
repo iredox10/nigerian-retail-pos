@@ -26,8 +26,9 @@ fun LocalImage(bytes:ByteArray?,description:String,modifier:Modifier=Modifier) {
     val bitmap=remember(bytes) {runCatching {bytes?.let {SkiaImage.makeFromEncoded(it).toComposeImageBitmap()}}.getOrNull()}
     Surface(modifier,shape=MaterialTheme.shapes.small,color=MaterialTheme.colorScheme.surfaceVariant) {
         if(bitmap!=null) Image(bitmap,description,Modifier.fillMaxSize().padding(4.dp),contentScale=ContentScale.Fit)
-        else BoxWithConstraints(Modifier.fillMaxSize().padding(8.dp).semantics {contentDescription=if(bytes==null) "No image" else "Image unavailable"},contentAlignment=Alignment.Center) {
-            Text(if(maxWidth<64.dp) "—" else if(bytes==null) "No image" else "Image unavailable",style=MaterialTheme.typography.labelSmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
+        else Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            PosIcon(if (description.contains("shop", true)) PosIcons.Store else PosIcons.Package,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }

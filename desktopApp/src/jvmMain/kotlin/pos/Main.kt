@@ -21,6 +21,7 @@ import pos.data.PosRepository
 import pos.security.WorkspaceAccess
 import pos.security.StaffAccess
 import pos.screens.StaffScreen
+import pos.screens.ShopToolsScreen
 import pos.screens.AuditScreen
 import pos.screens.SellScreen
 import pos.screens.StockScreen
@@ -52,6 +53,8 @@ import pos.screens.HelpScreen
 import pos.screens.PinSetupPanel
 import pos.help.PracticeLauncher
 import pos.ui.theme.PosTheme
+import pos.ui.components.*
+import pos.ui.theme.PosPalette
 
 private fun localDatabasePath() = System.getProperty("pos.dataDir", System.getProperty("user.home") + "/.nigerian-retail-pos") + "/pos.db"
 
@@ -179,7 +182,12 @@ fun main(args: Array<String>) {
         Row(Modifier.weight(1f)) {
             Column(Modifier.width(208.dp).fillMaxHeight().background(MaterialTheme.colorScheme.surface).padding(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Column(Modifier.weight(1f).verticalScroll(rememberScrollState()),verticalArrangement=Arrangement.spacedBy(8.dp)) {
-                Text("RETAIL / POS", fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.primary, fontSize = 14.sp)
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Surface(color = PosPalette.Accent, shape = MaterialTheme.shapes.large) {
+                        Box(Modifier.size(36.dp), contentAlignment = Alignment.Center) { PosIcon(PosIcons.Store, tint = androidx.compose.ui.graphics.Color.White) }
+                    }
+                    Text("Retail POS", fontWeight = FontWeight.SemiBold, fontSize = 18.sp)
+                }
                 val logo=remember(current.id,revision) {runCatching {repo.imageSelection(current.id,"shop","shop").assetId?.let {repo.imageBytes(current.id,it)}}.getOrNull()}
                 if(logo!=null) pos.ui.components.LocalImage(logo,"Shop logo",Modifier.padding(top=16.dp).size(64.dp))
                 Text(current.name, style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(vertical = 16.dp))
@@ -193,12 +201,15 @@ fun main(args: Array<String>) {
                             route = item; notice = null
                         } catch(e:Exception) { lock() }
                     }, color = if (selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface, shape = MaterialTheme.shapes.small) {
-                        Text(item, Modifier.fillMaxWidth().padding(14.dp), color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface, fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal)
+                        Row(Modifier.fillMaxWidth().heightIn(min = 48.dp).padding(horizontal = 12.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                            PosIcon(destinationIcon(item), tint = if (selected) PosPalette.Accent else PosPalette.Secondary)
+                            Text(item, color = if (selected) PosPalette.Accent else PosPalette.Ink, fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal)
+                        }
                     }
                 }
                 }
                 Text("Local workspace", style = MaterialTheme.typography.labelMedium)
-                TextButton(onClick = { lock() }) { Text("Lock / switch shop") }
+                TextButton(onClick = { lock() }) { PosIcon(PosIcons.LockKeyhole); Spacer(Modifier.width(8.dp)); Text("Lock / switch shop") }
             }
             Column(Modifier.weight(1f).fillMaxHeight()) {
                 Row(Modifier.fillMaxWidth().height(64.dp).padding(horizontal = 24.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -250,29 +261,14 @@ fun main(args: Array<String>) {
                         "Import" -> ProductImportScreen(repo, current.id) { revision++ }
                         "Money" -> MoneyScreen(repo, current.id) { revision++ }
                         "Help" -> HelpScreen(practiceLauncher, isPractice = isolatedPreview || System.getenv("POS_PRACTICE_CHILD") == "1")
-                        else -> Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()),verticalArrangement = Arrangement.spacedBy(20.dp)) {
-                            Text("Your shop tools", style = MaterialTheme.typography.headlineSmall)
-                            Text("Choose the work you need to do.")
-                            pos.ui.components.NeutralButton("Help & practice", { route = "Help" })
-                            if(allowed(StaffPermission.MANAGE_CUSTOMERS)) pos.ui.components.NeutralButton("Customer orders", { route = "Orders" })
-                            if(allowed(StaffPermission.VIEW_SALES)) pos.ui.components.NeutralButton("Quotations", {route="Quotations"})
-                            if(allowed(StaffPermission.MANAGE_SETTINGS)) pos.ui.components.NeutralButton("Shop & receipt details", {route="Shop settings"})
-                            if(allowed(StaffPermission.MANAGE_SUPPLIERS)) pos.ui.components.NeutralButton("Suppliers & payments", { route = "Suppliers" })
-                            if(allowed(StaffPermission.MANAGE_CUSTOMERS)) pos.ui.components.NeutralButton("Review customer credit", { route="Credit review" })
-                            if(allowed(StaffPermission.VIEW_REPORTS)) pos.ui.components.NeutralButton("Reports & CSV exports", { route = "Reports" })
-                            if(allowed(StaffPermission.VIEW_REPORTS)) pos.ui.components.NeutralButton("Activity history", { route="Audit" })
-                            if(allowed(StaffPermission.BACKUP)) pos.ui.components.NeutralButton("Encrypted shop backup", { route = "Backup" })
-                            if(allowed(StaffPermission.MANAGE_STOCK)) pos.ui.components.NeutralButton("Import new items from CSV", { route = "Import" })
-                            if(allowed(StaffPermission.VIEW_REPORTS)) Text("Saved work: ${repo.pendingSyncCount(current.id)} local changes are waiting for online setup. No online backup has been created.", Modifier.widthIn(max=680.dp))
-                            if(allowed(StaffPermission.MANAGE_STAFF)) pos.ui.components.NeutralButton("Staff & permissions", { route="Staff" })
-                            Text("Online accounts, staff approval requests and external payment services remain under development.", Modifier.widthIn(max=680.dp))
-                        }
+                        else -> ShopToolsScreen(::allowed) { route = it }
+
                     }
                 }
             }
         }
         Surface(color = MaterialTheme.colorScheme.surfaceVariant) { Row(Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 10.dp)) {
-            Text("On this computer · Online services not connected", style = MaterialTheme.typography.bodySmall)
+            PosIcon(PosIcons.Monitor, Modifier.padding(end = 8.dp)); Text("On this computer · Online services not connected", style = MaterialTheme.typography.bodySmall)
             Spacer(Modifier.weight(1f))
             Text("This shop only", style = MaterialTheme.typography.bodySmall)
         } }
@@ -310,6 +306,7 @@ fun main(args: Array<String>) {
     }
     Row(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).padding(64.dp), horizontalArrangement=Arrangement.spacedBy(64.dp), verticalAlignment=Alignment.CenterVertically) {
         Column(Modifier.weight(1f), verticalArrangement=Arrangement.spacedBy(24.dp)) {
+            Surface(color = PosPalette.AccentTint, shape = MaterialTheme.shapes.large) { Box(Modifier.size(80.dp), contentAlignment = Alignment.Center) { PosIcon(PosIcons.Store, Modifier.size(36.dp), PosPalette.Accent) } }
             Text("Your shop.\nYour records.", style=MaterialTheme.typography.displaySmall, fontWeight=FontWeight.SemiBold)
             Text("Choose goods. Record sales.\nKeep trading without internet.", style=MaterialTheme.typography.headlineSmall)
             Text("Each business has its own workspace.\nYour records stay on this computer until online sync is configured.")

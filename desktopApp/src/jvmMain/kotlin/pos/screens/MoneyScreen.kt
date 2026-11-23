@@ -39,7 +39,14 @@ fun MoneyScreen(repo: PosRepository, tenantId: String, onChanged: () -> Unit) {
         SectionHeader("Your shop's money", "Cash on this computer · Only this shop's records")
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             listOf("Today's cash", "Expenses", "Owner money", "Past shifts").forEach { label ->
-                FilterChip(tab == label, { tab = label }, label = { Text(label) })
+                FilterChip(tab == label, { tab = label }, label = { Text(label) }, leadingIcon = {
+                    PosIcon(when (label) {
+                        "Today's cash" -> PosIcons.Wallet
+                        "Expenses" -> PosIcons.ReceiptText
+                        "Owner money" -> PosIcons.Banknote
+                        else -> PosIcons.History
+                    })
+                })
             }
         }
         loadError?.let { InlineNotice("Could not load money records", it, NoticeTone.Danger); NeutralButton("Try again", { revision++ }) }
@@ -49,6 +56,7 @@ fun MoneyScreen(repo: PosRepository, tenantId: String, onChanged: () -> Unit) {
                 if (active == null) item {
                     Surface(shape = MaterialTheme.shapes.medium) {
                         Column(Modifier.fillMaxWidth().padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                            PosIcon(PosIcons.Wallet, Modifier.size(32.dp), MaterialTheme.colorScheme.primary)
                             Text("Start with the cash you can count", style = MaterialTheme.typography.titleLarge)
                             Text("Count the money in your drawer before opening this shift. Sales and payments recorded before a shift opens are not included in its cash count.")
                             PosButton("Open cash drawer", { action = "open" })

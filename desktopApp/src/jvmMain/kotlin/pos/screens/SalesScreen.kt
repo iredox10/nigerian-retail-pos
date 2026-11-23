@@ -104,6 +104,7 @@ private fun TenantSalesScreen(repo: PosRepository, tenantId: String, allowReturn
                                     shape = MaterialTheme.shapes.medium) {
                                     Column(Modifier.fillMaxWidth().padding(18.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                         Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                                            PosIcon(PosIcons.ReceiptText, tint = PosPalette.Secondary)
                                             Text("Receipt ${sale.id.take(8)}", Modifier.weight(1f), fontWeight = FontWeight.SemiBold)
                                             Text(money(sale.totalMinor), fontWeight = FontWeight.SemiBold)
                                         }

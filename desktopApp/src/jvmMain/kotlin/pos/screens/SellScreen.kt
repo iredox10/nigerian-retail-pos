@@ -20,6 +20,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import pos.domain.*
 import pos.ui.components.SavedImage
+import pos.ui.components.PosIcon
+import pos.ui.components.PosIcons
 import pos.data.DraftDiscountCodec
 import pos.data.DraftStore
 import pos.data.frequentItemIds
@@ -232,7 +234,10 @@ fun SellScreen(
             }
             Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(24.dp)) {
                 if (!compact || !showSaleOnly) Column(Modifier.weight(1f).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                    Text("Choose items", style = MaterialTheme.typography.headlineSmall)
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        PosIcon(PosIcons.Package, tint = MaterialTheme.colorScheme.primary)
+                        Text("Choose items", style = MaterialTheme.typography.headlineSmall)
+                    }
                     OutlinedTextField(search, { search = it }, modifier = Modifier.fillMaxWidth().onPreviewKeyEvent { event ->
                         if(event.key==Key.Enter && event.type==KeyEventType.KeyDown) {
                             val match=options.values.singleOrNull { option ->
@@ -245,7 +250,7 @@ fun SellScreen(
                             else { update(match,nextAddedQuantity(match));search="" }
                             true
                         } else false
-                    }, singleLine = true,
+                    }, singleLine = true, leadingIcon = { PosIcon(PosIcons.Search) },
                         label = { Text("Search for an item") }, placeholder = { Text("Type a name or scan a barcode, then Enter") }, shape = MaterialTheme.shapes.small)
                     if(compact && !showSaleOnly) error?.let { Text(it,color=MaterialTheme.colorScheme.error) }
                     Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), verticalAlignment = Alignment.CenterVertically, horizontalArrangement=Arrangement.spacedBy(8.dp)) {
@@ -308,9 +313,10 @@ fun SellScreen(
                     }
                     Text("Prices are per selling unit. Stock shown is recorded on this computer.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
-                if (!compact || showSaleOnly) Surface(Modifier.then(if (compact) Modifier.weight(1f) else Modifier.width(380.dp)).fillMaxHeight(), shape = MaterialTheme.shapes.medium) {
+                if (!compact || showSaleOnly) Surface(Modifier.then(if (compact) Modifier.weight(1f) else Modifier.width(380.dp)).fillMaxHeight(), shape = MaterialTheme.shapes.large, border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)) {
                     Column(Modifier.padding(24.dp)) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            PosIcon(if (stage == "saved") PosIcons.CircleCheck else PosIcons.ReceiptText, tint = MaterialTheme.colorScheme.primary)
                             Text(if (stage == "saved") "Sale saved" else "This sale", style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
                             if (stage == "payment") TextButton({ stage = "items"; error = null }) { Text("Back to items") }
                         }
@@ -328,7 +334,11 @@ fun SellScreen(
                             Text("Print or export this receipt from Sales. Online sync is not connected yet.", Modifier.padding(top = 12.dp), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             error?.let { Text(it,color=MaterialTheme.colorScheme.error,modifier=Modifier.padding(top=12.dp)) }
                             Spacer(Modifier.weight(1f))
-                            Button(onClick = { resetCurrent() }, shape = MaterialTheme.shapes.small, modifier = Modifier.fillMaxWidth().height(56.dp)) { Text("New sale") }
+                            Button(onClick = { resetCurrent() }, shape = MaterialTheme.shapes.small, modifier = Modifier.fillMaxWidth().height(56.dp)) {
+                                PosIcon(PosIcons.Plus)
+                                Spacer(Modifier.width(8.dp))
+                                Text("New sale")
+                            }
                         } else {
                             Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(8.dp)) {
                                 TextButton({holding=true;holdName="";heldError=null},enabled=encodedCart.isNotEmpty()) { Text("Put sale aside") }
@@ -344,6 +354,7 @@ fun SellScreen(
                             if (stage == "items") LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                                 if (lines.isEmpty()) item {
                                     Column(Modifier.padding(vertical = 32.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                        pos.ui.components.PosIcon(pos.ui.components.PosIcons.ShoppingCart, Modifier.size(32.dp), MaterialTheme.colorScheme.primary)
                                         Text("No items yet", style = MaterialTheme.typography.titleMedium)
                                         Text("Choose an item on the left to start this sale.", color = MaterialTheme.colorScheme.onSurfaceVariant)
                                     }
@@ -358,7 +369,10 @@ fun SellScreen(
                                         if (line.basketDiscountMinor>0) Text("Basket discount on this line: ${money(line.basketDiscountMinor)}",style=MaterialTheme.typography.bodySmall)
                                         if (line.discountPerUnitMinor > 0) {
                                             Text("Was ${money(line.unitPriceMinor)} · Now ${money(line.netUnitPriceMinor)} / ${line.sellingUnit}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
+                                            Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                                            PosIcon(PosIcons.Tag, tint = MaterialTheme.colorScheme.primary)
                                             Text("Reason: ${line.discountReason?.let(::displayPriceListReason)}", style = MaterialTheme.typography.bodySmall)
+                                        }
                                         }
                                         if (allowDiscounts) Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                                             TextButton({
@@ -498,6 +512,8 @@ fun SellScreen(
                                     }
                                 }
                             }, modifier = Modifier.fillMaxWidth().height(56.dp), enabled = quantityErrors.none {it.key in quantities && it.value} && lines.isNotEmpty() && !committing && totalResult.isSuccess && !unavailableDraftItems && !reservedDraftItems && !staleDiscounts && !stalePromotions && !staleBasket && (!forbiddenDraft || stage=="items") && draftStore != null && restoredDraft.isSuccess) {
+                                PosIcon(if (stage == "items") PosIcons.ArrowRight else PosIcons.Check)
+                                Spacer(Modifier.width(8.dp))
                                 Text(if (committing) "Saving…" else if (stage == "items") "Take payment" else if (method in setOf("credit","split_credit") && credit > 0) "Save with ${money(credit)} owed" else if(isSplit) "Save without bank confirmation" else "Finish sale")
                             }
                             if (stage == "items" && lines.isEmpty()) Text("Add an item to take payment", Modifier.padding(top = 8.dp), style = MaterialTheme.typography.bodySmall)

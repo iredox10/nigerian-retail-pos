@@ -119,8 +119,8 @@ private fun TenantStockScreen(repo: PosRepository, tenantId: String, onChanged: 
             else -> {
                 savedMessage?.let { InlineNotice(it, tone = NoticeTone.Success, modifier = Modifier.fillMaxWidth()) }
                 Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    FilterChip(selected = !history && !archived && !lowStock, onClick = { history = false; archived = false; lowStock = false }, label = { Text("Items in stock") })
-                    FilterChip(selected = !history && !archived && lowStock, onClick = { history = false; archived = false; lowStock = true }, label = { Text("Low stock ($lowStockCount)") })
+                    FilterChip(selected = !history && !archived && !lowStock, onClick = { history = false; archived = false; lowStock = false }, label = { Text("Items in stock") }, leadingIcon = { PosIcon(PosIcons.Package) })
+                    FilterChip(selected = !history && !archived && lowStock, onClick = { history = false; archived = false; lowStock = true }, label = { Text("Low stock ($lowStockCount)") }, leadingIcon = { PosIcon(PosIcons.TriangleAlert) })
                     FilterChip(selected = !history && archived, onClick = { history = false; archived = true; lowStock = false }, label = { Text("Archived items") })
                     FilterChip(selected = !history && favouritesOnly, onClick = { history=false; favouritesOnly=!favouritesOnly }, label = { Text("Favourites") })
                     Box {
@@ -130,7 +130,7 @@ private fun TenantStockScreen(repo: PosRepository, tenantId: String, onChanged: 
                             allProducts.mapNotNull {it.category}.distinct().sorted().forEach { category -> DropdownMenuItem(text={Text(category)},onClick={selectedCategory=category;categoryMenu=false;history=false}) }
                         }
                     }
-                    FilterChip(selected = history, onClick = { history = true; lowStock = false }, label = { Text("Stock received (${receipts.size})") })
+                    FilterChip(selected = history, onClick = { history = true; lowStock = false }, label = { Text("Stock received (${receipts.size})") }, leadingIcon = { PosIcon(PosIcons.Truck) })
                 }
                 PosTextField(search, { search = it }, if (history) "Search stock received" else "Search for an item",
                     Modifier.fillMaxWidth(), hint = if (history) "Item name or supplier" else "Name, variant, SKU, category, brand or barcode")
@@ -184,7 +184,7 @@ private fun TenantStockScreen(repo: PosRepository, tenantId: String, onChanged: 
                                 Text("Item", Modifier.weight(1f), style = MaterialTheme.typography.labelMedium)
                                 Text("On hand", Modifier.width(130.dp), style = MaterialTheme.typography.labelMedium)
                                 Text("Selling price", Modifier.width(170.dp), style = MaterialTheme.typography.labelMedium)
-                                Spacer(Modifier.width(230.dp))
+                                Spacer(Modifier.width(256.dp))
                             }
                             LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
                                 items(matching, key = { it.id }) { product ->
@@ -213,7 +213,7 @@ private fun TenantStockScreen(repo: PosRepository, tenantId: String, onChanged: 
                                                     }, Modifier.width(100.dp))
                                                     NeutralButton("Add stock", {
                                                         selectedProductId = product.id; savedMessage = null; editor = "receive"
-                                                    }, Modifier.width(110.dp), enabled = !product.archived)
+                                                    }, Modifier.width(136.dp), enabled = !product.archived)
                                                 }
                                             }
                                             if (compact) {

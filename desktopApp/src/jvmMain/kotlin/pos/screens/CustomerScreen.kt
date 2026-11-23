@@ -67,7 +67,7 @@ private fun TenantCustomers(repo: PosRepository, tenantId: String, onFollowUps: 
             PosTextField(search, { search = it }, "Search for a customer", Modifier.fillMaxWidth(), hint = "Customer name or phone number")
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text("${customers.size} customers · This shop only", Modifier.weight(1f), style = MaterialTheme.typography.bodySmall)
-                if (onFollowUps != null) TextButton(onFollowUps) { Text("Repayment follow-ups") }
+                if (onFollowUps != null) TextButton(onFollowUps) { PosIcon(PosIcons.History); Spacer(Modifier.width(8.dp)); Text("Repayment follow-ups") }
                 NeutralButton("Refresh", { revision++ })
             }
         } else {
@@ -89,6 +89,13 @@ private fun TenantCustomers(repo: PosRepository, tenantId: String, onFollowUps: 
                     Surface(shape = MaterialTheme.shapes.small) {
                         Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
+                                Surface(color = MaterialTheme.colorScheme.primaryContainer, shape = MaterialTheme.shapes.medium) {
+                                    Box(Modifier.size(40.dp), contentAlignment = Alignment.Center) {
+                                        Text(customer.name.trim().take(1).uppercase(), color = MaterialTheme.colorScheme.primary,
+                                            style = MaterialTheme.typography.titleMedium)
+                                    }
+                                }
+                                Spacer(Modifier.width(12.dp))
                                 Text(customer.name, Modifier.weight(1f).padding(end = 16.dp), fontWeight = FontWeight.SemiBold)
                                 Text(money(customer.balanceMinor), fontWeight = FontWeight.SemiBold)
                             }
