@@ -34,12 +34,12 @@ import java.util.UUID
 
 /** Every read and write remains scoped to the selected business, including editor state. */
 @Composable
-fun StockScreen(repo: PosRepository, tenantId: String, onChanged: () -> Unit, onImport: (() -> Unit)? = null, onCounts: (() -> Unit)? = null, onDispositions: (() -> Unit)? = null, onBulkUpdate:(()->Unit)?=null, onPriceLists:(()->Unit)?=null, onMinimumPrices:(()->Unit)?=null, onRepacking:(()->Unit)?=null, onReorder:(()->Unit)?=null, onPurchaseCosts:(()->Unit)?=null, onPhotoImport:(()->Unit)?=null, onPromotions:(()->Unit)?=null, onLandedCosts:(()->Unit)?=null) {
-    key(tenantId) { TenantStockScreen(repo, tenantId, onChanged, onImport, onCounts, onDispositions, onBulkUpdate, onPriceLists, onMinimumPrices, onRepacking, onReorder, onPurchaseCosts, onPhotoImport, onPromotions, onLandedCosts) }
+fun StockScreen(repo: PosRepository, tenantId: String, onChanged: () -> Unit, onImport: (() -> Unit)? = null, onCounts: (() -> Unit)? = null, onDispositions: (() -> Unit)? = null, onBulkUpdate:(()->Unit)?=null, onPriceLists:(()->Unit)?=null, onMinimumPrices:(()->Unit)?=null, onRepacking:(()->Unit)?=null, onReorder:(()->Unit)?=null, onPurchaseCosts:(()->Unit)?=null, onPhotoImport:(()->Unit)?=null, onPromotions:(()->Unit)?=null, onLandedCosts:(()->Unit)?=null, onVariants:(()->Unit)?=null, onCosting:(()->Unit)?=null) {
+    key(tenantId) { TenantStockScreen(repo, tenantId, onChanged, onImport, onCounts, onDispositions, onBulkUpdate, onPriceLists, onMinimumPrices, onRepacking, onReorder, onPurchaseCosts, onPhotoImport, onPromotions, onLandedCosts, onVariants, onCosting) }
 }
 
 @Composable
-private fun TenantStockScreen(repo: PosRepository, tenantId: String, onChanged: () -> Unit, onImport: (() -> Unit)?, onCounts: (() -> Unit)?, onDispositions: (() -> Unit)?, onBulkUpdate:(()->Unit)?,onPriceLists:(()->Unit)?, onMinimumPrices:(()->Unit)?, onRepacking:(()->Unit)?, onReorder:(()->Unit)?, onPurchaseCosts:(()->Unit)?, onPhotoImport:(()->Unit)?, onPromotions:(()->Unit)?, onLandedCosts:(()->Unit)?) {
+private fun TenantStockScreen(repo: PosRepository, tenantId: String, onChanged: () -> Unit, onImport: (() -> Unit)?, onCounts: (() -> Unit)?, onDispositions: (() -> Unit)?, onBulkUpdate:(()->Unit)?,onPriceLists:(()->Unit)?, onMinimumPrices:(()->Unit)?, onRepacking:(()->Unit)?, onReorder:(()->Unit)?, onPurchaseCosts:(()->Unit)?, onPhotoImport:(()->Unit)?, onPromotions:(()->Unit)?, onLandedCosts:(()->Unit)?, onVariants:(()->Unit)?, onCosting:(()->Unit)?) {
     var revision by remember { mutableStateOf(0) }
     val allProducts = remember(tenantId, revision) { repo.products(tenantId, includeArchived = true) }
     val products = allProducts.filterNot { it.archived }
@@ -82,7 +82,7 @@ private fun TenantStockScreen(repo: PosRepository, tenantId: String, onChanged: 
                         Box {
                             NeutralButton("Stock tools ▾",{toolsOpen=true})
                             DropdownMenu(toolsOpen,{toolsOpen=false}) {
-                                listOf("Reorder suggestions" to onReorder,"Purchase cost history" to onPurchaseCosts,"Landed costs" to onLandedCosts,"Count several items" to onCounts,"Stock removed" to onDispositions,
+                                listOf("Stock value & costs" to onCosting,"Variant matrix" to onVariants,"Reorder suggestions" to onReorder,"Purchase cost history" to onPurchaseCosts,"Landed costs" to onLandedCosts,"Count several items" to onCounts,"Stock removed" to onDispositions,
                                     "Price lists" to onPriceLists,"Promotions" to onPromotions,"Minimum selling prices" to onMinimumPrices,
                                     "Repack goods" to onRepacking,"Update existing goods from CSV" to onBulkUpdate,
                                     "Import new items from CSV" to onImport,"Import product photos" to onPhotoImport).forEach {(label,action) ->
