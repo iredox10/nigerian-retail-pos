@@ -73,3 +73,38 @@ The checkpoint is 593 passing tests. [Build evidence](BUILD_STATUS.md)
 - [x] Schedule and explicitly apply line promotions with saved review and usage history.
 
 The current test and native acceptance results are recorded in [BUILD_STATUS.md](BUILD_STATUS.md).
+
+## Complete remaining-scope execution — requested 23 November 2026
+
+Cloud synchronization stays excluded. Deliver each item through real local storage, usable UI, permission checks, immutable financial history, recovery coverage and relevant tests. Micro commits record independently reviewable changes. Device, external service and merchant acceptance require their actual evidence.
+
+### Five subagent assignments, scheduled across the available slots
+
+- [ ] Customer receipt disputes with outstanding disputed/undisputed balances and resolution history.
+- [ ] Supplier credit notes, unapplied credit, receipt allocation and statement reconciliation.
+- [ ] Order dispatch records and explicit proof/status of delivery.
+- [ ] Owner recovery with locally enrolled recovery proof, credential invalidation and audit.
+- [ ] Structured product options and size/colour matrix editing with independent stock identities.
+
+### Remaining delivery dependencies
+
+- [ ] Customer advances/store credit/change owed and explicit application or settlement.
+- [ ] Credit/external/store-credit exchanges and original-method refund recording.
+- [ ] Payment reversals/disputes and additional authorized debt corrections.
+- [ ] Reviewed duplicate customer merge preserving source history.
+- [ ] Separately authenticated, bounded manager approvals and minimum-price overrides.
+- [ ] Per-register/cashier drawer custody, handover and sign-off.
+- [ ] Supplier claims, quarantine, locations, lots/expiry, serials and advanced replenishment.
+- [ ] Stock-tracked bundles and nested/multi-input assembly.
+- [ ] Historical costing policy/layers, valuation, COGS and reliable profit.
+- [ ] Journals, chart of accounts, accounting periods and accountant exports.
+- [ ] Wider layaway/backorders, quotation conversion and document sharing.
+- [ ] Branded quotation/statement templates and tax settings/invoices.
+- [ ] Loyalty, containers, warranty/repair and applicable restaurant workflows.
+- [ ] Consented message queue/transport and truthful external delivery state.
+- [ ] Working database encryption, disk-failure diagnostics and controlled recovery.
+- [ ] Privacy workflows, help/localization and operational release tooling.
+- [ ] Android, iOS, web and multiple branches, with explicit platform/offline boundaries.
+- [ ] Windows packaging/upgrade, real peripheral, accessibility, performance and merchant acceptance.
+
+IMPLEMENTATION_TODO.md retains the detailed full-product checklist. A checked feature requires completed implementation and recorded evidence. Planned work and unavailable environments remain visible.
