@@ -114,6 +114,7 @@ private fun TenantSalesScreen(repo: PosRepository, tenantId: String, allowReturn
                                             sale.externalPayments.isNotEmpty() -> "External payment not confirmed"
                                             sale.creditMinor > 0 -> "Part paid / pay later at sale"
                                             sale.exchange != null -> "Replacement sale"
+                                            sale.orderPayment != null -> "Order collection"
                                             else -> "Paid in cash"
                                         },
                                             if (sale.creditMinor > 0 || sale.externalPayments.isNotEmpty()) NoticeTone.Warning else NoticeTone.Neutral)

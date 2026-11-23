@@ -83,6 +83,9 @@ fun ReportsScreen(repo: PosRepository, tenantId: String) {
                     sum(receipts.map { it.paidCashMinor }), sum(supplierPayments.map { it.amountMinor }), sum(cash.map { it.amountMinor }),sum(sales.map {it.externalRecordedMinor}),sum(returns.map {it.creditReductionMinor}),
                     sum(sales.map { it.exchange?.amountMinor ?: 0L }), sum(returns.map { it.returnedValueMinor }),
                     sum(cash.filter { it.kind == "supplier_reimbursement" }.map { it.amountMinor }),
+                    sum(cash.filter { it.kind == "order_deposit" }.map { it.amountMinor }),
+                    sum(cash.filter { it.kind == "order_deposit_refund" }.map { -it.amountMinor }),
+                    sum(sales.map { it.orderPayment?.depositMinor ?: 0L }),
                 )
             }
             calculated.exceptionOrNull()?.let { InlineNotice("Report could not be calculated", it.message ?: "A stored date or amount needs checking.", NoticeTone.Danger) }
@@ -91,6 +94,7 @@ fun ReportsScreen(repo: PosRepository, tenantId: String) {
                     SectionHeader("Sales in this date range", "$start through $end · WAT")
                     LabelValueRow("Original sales total", money(amounts.sales), emphasized = true)
                     LabelValueRow("Cash applied when these sales were made", money(amounts.saleCash))
+                    if (amounts.depositApplied > 0) LabelValueRow("Order deposits applied at collection", money(amounts.depositApplied))
                     if (amounts.exchangeApplied > 0) LabelValueRow("Returned value used for replacement sales", money(amounts.exchangeApplied))
                     if (amounts.returnedValue > 0) LabelValueRow("Value of goods returned in range", money(amounts.returnedValue))
                     LabelValueRow("Credit granted when these sales were made", money(amounts.saleCredit))
@@ -110,6 +114,8 @@ fun ReportsScreen(repo: PosRepository, tenantId: String) {
                     LabelValueRow("Cash paid when receiving that stock", money(amounts.purchaseCash))
                     LabelValueRow("Later supplier payments made in range", money(amounts.supplierPayments))
                     if (amounts.supplierReimbursements > 0) LabelValueRow("Cash received on supplier returns", money(amounts.supplierReimbursements))
+                    if (amounts.depositsReceived > 0) LabelValueRow("Cash received as order deposits", money(amounts.depositsReceived))
+                    if (amounts.depositsRefunded > 0) LabelValueRow("Order deposits refunded in cash", money(amounts.depositsRefunded))
                     LabelValueRow("Net recorded cash movements in range", money(amounts.netCash))
                     Text("Net movements include manual cash in/out and unassigned entries, but not opening cash counts. This is not the current drawer balance. Use Money → Today's cash for an active shift.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 } }
@@ -161,4 +167,4 @@ fun ReportsScreen(repo: PosRepository, tenantId: String) {
     }
 }
 
-private data class ReportAmounts(val sales: Long, val saleCash: Long, val saleCredit: Long, val currentDebt: Long, val repayments: Long, val expenses: Long, val refunds: Long, val purchases: Long, val purchaseCash: Long, val supplierPayments: Long, val netCash: Long,val externalRecorded:Long,val creditReduced:Long, val exchangeApplied: Long, val returnedValue: Long, val supplierReimbursements: Long)
+private data class ReportAmounts(val sales: Long, val saleCash: Long, val saleCredit: Long, val currentDebt: Long, val repayments: Long, val expenses: Long, val refunds: Long, val purchases: Long, val purchaseCash: Long, val supplierPayments: Long, val netCash: Long,val externalRecorded:Long,val creditReduced:Long, val exchangeApplied: Long, val returnedValue: Long, val supplierReimbursements: Long, val depositsReceived: Long, val depositsRefunded: Long, val depositApplied: Long)

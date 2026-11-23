@@ -207,6 +207,8 @@ private fun cashKind(value: String): String = when (value.lowercase()) {
     "repayment", "customer_repayment" -> "Customer payment"
     "expense" -> "Expense"
     "supplier_reimbursement" -> "Supplier cash reimbursement"
+    "order_deposit" -> "Cash deposit for order"
+    "order_deposit_refund" -> "Order deposit refund"
     "manual", "movement", "cash_movement" -> "Money moved"
     else -> value.replace('_', ' ').replaceFirstChar { it.uppercase() }
 }

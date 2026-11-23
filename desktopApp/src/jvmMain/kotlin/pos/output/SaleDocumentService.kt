@@ -34,6 +34,10 @@ object SaleDocumentService {
                 appendLine("Value from the exchange: ${money(exchange.amountMinor)}")
                 appendLine("Original receipt: ${exchange.linkedReceiptId}")
             }
+            sale.orderPayment?.let { payment ->
+                appendLine("Customer order: ${payment.orderId}")
+                appendLine("Order deposit applied: ${money(payment.depositMinor)}")
+            }
             sale.externalPayments.forEach { payment ->
                 appendLine("${payment.label}: ${money(payment.amountMinor)}")
                 appendLine("  Payment reference: ${payment.reference}")

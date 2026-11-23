@@ -68,11 +68,15 @@ object ReceiptService {
                 appendLine("Value from the exchange: ${money(exchange.amountMinor)}")
                 appendLine("Original receipt: ${exchange.linkedReceiptId}")
             }
+            sale.orderPayment?.let { payment ->
+                appendLine("Customer order: ${payment.orderId}")
+                appendLine("Order deposit applied: ${money(payment.depositMinor)}")
+            }
             if (sale.creditMinor > 0) {
                 appendLine("Customer owed at sale: ${money(sale.creditMinor)}")
                 appendLine("This is not the customer's current debt.")
                 appendLine(sale.dueDate?.let { "Agreed repayment due date: $it (WAT)" } ?: "No repayment due date recorded")
-            } else if(sale.externalPayments.isEmpty() && sale.exchange == null) appendLine("Paid in cash")
+            } else if(sale.externalPayments.isEmpty() && sale.exchange == null && sale.orderPayment == null) appendLine("Paid in cash")
             sale.externalPayments.forEach {p ->appendLine("${p.label}: ${money(p.amountMinor)}");appendLine("Reference: ${p.reference}");appendLine("Receiving account / terminal: ${p.receivingAccount}")}
             if(sale.externalPayments.isNotEmpty()) appendLine("Manually recorded. This app has not confirmed bank receipt or settlement.")
             sale.cashGivenMinor?.let { tender ->
