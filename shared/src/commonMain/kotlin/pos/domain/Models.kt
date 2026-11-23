@@ -111,6 +111,7 @@ data class Sale(
     val cashGivenMinor: Long? = null,
     val note: String? = null,
     val exchange: ExchangePortion? = null,
+    val orderPayment: OrderPayment? = null,
 ) {
     val externalRecordedMinor:Long get()=externalPaymentTotal(externalPayments)
     val changeMinor: Long? get() = cashGivenMinor?.minus(cashMinor)
@@ -122,8 +123,9 @@ data class Sale(
         require(lines.map { it.key }.distinct().size == lines.size) { "Combine repeated items into one line." }
         require(if(basketDiscount==null) lines.all {it.basketDiscountMinor==0L} else allocateBasketDiscount(lines,basketDiscount).map {it.basketDiscountMinor}==lines.map {it.basketDiscountMinor}) { "Basket discount allocations do not match the saved rule." }
         require(totalMinor >= 0 && totalMinor == cartTotal(lines)) { "Sale total does not match its items." }
-        require(exchange == null || (creditMinor == 0L && externalPayments.isEmpty()))
-        val recordedPayment = addMoney(addMoney(cashMinor, creditMinor), externalRecordedMinor)
+        require(exchange == null || orderPayment == null)
+        require((exchange == null && orderPayment == null) || (creditMinor == 0L && externalPayments.isEmpty()))
+        val recordedPayment = addMoney(addMoney(addMoney(cashMinor, creditMinor), externalRecordedMinor), orderPayment?.depositMinor ?: 0L)
         require(cashMinor >= 0 && creditMinor >= 0 && addMoney(recordedPayment, exchange?.amountMinor ?: 0L) == totalMinor) {
             "The recorded payment portions must cover the sale exactly."
         }

@@ -119,7 +119,7 @@ private fun validQuoteId(id:String) {require(id.isNotBlank() && id.length<=120 &
 private fun validateExpiry(value:String,now:String) {require(isValidCreditDueDate(value) && !LocalDate.parse(value).isBefore(Instant.parse(now).atZone(ZoneId.of("Africa/Lagos")).toLocalDate())) {"Choose today or a later quotation expiry date in WAT."}}
 private fun quoteTime(old:Quotation):String=Instant.now().also {require(!it.isBefore(Instant.parse(old.updatedAt))) {"The computer clock moved backwards. Correct it before changing this quotation."}}.toString()
 private fun PosRepository.validateQuoteCustomer(tenantId:String,customer:QuotationCustomer?) {customer?.customerId?.let {id ->require(featureQuery("SELECT id FROM customers WHERE tenant_id=? AND id=?",tenantId,id) {it.getString(1)}.size==1) {"Quoted customer belongs to another shop or is unavailable."}}}
-private fun PosRepository.snapshotQuoteLines(tenantId:String,inputs:List<QuotationLineInput>):List<QuotationLine> {
+internal fun PosRepository.snapshotQuoteLines(tenantId:String,inputs:List<QuotationLineInput>):List<QuotationLine> {
     require(inputs.size in 1..100 && inputs.map {it.key}.distinct().size==inputs.size) {"Choose 1–100 distinct items and units."}
     val products=products(tenantId,true).associateBy {it.id};val units=sellingUnits(tenantId,includeArchived=true).associateBy {it.id}
     return inputs.map {input ->
