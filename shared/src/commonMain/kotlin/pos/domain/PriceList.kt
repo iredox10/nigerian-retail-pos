@@ -64,4 +64,8 @@ data class PriceListSource(val listId:String,val version:Long,val minimumQuantit
 }
 
 /** Merchant copy never exposes the machine source token used for historical validation. */
-fun displayPriceListReason(reason:String):String = PriceListSource.decode(reason)?.let {"Price list · revision ${it.version}"} ?: reason
+fun displayPriceListReason(reason:String):String = PriceListSource.decode(reason)?.let {"Price list · revision ${it.version}"}
+    ?: if (reason.startsWith("@promotion/")) {
+        runCatching { PromotionSource.decode(reason) }.getOrNull()?.let { "Promotion · ${it.title}" }
+            ?: "Promotion needs review"
+    } else reason

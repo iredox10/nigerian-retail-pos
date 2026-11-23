@@ -210,20 +210,23 @@ private fun PosRepository.orderEventTime(tenantId:String,orderId:String):String 
     val now=Instant.now()
     val latest=featureQuery("SELECT created_at FROM purchase_order_events WHERE tenant_id=? AND order_id=? UNION ALL SELECT created_at FROM purchase_order_deliveries WHERE tenant_id=? AND order_id=? UNION ALL SELECT r.created_at FROM stock_receipts r JOIN purchase_order_delivery_lines l ON l.tenant_id=r.tenant_id AND l.receipt_id=r.id WHERE l.tenant_id=? AND l.order_id=?",tenantId,orderId,tenantId,orderId,tenantId,orderId) {Instant.parse(it.getString(1))}.maxOrNull()
     require(latest==null || !now.isBefore(latest)) {"The computer clock moved backwards. Correct it before changing this order."}
+    require(latestPurchaseDiscrepancyTime(tenantId, orderId)?.let { now.isAfter(it) } != false) {
+        "Correct the computer clock before recording more activity for this order."
+    }
     return now.toString()
 }
 private fun PosRepository.ordersUnchecked(tenantId:String)=featureQuery("SELECT * FROM purchase_orders WHERE tenant_id=? ORDER BY created_at DESC,id",tenantId) {row ->orderFromRow(row,orderLinesUnchecked(tenantId,row.getString("id")))}
-private fun PosRepository.requireOrder(tenantId:String,id:String)=featureQuery("SELECT * FROM purchase_orders WHERE tenant_id=? AND id=?",tenantId,id) {row ->orderFromRow(row,orderLinesUnchecked(tenantId,id))}.singleOrNull() ?: error("Purchase order does not belong to this shop.")
+internal fun PosRepository.requireOrder(tenantId:String,id:String)=featureQuery("SELECT * FROM purchase_orders WHERE tenant_id=? AND id=?",tenantId,id) {row ->orderFromRow(row,orderLinesUnchecked(tenantId,id))}.singleOrNull() ?: error("Purchase order does not belong to this shop.")
 private fun PosRepository.orderLinesUnchecked(tenantId:String,id:String)=featureQuery("SELECT * FROM purchase_order_lines WHERE tenant_id=? AND order_id=? ORDER BY position",tenantId,id,map=::orderLineFromRow)
 private fun orderFromRow(r:ResultSet,lines:List<PurchaseOrderLine>)=PurchaseOrder(r.getString("id"),r.getString("tenant_id"),r.getString("supplier_id"),r.getString("supplier_name"),r.getLong("supplier_version"),PurchaseOrderStatus.valueOf(r.getString("status")),r.getLong("version"),r.getString("created_at"),r.getString("approved_at"),r.getString("cancelled_at"),r.getString("cancellation_reason"),r.getString("notes"),lines)
 private fun orderLineFromRow(r:ResultSet)=PurchaseOrderLine(r.getString("id"),r.getString("product_id"),r.getString("product_name"),r.getString("base_unit"),r.getString("buying_unit"),exactInt(r.getLong("quantity")),exactInt(r.getLong("quantity_precision")),exactInt(r.getLong("base_precision")),exactInt(r.getLong("base_units_per_unit")),r.getLong("unit_cost_minor"),r.getString("purchase_unit_id"))
-private fun PosRepository.orderEventsUnchecked(tenantId:String,orderId:String)=featureQuery("SELECT * FROM purchase_order_events WHERE tenant_id=? AND order_id=? ORDER BY version",tenantId,orderId,map=::orderEventFromRow)
+internal fun PosRepository.orderEventsUnchecked(tenantId:String,orderId:String)=featureQuery("SELECT * FROM purchase_order_events WHERE tenant_id=? AND order_id=? ORDER BY version",tenantId,orderId,map=::orderEventFromRow)
 private fun PosRepository.eventById(tenantId:String,id:String)=featureQuery("SELECT * FROM purchase_order_events WHERE tenant_id=? AND id=?",tenantId,id,map=::orderEventFromRow).singleOrNull()
 private fun orderEventFromRow(r:ResultSet)=PurchaseOrderEvent(r.getString("id"),r.getString("tenant_id"),r.getString("order_id"),r.getLong("version"),r.getString("kind"),r.getString("reason"),r.getString("created_at"),decodeOrderSnapshot(r.getString("snapshot"),r.getString("tenant_id")))
-private fun PosRepository.deliveriesUnchecked(tenantId:String,orderId:String)=featureQuery("SELECT * FROM purchase_order_deliveries WHERE tenant_id=? AND order_id=? ORDER BY created_at,id",tenantId,orderId) {r ->
+internal fun PosRepository.deliveriesUnchecked(tenantId:String,orderId:String)=featureQuery("SELECT * FROM purchase_order_deliveries WHERE tenant_id=? AND order_id=? ORDER BY created_at,id",tenantId,orderId) {r ->
     PurchaseOrderDelivery(r.getString("id"),tenantId,orderId,r.getLong("order_version"),r.getString("created_at"),featureQuery("SELECT * FROM purchase_order_delivery_lines WHERE tenant_id=? AND delivery_id=? ORDER BY line_id",tenantId,r.getString("id")) {line ->require(line.getString("order_id")==orderId) {"Delivery line belongs to a different purchase order."};PurchaseOrderDeliveryLine(line.getString("line_id"),line.getString("receipt_id"),exactInt(line.getLong("quantity")),line.getLong("paid_cash_minor"),line.getLong("expected_stock_scaled"))})
 }
-private fun PosRepository.remainingUnchecked(order:PurchaseOrder):Map<String,Int> {
+internal fun PosRepository.remainingUnchecked(order:PurchaseOrder):Map<String,Int> {
     val received=deliveriesUnchecked(order.tenantId,order.id).flatMap {it.lines}.groupBy {it.lineId}.mapValues {(_,lines) ->lines.fold(0L) {sum,line ->Math.addExact(sum,line.quantity.toLong())}}
     require(received.keys.all {key ->order.lines.any {it.id==key}}) {"Delivery refers to an unknown order line."}
     return order.lines.associate {line ->val rest=Math.subtractExact(line.quantity.toLong(),received[line.id] ?: 0L);require(rest>=0) {"Delivered quantity exceeds the order."};line.id to exactInt(rest)}
