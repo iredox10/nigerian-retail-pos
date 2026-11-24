@@ -16,6 +16,7 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.window.*
 import pos.domain.*
 import pos.cloud.client.*
+import pos.cloud.desktop.desktopCloudFiles
 import pos.cloud.app.RepositoryCloudLocalStore
 import pos.cloud.ui.*
 import pos.data.imageSelection
@@ -101,7 +102,7 @@ fun main(args: Array<String>) {
             val active=requireNotNull(session) {"Sign in as the local owner."}
             require(active.tenantId==id && active.role==StaffRole.OWNER) {"Only this shop's owner can configure cloud access."}
             staffAccess.requireSession(active,StaffPermission.BACKUP,false)
-        },HttpCloudTransport(),CloudStateStore(PrivateCloudFiles(root.resolve("checkpoints"))),FileCloudCredentialStore(PrivateCloudFiles(root.resolve("credentials"))))
+        },HttpCloudTransport(),CloudStateStore(desktopCloudFiles(root.resolve("checkpoints"))),FileCloudCredentialStore(desktopCloudFiles(root.resolve("credentials"))))
     }
     DisposableEffect(cloud) {onDispose {cloud.close()}}
     DisposableEffect(session?.token) {
