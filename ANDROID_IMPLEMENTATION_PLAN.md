@@ -41,3 +41,15 @@ Camera scanning, Bluetooth/USB thermal printers, scales/cash drawers, keystore-b
 Verified on 23 November 2026: 680 shared/desktop tests, 6 Android JVM tests and 16 native API 37 instrumentation tests pass, zero failures/errors/skips. Debug APK and Linux application image built with installed Gradle 8.13/JDK17; wrapper Gradle 8.14.3 was not used. Actual isolated emulator shop creation, counted stock, drawer opening, two-piece cash checkout/change, receipt view and unfinished-basket restart recovery were exercised while disconnected. Final sale/stock/drawer persistence was checked after restart. Screenshots and detailed limits are in BUILD_STATUS.md. Installing a debug APK is not production release acceptance.
 
 The unchecked journey rows above remain broader parity/acceptance work, even where parts of their source are present. In particular, native backup picker cancellation/overwrite, staff lifecycle UI, credit/external/return journeys, adaptive tablet/large-font/TalkBack, API 30–36 and physical hardware need independent verification.
+
+## 24 November continuation
+
+Continue from the verified 680 desktop/shared + 6 Android JVM + 16 native Android checkpoint. Separate pre-existing in-progress cloud modules are preserved and are not counted as Android feature completion in this wave.
+
+- [ ] Catalogue edit/archive/restore, metadata and selling/buying pack editors.
+- [ ] Owner recovery enrollment/reset, staff PIN setup/sign-in and authenticated counted drawer handover.
+- [ ] Editable quotations, orders/deposits/reservations/collection and dispatch proof.
+- [ ] Merchant-controlled Android CSV export with exact money and spreadsheet-safe text.
+- [ ] Integrate routes, rerun desktop/Android tests, install APK and record actual phone evidence.
+
+Four subagent assignments run in dependency waves; root integrates and verifies. These are additional Android workflows, not a claim that the complete parity matrix is finished.
