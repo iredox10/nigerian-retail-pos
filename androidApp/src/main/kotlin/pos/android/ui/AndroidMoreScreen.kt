@@ -25,10 +25,11 @@ private data class AndroidTool(val name: String, val description: String, val pe
 fun AndroidMoreScreen(repo: PosRepository, tenantId: String, access: StaffAccess, session: StaffSession, onChanged: () -> Unit) = key(tenantId, session.token) {
     var tool by rememberSaveable { mutableStateOf<String?>(null) }
     val tools = listOf(
+        AndroidTool("CSV exports", "Review and save local records as a spreadsheet file", StaffPermission.VIEW_REPORTS),
         AndroidTool("Reports", "Recorded sales, customer debt and actual drawer cash", StaffPermission.VIEW_REPORTS),
         AndroidTool("Suppliers", "Supplier profiles, buying receipt debt and cash payments", StaffPermission.MANAGE_SUPPLIERS),
-        AndroidTool("Orders", "Read orders, collection and remaining deposits", StaffPermission.MANAGE_CUSTOMERS),
-        AndroidTool("Quotations", "Read saved agreed prices and quotation status", StaffPermission.VIEW_SALES),
+        AndroidTool("Orders", "Agreed goods, deposits, stock holds and collection", StaffPermission.MANAGE_CUSTOMERS),
+        AndroidTool("Quotations", "Prepare agreed prices and create customer orders", StaffPermission.VIEW_SALES),
         AndroidTool("Customer advances", "Receive, apply or refund customer-owned cash", StaffPermission.MANAGE_CUSTOMERS),
         AndroidTool("Customer disputes", "Review receipt disputes and record outcomes", StaffPermission.MANAGE_CUSTOMERS),
         AndroidTool("Reorder suggestions", "Review stock needs from saved local records", StaffPermission.MANAGE_STOCK),
@@ -38,6 +39,8 @@ fun AndroidMoreScreen(repo: PosRepository, tenantId: String, access: StaffAccess
         AndroidTool("Activity history", "Who recorded each local business change", StaffPermission.VIEW_REPORTS),
         AndroidTool("Shop & receipt details", "Shop identity and receipt wording", StaffPermission.MANAGE_SETTINGS),
         AndroidTool("Encrypted backup", "Save and restore local shop records", StaffPermission.BACKUP),
+        AndroidTool("Owner recovery", "Enroll a single-use code for owner access", StaffPermission.MANAGE_STAFF),
+        AndroidTool("Cash handover", "Count and pass the shared drawer with recipient consent", StaffPermission.MANAGE_MONEY),
         AndroidTool("Staff", "Owner-controlled local staff access", StaffPermission.MANAGE_STAFF),
     ).filter { session.role.allows(it.permission) && (it.name != "Stock value & costs" || session.role.allows(StaffPermission.VIEW_REPORTS)) }
     val selected = tools.singleOrNull { it.name == tool }
@@ -45,6 +48,11 @@ fun AndroidMoreScreen(repo: PosRepository, tenantId: String, access: StaffAccess
         if (selected != null) {
             TextButton({ tool = null }, Modifier.heightIn(min = 48.dp)) { Text("Back to shop tools") }
             when (selected.name) {
+                "Owner recovery" -> if(session.role==StaffRole.OWNER) AndroidOwnerRecoveryScreen(access,session) else Text("Owner sign-in is required.")
+                "Cash handover" -> AndroidHandoverScreen(repo,tenantId,access,session,onChanged)
+                "Orders" -> AndroidOrdersScreen(repo,tenantId,onChanged)
+                "Quotations" -> AndroidQuotationsScreen(repo,tenantId,onChanged,canManage=session.role.allows(StaffPermission.DISCOUNT))
+                "CSV exports" -> AndroidCsvExportScreen(repo,tenantId)
                 "Reports" -> AndroidLocalReports(repo, tenantId)
                 "Suppliers" -> AndroidSupplierTools(repo, tenantId, onChanged)
                 "Staff" -> AndroidStaffTools(access, session, onChanged)
