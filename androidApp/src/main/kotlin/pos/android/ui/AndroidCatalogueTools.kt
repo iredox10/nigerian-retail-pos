@@ -102,8 +102,8 @@ internal fun AndroidCatalogueTools(repo:PosRepository,tenantId:String,productId:
         Column(Modifier.fillMaxWidth().heightIn(max=540.dp).verticalScroll(rememberScrollState()),verticalArrangement=Arrangement.spacedBy(12.dp)) {
             OperationsLoadState(loaded,"item details",{revision++})
             notice?.let {InlineNotice(it,tone=NoticeTone.Success)}
-            Row(Modifier.horizontalScroll(rememberScrollState()),horizontalArrangement=Arrangement.spacedBy(8.dp)) {
-                listOf("Details","Packages","History").forEach {name ->FilterChip(tab==name,{tab=name},label={Text(name)})}
+            Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(6.dp)) {
+                listOf("Details","Packages","History").forEach {name ->FilterChip(tab==name,{tab=name},modifier=Modifier.weight(1f).heightIn(min=48.dp),label={Text(if(name=="Packages")"Packs" else name,style=MaterialTheme.typography.labelMedium)})}
             }
             product?.let {item ->when(tab) {
                 "Details" -> {

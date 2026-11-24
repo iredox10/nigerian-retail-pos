@@ -170,5 +170,17 @@
     "artwork": "Additional receipt image",
     "tagline": "Tagline below the heading (optional)",
     "policy": "Returns policy or receipt note (optional)"
+  },
+  "androidTools": {
+    "ownerRecovery": "Owner recovery",
+    "recoverOwner": "Recover owner access",
+    "staffPin": "Staff PIN",
+    "configurePin": "Set up or remove staff PIN",
+    "cashHandover": "Cash handover",
+    "csvExports": "CSV exports",
+    "catalogueManage": "Manage item",
+    "activeItems": "Active items",
+    "archivedItems": "Archived items",
+    "packagesTab": "Packs"
   }
 }
