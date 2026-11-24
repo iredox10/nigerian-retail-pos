@@ -11,3 +11,6 @@ local.properties
 # Local build/deployment diagnostics; retain only reviewed evidence artifacts.
 artifacts/cloud-verification/*.log
 artifacts/cloud-verification/database-info.json
+
+artifacts/cloud-acceptance/*.log
+artifacts/cloud-acceptance/*-ui.xml

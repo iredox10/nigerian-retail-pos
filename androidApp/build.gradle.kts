@@ -3,6 +3,17 @@ android {
     namespace = "pos.android"
     compileSdk = 35
     defaultConfig { applicationId = "ng.retailpos.android"; minSdk = 30; targetSdk = 35; versionCode = 1; versionName = "0.1.0"; testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner" }
+    defaultConfig.manifestPlaceholders["appLabel"] = "Retail POS"
+    buildTypes {
+        create("acceptance") {
+            initWith(getByName("debug"))
+            applicationIdSuffix = ".acceptance"
+            versionNameSuffix = "-acceptance"
+            manifestPlaceholders["appLabel"] = "Retail POS QA"
+            matchingFallbacks += "debug"
+        }
+    }
+    testBuildType = if(providers.gradleProperty("androidAcceptance").orNull=="true") "acceptance" else "debug"
     compileOptions { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17; isCoreLibraryDesugaringEnabled = true }
     kotlinOptions { jvmTarget = "17" }
     buildFeatures { compose = true }
