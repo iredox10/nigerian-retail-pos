@@ -36,6 +36,12 @@ class CloudCoordinator(
     @Volatile private var schedulerStarted=false
 
     fun status(localShopId:String):CloudSyncStatus=statuses[localShopId] ?: CloudSyncStatus()
+    /** Invalidate a successful observation immediately after the app saves new local work. */
+    fun localChanged(localShopId:String) {
+        statuses.computeIfPresent(localShopId) {_,old ->
+            if(old.phase=="up_to_date") old.copy(phase="local_pending",message="New local work is saved here and waiting to sync.") else old
+        }
+    }
     /** Disk-backed metadata; call from a background/UI IO context, not while drawing a frame. */
     fun connection(localShopId:String):CloudConnectionInfo?=states.load(localShopId)?.let(::info)
     fun register(endpoint:CloudEndpoint,email:String,password:String):CloudAccountSession=transport.register(endpoint,CloudAccountRequest(email.trim(),password))

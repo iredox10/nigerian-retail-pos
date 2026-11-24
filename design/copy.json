@@ -182,5 +182,16 @@
     "activeItems": "Active items",
     "archivedItems": "Archived items",
     "packagesTab": "Packs"
+  },
+  "cloudConnection": {
+    "title": "Cloud connection",
+    "signIn": "Sign in to cloud",
+    "register": "Create cloud account",
+    "syncNow": "Sync now",
+    "publish": "Connect this shop",
+    "join": "Download as a new local shop",
+    "notConnected": "Saved here · Cloud not connected",
+    "waiting": "Saved here · Waiting to sync",
+    "needsReview": "Saved here · Sync needs review"
   }
 }

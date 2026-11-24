@@ -5,6 +5,7 @@ kotlin {
     sourceSets {
         jvmMain.dependencies {
             implementation(project(":shared"))
+            implementation(project(":cloudClient"))
             implementation(compose.desktop.currentOs)
             implementation(compose.material3)
             implementation("org.xerial:sqlite-jdbc:3.49.1.0")

@@ -38,11 +38,12 @@ fun AndroidSellScreen(
     val restored = remember { runCatching { storeResult.getOrThrow().load() } }
     var draft by remember { mutableStateOf(restored.getOrNull() ?: SaleDraft("", UUID.randomUUID().toString())) }
     var revision by remember { mutableIntStateOf(0) }
-    val catalogue = remember(revision) { runCatching { repo.products(tenantId) to repo.sellingUnits(tenantId) } }
+    val cloudRevision=pos.cloud.ui.LocalCloudRevision.current
+    val catalogue = remember(revision,cloudRevision) { runCatching { repo.products(tenantId) to repo.sellingUnits(tenantId) } }
     val products = catalogue.getOrNull()?.first.orEmpty()
     val units = catalogue.getOrNull()?.second.orEmpty()
-    val customers = remember(revision) { runCatching { repo.customers(tenantId) } }
-    val reservations = remember(revision) { runCatching { repo.orderReservedQuantities(tenantId) } }
+    val customers = remember(revision,cloudRevision) { runCatching { repo.customers(tenantId) } }
+    val reservations = remember(revision,cloudRevision) { runCatching { repo.orderReservedQuantities(tenantId) } }
     var search by remember { mutableStateOf("") }
     var stage by remember { mutableStateOf("items") }
     var editing by remember { mutableStateOf<CartLine?>(null) }

@@ -15,6 +15,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.window.*
 import pos.domain.*
+import pos.cloud.client.*
+import pos.cloud.app.RepositoryCloudLocalStore
+import pos.cloud.ui.*
 import pos.data.imageSelection
 import pos.data.imageBytes
 import pos.data.PosRepository
@@ -92,6 +95,20 @@ fun main(args: Array<String>) {
         onDispose { Thread({ practiceLauncher.close() }, "practice-cleanup").apply { isDaemon = true; start() } }
     }
     var session by remember { mutableStateOf<StaffSession?>(initialSession) }
+    val cloud = remember(repo) {
+        val root=java.nio.file.Path.of(System.getProperty("pos.dataDir",System.getProperty("user.home")+"/.nigerian-retail-pos"),"cloud")
+        CloudCoordinator(RepositoryCloudLocalStore(repo,access,{PosRepository(localDatabasePath())}) {id ->
+            val active=requireNotNull(session) {"Sign in as the local owner."}
+            require(active.tenantId==id && active.role==StaffRole.OWNER) {"Only this shop's owner can configure cloud access."}
+            staffAccess.requireSession(active,StaffPermission.BACKUP,false)
+        },HttpCloudTransport(),CloudStateStore(PrivateCloudFiles(root.resolve("checkpoints"))),FileCloudCredentialStore(PrivateCloudFiles(root.resolve("credentials"))))
+    }
+    DisposableEffect(cloud) {onDispose {cloud.close()}}
+    DisposableEffect(session?.token) {
+        if(session!=null)cloud.activate(requireNotNull(session).tenantId) else cloud.lock()
+        onDispose {cloud.lock()}
+    }
+
     val automaticBackups=remember(repo) {pos.backup.AutoBackupCoordinator(repo,if(initialTenant!=null && initialSession==null) java.nio.file.Files.createTempDirectory("pos-practice-backups-") else java.nio.file.Path.of(System.getProperty("pos.dataDir",System.getProperty("user.home")+"/.nigerian-retail-pos")))}
     DisposableEffect(automaticBackups) {automaticBackups.startScheduler();onDispose {automaticBackups.close()}}
     DisposableEffect(session?.token) {automaticBackups.lock();onDispose {automaticBackups.lock()}}
@@ -115,6 +132,7 @@ fun main(args: Array<String>) {
         }
     }
     var revision by remember { mutableIntStateOf(0) }
+    fun changed() {revision++;tenant?.let {cloud.localChanged(it.id)}}
     var route by remember { mutableStateOf(initialRoute) }
     var notice by remember { mutableStateOf<String?>(null) }
     val saleStates = rememberSaveableStateHolder()
@@ -127,7 +145,7 @@ fun main(args: Array<String>) {
         }
     }
     if (tenant == null) {
-        WorkspacePicker(repo, access, staffAccess) { shop, active -> tenant = shop; session = active; route = "Sell"; revision++ }
+        WorkspacePicker(repo, access, staffAccess) { shop, active -> tenant = shop; session = active; route = "Sell"; changed() }
         return
     }
     val current = tenant!!
@@ -152,7 +170,7 @@ fun main(args: Array<String>) {
         "Reports","Audit" -> allowed(StaffPermission.VIEW_REPORTS)
         "Suppliers" -> allowed(StaffPermission.MANAGE_SUPPLIERS)
         "Backup" -> allowed(StaffPermission.BACKUP)
-        "Staff","Owner recovery" -> allowed(StaffPermission.MANAGE_STAFF)
+        "Staff","Owner recovery","Cloud connection" -> allowed(StaffPermission.MANAGE_STAFF)
         "Shop settings","Minimum prices" -> allowed(StaffPermission.MANAGE_SETTINGS)
         else -> true
     }
@@ -206,6 +224,14 @@ fun main(args: Array<String>) {
             onDispose { toolkit.removeAWTEventListener(listener) }
         }
     }
+    LaunchedEffect(cloud,current.id) {
+        var last:String?=null
+        while(true) {
+            val synced=cloud.status(current.id).lastSyncedAt
+            if(synced!=last) {last=synced;revision++}
+            kotlinx.coroutines.delay(1000)
+        }
+    }
     val products = remember(current.id, revision) { repo.products(current.id) }
     val customers = remember(current.id, revision) { if (allowed(StaffPermission.SELL_CREDIT) || allowed(StaffPermission.MANAGE_CUSTOMERS)) repo.customers(current.id) else emptyList() }
     priceApprovalRequest?.let { request ->
@@ -231,7 +257,7 @@ fun main(args: Array<String>) {
                 Text(session?.let { "${it.name} · ${it.role.name.lowercase().replaceFirstChar { c -> c.uppercaseChar() }}" } ?: "Isolated owner preview", style = MaterialTheme.typography.labelMedium)
                 Spacer(Modifier.height(20.dp))
                 listOf("Sell", "Sales", "Stock", "Customers", "Money", "More").filter { routeAllowed(it) }.forEach { item ->
-                    val selected = route == item || (item == "Customers" && route in setOf("Repayment follow-ups", "Customer disputes", "Customer advances")) || (item == "Stock" && route in setOf("Stock counts","Stock removed","Bulk update","Import product photos","Price lists","Repacking","Reorder suggestions","Purchase cost history","Landed costs","Promotions","Minimum prices","Variant matrix","Stock value & costs")) || (item == "More" && route in setOf("Reports","Suppliers","Backup","Import","Credit review","Staff","Audit","Help","Shop settings","Quotations","Orders","Order dispatch","Owner recovery","Bundles","Cash handover","Diagnostics"))
+                    val selected = route == item || (item == "Customers" && route in setOf("Repayment follow-ups", "Customer disputes", "Customer advances")) || (item == "Stock" && route in setOf("Stock counts","Stock removed","Bulk update","Import product photos","Price lists","Repacking","Reorder suggestions","Purchase cost history","Landed costs","Promotions","Minimum prices","Variant matrix","Stock value & costs")) || (item == "More" && route in setOf("Reports","Suppliers","Backup","Import","Credit review","Staff","Audit","Help","Shop settings","Quotations","Orders","Order dispatch","Owner recovery","Cloud connection","Bundles","Cash handover","Diagnostics"))
                     Surface(onClick = {
                         try {
                             session?.let { staffAccess.requireSession(it,StaffPermission.SELL) }
@@ -254,7 +280,7 @@ fun main(args: Array<String>) {
                     if (route in setOf("Repayment follow-ups", "Customer disputes", "Customer advances")) TextButton({route="Customers"}) {Text("Back to customers")}
                     else if(route in setOf("Stock counts","Stock removed","Bulk update","Import product photos","Price lists","Repacking","Reorder suggestions","Purchase cost history","Landed costs","Promotions","Minimum prices","Variant matrix","Stock value & costs")) TextButton({route="Stock"}) {Text("Back to stock")}
                     else if (route == "Order dispatch") TextButton({route="Orders"}) {Text("Back to orders")}
-                    else if (route in setOf("Reports","Suppliers","Backup","Import","Credit review","Staff","Audit","Help","Shop settings","Quotations","Orders","Order dispatch","Owner recovery","Bundles","Cash handover","Diagnostics")) TextButton({ route = if(route=="Import") "Stock" else "More" }) { Text(if(route=="Import") "Back to stock" else "Back to shop tools") }
+                    else if (route in setOf("Reports","Suppliers","Backup","Import","Credit review","Staff","Audit","Help","Shop settings","Quotations","Orders","Order dispatch","Owner recovery","Cloud connection","Bundles","Cash handover","Diagnostics")) TextButton({ route = if(route=="Import") "Stock" else "More" }) { Text(if(route=="Import") "Back to stock" else "Back to shop tools") }
                     Spacer(Modifier.weight(1f))
                     if (route == "Sell" && allowed(StaffPermission.MANAGE_MONEY)) {
                         val activeShift = remember(current.id, revision) { repo.activeCashShift(current.id) }
@@ -274,43 +300,44 @@ fun main(args: Array<String>) {
                                 try { priceApprovalRequest=repo.minimumPriceApprovalRequest(current.id,operation,lines);priceApprovalResponse=approved }
                                 catch(e:Exception) {notice=e.message ?: "Price approval could not be requested."}
                             }) else null) { lines, cash, customer, operationId, dueDate, basketDiscount, externalPayments, cashGiven, note, priceApproval ->
-                            try { repo.checkout(current.id, lines, cash, customer, operationId,dueDate,basketDiscount,externalPayments,cashGiven,note,priceApproval); revision++; null } catch (e: Exception) { e.message ?: "Sale not saved" }
+                            try { repo.checkout(current.id, lines, cash, customer, operationId,dueDate,basketDiscount,externalPayments,cashGiven,note,priceApproval); changed(); null } catch (e: Exception) { e.message ?: "Sale not saved" }
                         } }
-                        "Stock" -> StockScreen(repo, current.id, onChanged={ revision++ }, onImport={ route="Import" }, onCounts={route="Stock counts"}, onDispositions={route="Stock removed"}, onBulkUpdate={route="Bulk update"}, onPriceLists={route="Price lists"}, onMinimumPrices=if(allowed(StaffPermission.MANAGE_SETTINGS)) ({route="Minimum prices"}) else null, onRepacking={route="Repacking"}, onReorder={route="Reorder suggestions"}, onPurchaseCosts=if(allowed(StaffPermission.MANAGE_SUPPLIERS)) ({route="Purchase cost history"}) else null, onPhotoImport={route="Import product photos"}, onPromotions={route="Promotions"}, onLandedCosts=if(allowed(StaffPermission.MANAGE_MONEY)) ({route="Landed costs"}) else null, onVariants={route="Variant matrix"},onCosting=if(allowed(StaffPermission.VIEW_REPORTS)) ({route="Stock value & costs"}) else null)
+                        "Stock" -> StockScreen(repo, current.id, onChanged={ changed() }, onImport={ route="Import" }, onCounts={route="Stock counts"}, onDispositions={route="Stock removed"}, onBulkUpdate={route="Bulk update"}, onPriceLists={route="Price lists"}, onMinimumPrices=if(allowed(StaffPermission.MANAGE_SETTINGS)) ({route="Minimum prices"}) else null, onRepacking={route="Repacking"}, onReorder={route="Reorder suggestions"}, onPurchaseCosts=if(allowed(StaffPermission.MANAGE_SUPPLIERS)) ({route="Purchase cost history"}) else null, onPhotoImport={route="Import product photos"}, onPromotions={route="Promotions"}, onLandedCosts=if(allowed(StaffPermission.MANAGE_MONEY)) ({route="Landed costs"}) else null, onVariants={route="Variant matrix"},onCosting=if(allowed(StaffPermission.VIEW_REPORTS)) ({route="Stock value & costs"}) else null)
                         "Reorder suggestions" -> ReorderSuggestionsScreen(repo,current.id)
                         "Purchase cost history" -> PurchaseCostHistoryScreen(repo,current.id)
                         "Landed costs" -> LandedCostsScreen(repo,current.id)
-                        "Promotions" -> PromotionsScreen(repo,current.id) { revision++ }
-                        "Import product photos" -> BulkProductPhotosScreen(repo,current.id) { revision++ }
-                        "Stock counts" -> StockCountSessionsScreen(repo,current.id) {revision++}
-                        "Stock removed" -> InventoryDispositionsScreen(repo,current.id) {revision++}
-                        "Bulk update" -> BulkCatalogueUpdateScreen(repo,current.id) {revision++}
-                        "Price lists" -> PriceListsScreen(repo,current.id) {revision++}
-                        "Minimum prices" -> MinimumPricesScreen(repo,current.id) {revision++}
-                        "Repacking" -> RepackingScreen(repo,current.id) {revision++}
-                        "Customers" -> CustomerWorkspace(repo,current.id,onFollowUps={route="Repayment follow-ups"},onDisputes={disputeCustomerId=it;route="Customer disputes"},onAdvances={disputeCustomerId=it;route="Customer advances"}) { revision++ }
+                        "Promotions" -> PromotionsScreen(repo,current.id) { changed() }
+                        "Import product photos" -> BulkProductPhotosScreen(repo,current.id) { changed() }
+                        "Stock counts" -> StockCountSessionsScreen(repo,current.id) {changed()}
+                        "Stock removed" -> InventoryDispositionsScreen(repo,current.id) {changed()}
+                        "Bulk update" -> BulkCatalogueUpdateScreen(repo,current.id) {changed()}
+                        "Price lists" -> PriceListsScreen(repo,current.id) {changed()}
+                        "Minimum prices" -> MinimumPricesScreen(repo,current.id) {changed()}
+                        "Repacking" -> RepackingScreen(repo,current.id) {changed()}
+                        "Customers" -> CustomerWorkspace(repo,current.id,onFollowUps={route="Repayment follow-ups"},onDisputes={disputeCustomerId=it;route="Customer disputes"},onAdvances={disputeCustomerId=it;route="Customer advances"}) { changed() }
                         "Repayment follow-ups" -> RepaymentRemindersScreen(repo,current.id)
-                        "Sales" -> SalesScreen(repo, current.id, allowReturns = allowed(StaffPermission.RETURN_SALE)) { revision++ }
+                        "Sales" -> SalesScreen(repo, current.id, allowReturns = allowed(StaffPermission.RETURN_SALE)) { changed() }
                         "Credit review" -> CreditReviewScreen(repo,current.id)
                         "Reports" -> ReportsScreen(repo, current.id)
                         "Audit" -> AuditScreen(repo,current.id,staffAccess,session)
-                        "Orders" -> CustomerOrdersScreen(repo,current.id,onDispatch={dispatchOrderId=it;route="Order dispatch"},onChanged={ revision++ })
+                        "Orders" -> CustomerOrdersScreen(repo,current.id,onDispatch={dispatchOrderId=it;route="Order dispatch"},onChanged={ changed() })
+                        "Cloud connection" -> if(session?.role==StaffRole.OWNER) CloudConnectionScreen(cloud,current.id,current.name) {lock()} else Text("Sign in as the owner to configure cloud access.")
                         "Diagnostics" -> DiagnosticsScreen(repo,current.id)
-                        "Bundles" -> BundlesScreen(repo,current.id,canManage=allowed(StaffPermission.MANAGE_STOCK)) {revision++}
-                        "Cash handover" -> session?.let { CashHandoverScreen(repo,current.id,staffAccess,it) {revision++} } ?: Text("Sign in to hand over the drawer.")
-                        "Stock value & costs" -> CostingScreen(repo,current.id) {revision++}
-                        "Variant matrix" -> VariantMatrixScreen(repo,current.id) {revision++}
+                        "Bundles" -> BundlesScreen(repo,current.id,canManage=allowed(StaffPermission.MANAGE_STOCK)) {changed()}
+                        "Cash handover" -> session?.let { CashHandoverScreen(repo,current.id,staffAccess,it) {changed()} } ?: Text("Sign in to hand over the drawer.")
+                        "Stock value & costs" -> CostingScreen(repo,current.id) {changed()}
+                        "Variant matrix" -> VariantMatrixScreen(repo,current.id) {changed()}
                         "Owner recovery" -> session?.let { OwnerRecoveryScreen(staffAccess,it) } ?: Text("Sign in as the owner to set up recovery.")
-                        "Customer advances" -> CustomerAdvancesScreen(repo,current.id,customerId=disputeCustomerId) {revision++}
-                        "Customer disputes" -> CustomerDisputesScreen(repo,current.id,customerId=disputeCustomerId) { revision++ }
-                        "Order dispatch" -> OrderDispatchScreen(repo,current.id,onChanged={revision++},orderId=dispatchOrderId)
-                        "Quotations" -> QuotationsScreen(repo,current.id,onChanged={revision++},canManage=allowed(StaffPermission.DISCOUNT))
-                        "Suppliers" -> SuppliersScreen(repo, current.id) { revision++ }
+                        "Customer advances" -> CustomerAdvancesScreen(repo,current.id,customerId=disputeCustomerId) {changed()}
+                        "Customer disputes" -> CustomerDisputesScreen(repo,current.id,customerId=disputeCustomerId) { changed() }
+                        "Order dispatch" -> OrderDispatchScreen(repo,current.id,onChanged={changed()},orderId=dispatchOrderId)
+                        "Quotations" -> QuotationsScreen(repo,current.id,onChanged={changed()},canManage=allowed(StaffPermission.DISCOUNT))
+                        "Suppliers" -> SuppliersScreen(repo, current.id) { changed() }
                         "Backup" -> BackupPanel(repo, current,automaticBackups)
-                        "Staff" -> session?.let { StaffScreen(staffAccess,it) { revision++ } } ?: Text("Staff management requires an owner sign-in.")
-                        "Shop settings" -> ShopSettingsScreen(repo,current) {revision++}
-                        "Import" -> ProductImportScreen(repo, current.id) { revision++ }
-                        "Money" -> MoneyScreen(repo, current.id) { revision++ }
+                        "Staff" -> session?.let { StaffScreen(staffAccess,it) { changed() } } ?: Text("Staff management requires an owner sign-in.")
+                        "Shop settings" -> ShopSettingsScreen(repo,current) {changed()}
+                        "Import" -> ProductImportScreen(repo, current.id) { changed() }
+                        "Money" -> MoneyScreen(repo, current.id) { changed() }
                         "Help" -> HelpScreen(practiceLauncher, isPractice = isolatedPreview || System.getenv("POS_PRACTICE_CHILD") == "1")
                         else -> ShopToolsScreen(::allowed) { route = it }
 
@@ -319,7 +346,7 @@ fun main(args: Array<String>) {
             }
         }
         Surface(color = MaterialTheme.colorScheme.surfaceVariant) { Row(Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 10.dp)) {
-            PosIcon(PosIcons.Monitor, Modifier.padding(end = 8.dp)); Text("On this computer · Online services not connected", style = MaterialTheme.typography.bodySmall)
+            PosIcon(PosIcons.Monitor, Modifier.padding(end = 8.dp)); CloudStatus(cloud,current.id)
             Spacer(Modifier.weight(1f))
             Text("This shop only", style = MaterialTheme.typography.bodySmall)
         } }

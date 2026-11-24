@@ -31,6 +31,7 @@ fun ShopToolsScreen(allowed: (StaffPermission) -> Boolean, open: (String) -> Uni
             ShopTool("Encrypted shop backup", "Save and restore a copy of your records", "Backup", PosIcons.Database, StaffPermission.BACKUP),
             ShopTool("Import new items from CSV", "Review your catalogue before importing", "Import", PosIcons.Upload, StaffPermission.MANAGE_STOCK)),
         "Your workspace" to listOf(
+            ShopTool("Cloud connection", "Use this shop on desktop and Android", "Cloud connection", PosIcons.Database, StaffPermission.BACKUP),
             ShopTool("Shop & receipt details", "Shop identity, logo and receipt wording", "Shop settings", PosIcons.Store, StaffPermission.MANAGE_SETTINGS),
             ShopTool("Owner recovery", "Set up a recovery code for this shop", "Owner recovery", PosIcons.LockKeyhole, StaffPermission.MANAGE_STAFF),
             ShopTool("Staff & permissions", "Manage the people who use this shop", "Staff", PosIcons.ShieldCheck, StaffPermission.MANAGE_STAFF),

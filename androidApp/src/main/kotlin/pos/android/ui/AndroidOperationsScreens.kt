@@ -551,7 +551,8 @@ internal fun OperationsDialog(title: String, dismiss: () -> Unit, actionLabel: S
 @Composable
 internal fun <T> operationsLoad(repo: PosRepository, tenantId: String, revision: Any?, load: () -> T): Result<T>? {
     var result by remember(repo, tenantId, revision) { mutableStateOf<Result<T>?>(null) }
-    LaunchedEffect(repo, tenantId, revision) { result = withContext(Dispatchers.IO) { runCatching(load) } }
+    val cloudRevision=pos.cloud.ui.LocalCloudRevision.current
+    LaunchedEffect(repo, tenantId, revision, cloudRevision) { result = withContext(Dispatchers.IO) { runCatching(load) } }
     return result
 }
 

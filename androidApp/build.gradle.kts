@@ -11,6 +11,7 @@ android {
 }
 dependencies {
     implementation(project(":shared"))
+    implementation(project(":cloudClient"))
     implementation(compose.runtime); implementation(compose.foundation); implementation(compose.material3)
     implementation("androidx.activity:activity-compose:1.10.1")
     implementation("androidx.core:core-ktx:1.16.0")
@@ -24,7 +25,7 @@ dependencies {
 }
 val prepareLocalCore by tasks.registering(Sync::class) {
     from("../desktopApp/src/jvmMain/kotlin") {
-        include("pos/data/**", "pos/security/**", "pos/output/BackupService.kt")
+        include("pos/data/**", "pos/security/**", "pos/output/BackupService.kt", "pos/cloud/app/**", "pos/cloud/ui/**")
         exclude("pos/data/ImageUpload.kt", "pos/data/SupplierInvoiceAttachmentUpload.kt", "pos/data/DiagnosticRepository.kt")
     }
     into(layout.buildDirectory.dir("generated/localCore"))

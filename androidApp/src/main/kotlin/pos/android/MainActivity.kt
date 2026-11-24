@@ -18,6 +18,10 @@ import pos.android.storage.AndroidSqliteDriver
 import pos.android.ui.*
 import pos.data.*
 import pos.domain.*
+import pos.cloud.client.*
+import pos.cloud.app.RepositoryCloudLocalStore
+import pos.cloud.ui.*
+import pos.android.cloud.AndroidCloudCredentials
 import pos.security.*
 import pos.ui.theme.PosTheme
 import pos.ui.components.*
@@ -53,11 +57,45 @@ private fun AndroidApp(repo:PosRepository,access:StaffAccess,installLock:((()->U
     var approvalRequest by remember {mutableStateOf<MinimumPriceApprovalRequest?>(null)}
     var approvalResponse by remember {mutableStateOf<((String)->Unit)?>(null)}
     fun lock(){session?.let(access::logout);session=null;tenant=null;receipt=null;route="Sell";approvalRequest=null;approvalResponse=null}
+    val cloud=remember(repo) {
+        val root=java.nio.file.Path.of(System.getProperty("pos.dataDir"),"cloud")
+        val protection=CloudFileProtection {path,directory ->pos.security.LocalFilePermissions.restrict(path,if(directory) "rwx------" else "rw-------")}
+        CloudCoordinator(RepositoryCloudLocalStore(repo,WorkspaceAccess(),{PosRepository(java.io.File(System.getProperty("pos.dataDir"),"pos.db").path)}) {id ->
+            val identity=requireNotNull(session) {"Sign in as the local owner."}
+            require(identity.tenantId==id && identity.role==StaffRole.OWNER) {"Only this shop's owner can configure cloud access."}
+            access.requireSession(identity,StaffPermission.BACKUP,false)
+        },HttpCloudTransport(),CloudStateStore(PrivateCloudFiles(root.resolve("checkpoints"),protection)),AndroidCloudCredentials(PrivateCloudFiles(root.resolve("credentials"),protection)))
+    }
+    DisposableEffect(cloud) {onDispose {cloud.close()}}
+    val lifecycle=(androidx.compose.ui.platform.LocalContext.current as ComponentActivity).lifecycle
+    DisposableEffect(session?.token,lifecycle) {
+        fun resumeSync() {
+            val identity=session
+            if(identity!=null && lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.STARTED))cloud.activate(identity.tenantId) else cloud.lock()
+        }
+        val observer=androidx.lifecycle.LifecycleEventObserver {_,event ->
+            if(event==androidx.lifecycle.Lifecycle.Event.ON_START)resumeSync()
+            if(event==androidx.lifecycle.Lifecycle.Event.ON_STOP)cloud.lock()
+        }
+        lifecycle.addObserver(observer);resumeSync()
+        onDispose {lifecycle.removeObserver(observer);cloud.lock()}
+    }
+    var cloudRevision by remember {mutableLongStateOf(0L)}
+    LaunchedEffect(cloud,session?.token) {
+        var last:String?=null
+        while(session!=null) {
+            val synced=cloud.status(requireNotNull(session).tenantId).lastSyncedAt
+            if(synced!=last) {last=synced;cloudRevision++}
+            kotlinx.coroutines.delay(1000)
+        }
+    }
+    fun changed() {revision++;tenant?.let {cloud.localChanged(it.id)}}
     SideEffect {
         installLock(::lock)
         repo.setPermissionCheck {id,permission ->
             val active=requireNotNull(session) {"Sign in to use this shop."}
-            require(active.tenantId==id) {"Sign in to this shop."};access.requireSession(active,permission)
+            require(active.tenantId==id) {"Sign in to this shop."}
+            access.requireSession(active,permission,touch=!Thread.currentThread().name.startsWith("retail-cloud-sync"))
         }
         repo.setActorProvider {id ->session?.takeIf {it.tenantId==id}?.let {AuditActor(id,it.staffId,it.name,it.role)}}
         repo.setMinimumPriceApprovalCheck {id,grant,request -> val active=requireNotNull(session);require(active.tenantId==id);access.requireMinimumPriceApproval(active,grant,request)}
@@ -66,7 +104,7 @@ private fun AndroidApp(repo:PosRepository,access:StaffAccess,installLock:((()->U
     LaunchedEffect(session?.token) {while(session!=null) {kotlinx.coroutines.delay(15_000);if(runCatching {access.requireSession(requireNotNull(session),StaffPermission.SELL,false)}.isFailure)lock()}}
     val current=tenant;val active=session
     if(current==null || active==null) {
-        AndroidSignIn(repo,access) {shop,identity ->tenant=shop;session=identity;revision++}
+        AndroidSignIn(repo,access) {shop,identity ->tenant=shop;session=identity;changed()}
         return
     }
     fun allowed(p:StaffPermission)=runCatching {access.requireSession(active,p,false)}.isSuccess
@@ -76,24 +114,26 @@ private fun AndroidApp(repo:PosRepository,access:StaffAccess,installLock:((()->U
     BackHandler(receipt!=null || route!="Sell") {if(receipt!=null)receipt=null else route="Sell"}
     Column(Modifier.fillMaxSize().safeDrawingPadding().imePadding()) {
         Row(Modifier.fillMaxWidth().padding(horizontal=16.dp,vertical=8.dp),horizontalArrangement=Arrangement.SpaceBetween) {
-            Column(Modifier.weight(1f)) {Text(current.name,style=MaterialTheme.typography.titleMedium);Text("${active.name} · Saved on this device",style=MaterialTheme.typography.bodySmall)}
+            Column(Modifier.weight(1f)) {Text(current.name,style=MaterialTheme.typography.titleMedium);Text(active.name,style=MaterialTheme.typography.bodySmall);CloudStatus(cloud,current.id)}
             TextButton({lock()}) {Text("Lock")}
         }
         HorizontalDivider()
+        CompositionLocalProvider(LocalCloudRevision provides cloudRevision) {
         Box(Modifier.weight(1f).padding(16.dp)) {key(current.id,route) {
             if(receipt!=null) AndroidReceiptScreen(repo,current.id,requireNotNull(receipt),onBack={receipt=null})
             else when(route) {
-                "Sell" -> AndroidSellScreen(repo,current.id,{revision++},{receipt=it},
+                "Sell" -> AndroidSellScreen(repo,current.id,{changed()},{receipt=it},
                     onRequestApproval=if(android.os.Build.VERSION.SDK_INT>=33) ({lines,operation,response ->
                         approvalRequest=repo.minimumPriceApprovalRequest(current.id,operation,lines);approvalResponse=response
                     }) else null, allowDiscounts=allowed(StaffPermission.DISCOUNT))
                 "Sales" -> if(allowed(StaffPermission.VIEW_SALES)) AndroidSalesScreen(repo,current.id) {receipt=it} else Text("Your role cannot view sales.")
-                "Stock" -> if(allowed(StaffPermission.MANAGE_STOCK)) AndroidStockScreen(repo,current.id) {revision++} else Text("Your role cannot manage stock.")
-                "Customers" -> if(allowed(StaffPermission.MANAGE_CUSTOMERS)) AndroidCustomersScreen(repo,current.id) {revision++} else Text("Your role cannot manage customers.")
-                "Money" -> if(allowed(StaffPermission.MANAGE_MONEY)) AndroidMoneyScreen(repo,current.id) {revision++} else Text("Your role cannot manage money.")
-                else -> AndroidMoreScreen(repo,current.id,access,active,{revision++})
+                "Stock" -> if(allowed(StaffPermission.MANAGE_STOCK)) AndroidStockScreen(repo,current.id) {changed()} else Text("Your role cannot manage stock.")
+                "Customers" -> if(allowed(StaffPermission.MANAGE_CUSTOMERS)) AndroidCustomersScreen(repo,current.id) {changed()} else Text("Your role cannot manage customers.")
+                "Money" -> if(allowed(StaffPermission.MANAGE_MONEY)) AndroidMoneyScreen(repo,current.id) {changed()} else Text("Your role cannot manage money.")
+                "Cloud connection" -> if(active.role==StaffRole.OWNER) CloudConnectionScreen(cloud,current.id,current.name) {lock()} else Text("Owner sign-in required.")
+                else -> AndroidMoreScreen(repo,current.id,access,active,{changed()},onCloud={route="Cloud connection"})
             }
-        }}
+        }}}
         HorizontalDivider()
         Column {
           listOf("Sell","Sales","Stock","Customers","Money","More").chunked(3).forEach { destinations ->
@@ -135,7 +175,7 @@ private fun AndroidSignIn(repo:PosRepository,access:StaffAccess,onEnter:(Tenant,
         onDismiss={recovering=false},onRecovered={recovering=false;password="";usePin=false;notice="Owner access recovered. Sign in with your new password."})
     Column(Modifier.fillMaxSize().safeDrawingPadding().imePadding().padding(24.dp).verticalScroll(rememberScrollState()),verticalArrangement=Arrangement.spacedBy(16.dp)) {
         SectionHeader("Retail POS", "Sell and keep shop records without internet")
-        Text("Records stay on this Android device. Cloud sync is not connected.")
+        Text("Records save on this device. After opening a shop, use More → Cloud connection to link your other devices.")
         if(!create) {
             shops.forEach {shop -> FilterChip(selected?.id==shop.id,{selected=shop;memberId=null;password=""},label={Text(shop.name)})}
             FilterChip(memberId==null,{memberId=null;password=""},label={Text("Owner")})

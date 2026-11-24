@@ -80,3 +80,11 @@ Existing hierarchy/reference lock remains. Stock retains goods, search, Add item
 ## Local stock and money tools — 17 November 2026
 
 The same reference lock and tokens apply. Stock tools groups advanced contextual actions while Add item/Add stock stay visible. Minimum-price settings and repacking use scrollable goods/recipe cards with explicit unit/quantity/reason/review states. Money keeps ordinary cash/expense tabs and adds a labeled Owner money subsection. Receipt attachments live on the relevant expense and use native chooser plus fixed-bound preview. Selected actual disconnected native renders/input passed; broader compact/keyboard/accessibility and merchant evidence remains unperformed (BUILD_STATUS.md). No palette, typography or primary-navigation change was made.
+
+## Cloud setup — 24 November 2026
+
+Target: the existing trading-counter design in DESIGN_GUIDE.md and DESIGN_BRIEF.md. This is an extension under labeled More, not a new visual direction. The connection screen uses existing Material/PosTheme surface, ink, teal action, type and spacing roles; no new token roles or imagery were introduced. Refero bundled craft-details (visible field labels, focus and comfortable controls) and copywriting (explicit outcomes and decisions) supplement the existing reference lock. Live Refero tools were unavailable.
+
+Flow decision: separate owner cloud sign-in from local unlock; review publication before sending saved business records; download another device's shop as a new local workspace; keep revocation explicit about already downloaded copies. Conflict, expired access, loading, waiting, disconnected and synchronized states remain distinct. Setup status is separate from payment certainty. Local-save text never implies a bank/card confirmation.
+
+Rendered/native and keyboard/offline evidence for this change is recorded in BUILD_STATUS.md when performed. Merchant first-glance research, hardware and formal accessibility acceptance remain unperformed; source review is not usability evidence.

@@ -34,7 +34,7 @@ internal fun AndroidProductImageEditor(repo:PosRepository,tenantId:String,produc
     var error by remember {mutableStateOf<String?>(null)}
     var busy by remember {mutableStateOf(false)}
     val context=LocalContext.current;val scope=rememberCoroutineScope()
-    val selected=remember(revision) {runCatching {repo.imageSelection(tenantId,"product",productId)}}
+    val selected=remember(revision,pos.cloud.ui.LocalCloudRevision.current) {runCatching {repo.imageSelection(tenantId,"product",productId)}}
     val choose=rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) {uri ->
         if(uri!=null) {busy=true;scope.launch {
             try {upload=withContext(Dispatchers.IO) {val bytes=requireNotNull(context.contentResolver.openInputStream(uri)).use {input ->val out=java.io.ByteArrayOutputStream();val buffer=ByteArray(8192);while(true){val n=input.read(buffer);if(n<0)break;require(out.size()+n<=8_388_608){"Choose an image up to 8 MB."};out.write(buffer,0,n)};out.toByteArray()};ImageUpload.fromBytes(bytes)}}
