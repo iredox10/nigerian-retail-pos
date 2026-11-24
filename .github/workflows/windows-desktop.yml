@@ -1,0 +1,80 @@
+name: Windows desktop acceptance
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/windows-desktop.yml'
+      - '**/*.gradle.kts'
+      - 'gradle/**'
+      - 'desktopApp/**'
+      - 'shared/**'
+      - 'cloudClient/**'
+      - 'cloudProtocol/**'
+      - 'businessCore/**'
+  pull_request:
+    paths:
+      - '.github/workflows/windows-desktop.yml'
+      - '**/*.gradle.kts'
+      - 'desktopApp/**'
+      - 'shared/**'
+      - 'cloudClient/**'
+      - 'cloudProtocol/**'
+      - 'businessCore/**'
+
+permissions:
+  contents: read
+
+jobs:
+  windows:
+    runs-on: windows-2022
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: gradle
+      - name: Verify domain, recovery and native Windows cloud permissions
+        shell: pwsh
+        run: >-
+          ./gradlew.bat --no-daemon --max-workers=2
+          :shared:jvmTest :cloudProtocol:test :businessCore:test
+          :desktopApp:jvmTest --tests pos.cloud.desktop.DesktopCloudFilesTest
+      - name: Build unsigned per-user Windows installers and application image
+        shell: pwsh
+        run: ./gradlew.bat --no-daemon --max-workers=2 :desktopApp:packageMsi :desktopApp:packageExe :desktopApp:createDistributable
+      - name: Verify installer outputs
+        shell: pwsh
+        run: |
+          foreach ($format in @('msi','exe')) {
+            $files = @(Get-ChildItem "desktopApp/build/compose/binaries/main/$format/*.$format")
+            if ($files.Count -eq 0 -or ($files | Where-Object Length -eq 0)) {
+              throw "Missing or empty $format installer"
+            }
+            $files | Get-FileHash -Algorithm SHA256 | Format-Table -AutoSize
+          }
+      - uses: actions/upload-artifact@v7
+        if: success()
+        with:
+          name: RetailPOS-windows-unsigned
+          path: |
+            desktopApp/build/compose/binaries/main/msi/*.msi
+            desktopApp/build/compose/binaries/main/exe/*.exe
+            desktopApp/build/compose/binaries/main/app/
+          if-no-files-found: error
+          retention-days: 14
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: Windows-acceptance-reports
+          path: |
+            shared/build/test-results/
+            cloudProtocol/build/test-results/
+            businessCore/build/test-results/
+            desktopApp/build/test-results/
+          if-no-files-found: warn
+          retention-days: 14

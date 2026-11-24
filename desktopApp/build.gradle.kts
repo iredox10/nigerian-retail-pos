@@ -1,3 +1,5 @@
+import org.jetbrains.compose.desktop.application.dsl.TargetFormat
+
 plugins { kotlin("multiplatform"); id("org.jetbrains.compose"); id("org.jetbrains.kotlin.plugin.compose") }
 kotlin {
     jvm()
@@ -16,4 +18,18 @@ kotlin {
         jvmTest.dependencies { implementation(kotlin("test")) }
     }
 }
-compose.desktop { application { mainClass = if(project.hasProperty("preview")) "pos.PreviewKt" else "pos.MainKt"; nativeDistributions { packageName = "RetailPOS"; packageVersion = "0.1.0"; modules("java.sql", "jdk.unsupported") } } }
+compose.desktop { application { mainClass = if(project.hasProperty("preview")) "pos.PreviewKt" else "pos.MainKt"; nativeDistributions {
+    targetFormats(TargetFormat.Msi,TargetFormat.Exe,TargetFormat.Deb)
+    packageName = "RetailPOS"
+    packageVersion = "0.1.0"
+    description = "Offline-first Nigerian retail point of sale"
+    vendor = "Retail POS"
+    modules("java.sql", "jdk.unsupported")
+    windows {
+        perUserInstall = true
+        dirChooser = true
+        shortcut = true
+        menuGroup = "Retail POS"
+        upgradeUuid = "e78852ce-2019-46fb-b81b-d7eac1d46aae"
+    }
+} } }
