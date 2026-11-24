@@ -4,6 +4,7 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.SystemBarStyle
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.rememberScrollState
@@ -34,7 +35,12 @@ class MainActivity : ComponentActivity() {
     private var lockAction: (() -> Unit)? = null
     override fun onCreate(savedInstanceState:Bundle?) {
         super.onCreate(savedInstanceState)
-        enableEdgeToEdge()
+        // PosTheme uses a light canvas; system icons must remain visible on it,
+        // including when the phone itself is configured for a dark system theme.
+        enableEdgeToEdge(
+            statusBarStyle=SystemBarStyle.light(android.graphics.Color.TRANSPARENT,android.graphics.Color.TRANSPARENT),
+            navigationBarStyle=SystemBarStyle.light(android.graphics.Color.TRANSPARENT,android.graphics.Color.TRANSPARENT),
+        )
         System.setProperty("pos.dataDir",filesDir.absolutePath)
         LocalSqlite.installPlatformAdapter(AndroidSqliteDriver::open)
         pos.android.platform.AndroidPrivateFiles.install()
