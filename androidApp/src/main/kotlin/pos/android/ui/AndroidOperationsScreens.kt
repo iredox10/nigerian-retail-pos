@@ -25,33 +25,41 @@ import java.util.UUID
 fun AndroidStockScreen(repo: PosRepository, tenantId: String, onChanged: () -> Unit) = key(tenantId) {
     var revision by remember { mutableIntStateOf(0) }
     var search by rememberSaveable { mutableStateOf("") }
+    var archived by rememberSaveable { mutableStateOf(false) }
+    var managing by remember { mutableStateOf<Product?>(null) }
     var add by remember { mutableStateOf(false) }
     var receive by remember { mutableStateOf<Product?>(null) }
     var count by remember { mutableStateOf<Product?>(null) }
     var notice by remember { mutableStateOf<String?>(null) }
-    val loaded = operationsLoad(repo, tenantId, revision) { repo.products(tenantId) }
+    val loaded = operationsLoad(repo, tenantId, revision) { repo.products(tenantId, true) }
     fun changed(message: String) { revision++; notice = message; onChanged() }
+    managing?.let { product -> AndroidCatalogueTools(repo, tenantId, product.id, { managing = null }) { changed("Catalogue saved on this device") } }
     if (add) AddAndroidItem(repo, tenantId, { add = false }) { add = false; changed("Item saved on this device") }
     receive?.let { product -> ReceiveAndroidStock(repo, tenantId, product, { receive = null }) { receive = null; changed("Stock received on this device") } }
     count?.let { product -> CountAndroidStock(repo, tenantId, product, { count = null }) { count = null; changed("Stock count saved with its correction history") } }
     LazyColumn(Modifier.fillMaxSize().imePadding(), verticalArrangement = Arrangement.spacedBy(12.dp), contentPadding = PaddingValues(bottom = 24.dp)) {
         item { SectionHeader("Stock", "Know what is available and record what came in.") }
         item { PosButton("Add item", { add = true }, modifier = Modifier.fillMaxWidth()) }
+        item { Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            FilterChip(!archived, { archived = false }, label = { Text("Active items") })
+            FilterChip(archived, { archived = true }, label = { Text("Archived items") })
+        } }
         notice?.let { item { InlineNotice(it, tone = NoticeTone.Success) } }
         item { PosTextField(search, { search = it }, "Search for an item", hint = "Name, SKU, category or barcode") }
         item { OperationsLoadState(loaded, "stock", { revision++ }) }
-        val products = loaded?.getOrNull().orEmpty().filter { it.matchesCatalogueSearch(search) }
-        if (loaded?.isSuccess == true && products.isEmpty()) item { EmptyState("No matching items", "Add an item or change your search.") }
+        val products = loaded?.getOrNull().orEmpty().filter { it.archived == archived && it.matchesCatalogueSearch(search) }
+        if (loaded?.isSuccess == true && products.isEmpty()) item { EmptyState("No matching items", if (archived) "Archived goods stay recorded here. Use Manage item to restore them." else "Add an item or change your search.") }
         items(products, key = { it.id }) { product ->
             OperationsCard {
                 AndroidProductPicture(repo, tenantId, product.id, revision)
                 Text(product.name, style = MaterialTheme.typography.titleMedium)
-                AndroidProductImageEditor(repo, tenantId, product.id) { changed("Product photo saved") }
+                if (!product.archived) AndroidProductImageEditor(repo, tenantId, product.id) { changed("Product photo saved") }
                 LabelValueRow("On hand", "${product.stockLabel} ${product.unit}")
                 LabelValueRow("Selling price", "${money(product.priceMinor)} / ${product.unit}")
                 product.barcode?.let { Text("Barcode $it", style = MaterialTheme.typography.bodySmall) }
                 product.sku?.let { Text("SKU $it", style = MaterialTheme.typography.bodySmall) }
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedButton({ managing = product }, Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text("Manage item") }
+                if (!product.archived) Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     OutlinedButton({ receive = product }, Modifier.weight(1f).heightIn(min = 48.dp)) { Text("Add stock") }
                     OutlinedButton({ count = product }, Modifier.weight(1f).heightIn(min = 48.dp)) { Text("Count stock") }
                 }
