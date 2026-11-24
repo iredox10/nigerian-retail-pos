@@ -68,6 +68,7 @@ class SupplierInvoiceIntegrityTest {
             repo.setPermissionCheck {_,permission ->if(permission!=StaffPermission.BACKUP)error("Denied")}
             assertFails {repo.supplierInvoices(t,s)};assertFails {repo.supplierInvoiceRevisions(t,i.id)};assertFails {repo.supplierInvoiceAttachmentBytes(t,i.id)}
             assertFails {repo.correctSupplierInvoice(t,i.id,details,emptyList(),SupplierInvoiceStatus.VOIDED,null,reason="Void duplicate",expectedVersion=1)}
+            repo.setPermissionCheck(null) // Trusted inspection after the denied operation.
             assertEquals(before,repo.exportTenantSnapshot(t))
         }
     }

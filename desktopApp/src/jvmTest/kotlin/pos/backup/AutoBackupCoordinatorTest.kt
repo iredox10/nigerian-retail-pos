@@ -90,7 +90,7 @@ class AutoBackupCoordinatorTest {
         try {PosRepository(":memory:").use {repo ->
             val shop=repo.createTenant("Shop");val other=repo.createTenant("Other")
             val folder=Files.createDirectory(root.resolve("copies"));var now=start;var allowed=false
-            repo.setPermissionCheck {tenant,permission ->require(allowed && tenant==shop.id && permission==StaffPermission.BACKUP) {"Backup permission denied."}}
+            repo.setPermissionCheck {tenant,permission ->require(allowed && tenant==shop.id && permission in setOf(StaffPermission.BACKUP,StaffPermission.SELL)) {"Backup permission denied."}}
             AutoBackupCoordinator(repo,root.resolve("settings")) {now}.use {service ->
                 assertFails {service.enable(shop.id,policy(folder),passphrase.toCharArray())}
                 assertFails {service.status(shop.id)};assertTrue(managedFiles(folder).isEmpty())

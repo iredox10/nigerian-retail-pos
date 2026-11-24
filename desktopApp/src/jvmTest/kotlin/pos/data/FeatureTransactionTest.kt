@@ -37,6 +37,7 @@ class FeatureTransactionTest {
             }
             assertFails { repo.featureRead(shop.id, StaffPermission.MANAGE_SUPPLIERS) { entered = true } }
             assertFalse(entered)
+            repo.setPermissionCheck(null) // Trusted inspection after the denied operation.
             assertEquals(before, repo.exportTenantSnapshot(shop.id))
         }
     }

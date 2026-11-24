@@ -84,6 +84,7 @@ class ReceiptAppearanceIntegrityTest {
             val source=repo.exportTenantSnapshot(shop.id)
             repo.setPermissionCheck {_,permission ->require(permission==StaffPermission.BACKUP)}
             assertFails {repo.saveReceiptArtwork(shop.id,artwork())}
+            repo.setPermissionCheck(null) // Trusted inspection after the denied operation.
             assertEquals(source,repo.exportTenantSnapshot(shop.id))
         }
     }

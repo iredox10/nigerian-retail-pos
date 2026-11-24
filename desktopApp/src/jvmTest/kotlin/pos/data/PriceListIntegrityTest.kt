@@ -82,6 +82,7 @@ class PriceListIntegrityTest {
             assertFails {repo.savePriceList(shop.id,"list",details(item),0,"Set prices","new")}
             assertFails {repo.priceLists(shop.id)}
             assertFails {repo.checkoutPriceLists(shop.id,null)}
+            repo.setPermissionCheck(null) // Trusted inspection after the denied operation.
             assertEquals(before,repo.exportTenantSnapshot(shop.id))
             repo.setPermissionCheck {_,_->}
             repo.setActorProvider {throw IllegalStateException("Actor unavailable")}

@@ -159,6 +159,7 @@ class BulkCatalogueUpdateIntegrityTest {
                 assertFails {repo.applyBulkCatalogueUpdates(shop.id,rows.map {it.copy(record=it.record+10)},"New shelf prices","retry-batch")}
                 repo.setPermissionCheck {_,permission ->require(permission==StaffPermission.BACKUP)}
                 assertFails {repo.applyBulkCatalogueUpdates(shop.id,rows,"New shelf prices","retry-batch")}
+                repo.setPermissionCheck(null) // Trusted inspection after the denied operation.
                 assertEquals(before,repo.exportTenantSnapshot(shop.id))
             }
         } finally {directory.toFile().deleteRecursively()}

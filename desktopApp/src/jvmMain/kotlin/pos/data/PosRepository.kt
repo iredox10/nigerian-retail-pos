@@ -1442,7 +1442,13 @@ class PosRepository(path: String = File(System.getProperty("user.home"), ".niger
     }
     private fun stockSettingsChange(r:ResultSet)=StockSettingsChange(r.getString("id"),r.getString("tenant_id"),r.getString("product_id"),r.getObject("previous_reorder_level")?.let { (it as Number).toInt() },r.getObject("reorder_level")?.let { (it as Number).toInt() },r.getString("created_at"))
     private fun stockAdjustment(r:ResultSet)=StockAdjustment(r.getString("id"),r.getString("tenant_id"),r.getString("product_id"),r.getString("product_name"),r.getString("unit"),r.getDouble("previous_stock"),r.getInt("counted_stock"),r.getString("reason"),r.getString("created_at"),r.getInt("quantity_precision"))
-    private fun requireTenant(tenantId: String) { require(query("SELECT id FROM tenants WHERE id=?",tenantId) { it.getString(1) }.isNotEmpty()) { "Shop not found." } }
+    private fun requireTenant(tenantId: String) {
+        // The picker may list workspace names while locked, but business reads must use
+        // the active shop's session just like writes. Trusted recovery connections have
+        // no callback and are never substituted into the running application.
+        requirePermission(tenantId,StaffPermission.SELL)
+        require(query("SELECT id FROM tenants WHERE id=?",tenantId) { it.getString(1) }.isNotEmpty()) { "Shop not found." }
+    }
     private fun product(r: ResultSet)=Product(r.getString("id"),r.getString("tenant_id"),r.getString("name"),r.getString("unit"),r.getLong("price_minor"),r.getDouble("stock"),r.getString("barcode"),r.getInt("archived")==1,r.getObject("reorder_level")?.let { (it as Number).toInt() },r.getObject("opening_stock")?.let { (it as Number).toDouble() },r.getString("created_at"),r.getString("sku"),r.getString("category"),r.getString("brand"),decodeProductAliases(r.getString("aliases")),r.getInt("favourite")==1,r.getInt("quantity_precision"),(r.getObject("stock_scaled") as? Number)?.toLong())
     private fun auditEvent(row: ResultSet): AuditEvent {
         val tenantId=row.getString("tenant_id")

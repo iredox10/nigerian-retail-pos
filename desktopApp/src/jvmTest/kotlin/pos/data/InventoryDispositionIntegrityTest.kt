@@ -59,6 +59,7 @@ class InventoryDispositionIntegrityTest {
             assertEquals(snapshot,repo.exportTenantSnapshot(shop.id))
             repo.setPermissionCheck {_,permission ->require(permission==StaffPermission.BACKUP)}
             assertFails {repo.recordInventoryDisposition(shop.id,item.id,125,InventoryDispositionCategory.DONATION,"Community donation","",baseline,"donation")}
+            repo.setPermissionCheck(null) // Trusted inspection after the denied operation.
             assertEquals(snapshot,repo.exportTenantSnapshot(shop.id))
         }
     }

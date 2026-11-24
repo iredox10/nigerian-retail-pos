@@ -35,6 +35,7 @@ class StockCountSessionIntegrityTest {
             val protected=repo.exportTenantSnapshot(shop.id)
             repo.setPermissionCheck {_,permission ->require(permission==StaffPermission.BACKUP)}
             assertFails {repo.postStockCountSession(shop.id,saved.id,saved.version)}
+            repo.setPermissionCheck(null) // Trusted inspection after the denied operation.
             assertEquals(protected,repo.exportTenantSnapshot(shop.id))
         }
     }
@@ -67,6 +68,7 @@ class StockCountSessionIntegrityTest {
             repo.setPermissionCheck {_,permission ->require(permission==StaffPermission.BACKUP)}
             assertFails {repo.createStockCountSession(shop.id,"Partial",listOf(rice.id,soap.id),"partial")}
             assertFails {repo.stockCountSessions(shop.id)}
+            repo.setPermissionCheck(null) // Trusted inspection after the denied operation.
             assertEquals(before,repo.exportTenantSnapshot(shop.id))
         }
     }

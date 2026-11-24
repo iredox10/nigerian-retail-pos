@@ -33,6 +33,8 @@ class StaffSessionRepositoryIntegrationTest {
                     assertEquals(1,repo.sales(shop.id).size)
                     access.updateMember(owner,member.id,member.name,member.role,false)
                     assertFails {repo.checkout(shop.id,listOf(CartLine(product,1)),50_000,operationId="cash-sale")}
+                    assertFails {repo.sales(shop.id)}
+                    repo.setPermissionCheck {tenant,permission ->require(tenant==owner.tenantId);access.requireSession(owner,permission)}
                     assertEquals(1,repo.sales(shop.id).size)
                 }
             }
@@ -56,8 +58,9 @@ class StaffSessionRepositoryIntegrationTest {
                     assertFails {access.addMember(manager,"Another",StaffRole.CASHIER,"another-password")}
                     access.updateMember(owner,member.id,member.name,StaffRole.CASHIER,true)
                     assertFails {repo.addProduct(shop.id,"Blocked","piece",100,1.0)}
-                    assertEquals(1,repo.products(shop.id).size)
+                    assertFails {repo.products(shop.id)}
                     repo.setPermissionCheck {tenant,permission ->require(tenant==owner.tenantId);access.requireSession(owner,permission)}
+                    assertEquals(1,repo.products(shop.id).size)
                     assertEquals(shop.id,repo.exportTenantSnapshot(shop.id).tenant.id)
                 }
             }

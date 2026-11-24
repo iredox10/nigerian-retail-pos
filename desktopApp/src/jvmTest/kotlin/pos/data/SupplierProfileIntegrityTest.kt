@@ -87,6 +87,7 @@ class SupplierProfileIntegrityTest {
             assertFails {repo.addSupplierProfile(shop.id,SupplierDetails("Denied"),"denied")}
             assertFails {repo.supplierProfiles(shop.id)}
             assertFails {repo.receiveStockForSupplier(shop.id,item.id,1,100,0,profile.id,"denied-receive")}
+            repo.setPermissionCheck(null) // Trusted inspection after the denied operation.
             assertEquals(before,repo.exportTenantSnapshot(shop.id))
             repo.setPermissionCheck(null)
             var actorCalls=0

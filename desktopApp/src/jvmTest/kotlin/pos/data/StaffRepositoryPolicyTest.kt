@@ -101,6 +101,8 @@ class StaffRepositoryPolicyTest {
             active=false
             assertFailsWith<SecurityException> {repo.checkout(f.tenant.id,listOf(line),10_000,operationId="saved-sale")}
             assertFailsWith<SecurityException> {repo.updateCustomer(f.tenant.id,f.customer.id,"Amina",null,null,null,"saved-edit")}
+            assertFailsWith<SecurityException> {repo.pendingSyncCount(f.tenant.id)}
+            active=true // Explicitly restore the test session before inspecting saved state.
             assertEquals(pending,repo.pendingSyncCount(f.tenant.id))
         }
     }

@@ -39,6 +39,7 @@ class ReplenishmentPolicyIntegrityTest {
             val snapshot = repo.exportTenantSnapshot(shop)
             repo.setPermissionCheck { _, permission -> require(permission == StaffPermission.BACKUP) }
             assertFails { repo.saveReplenishmentPolicy(shop, item.id, 0, 0, 1, 1, "Denied rules", "denied") }
+            repo.setPermissionCheck(null) // Trusted inspection after the denied operation.
             assertEquals(snapshot, repo.exportTenantSnapshot(shop))
             repo.setPermissionCheck(null)
             assertFails { repo.restoreTenantSnapshot(snapshot.copy(tables = snapshot.tables - "replenishment_policy_events"), "Missing") }
