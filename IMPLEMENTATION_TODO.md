@@ -1,11 +1,13 @@
 # Complete implementation TODO
 
 Authority: FEATURE_SPECIFICATION.md (all 32 sections). Coverage and evidence: IMPLEMENTATION_STATUS.md and BUILD_STATUS.md.
-Provider decisions: [PROVIDER_DECISIONS.md](PROVIDER_DECISIONS.md). Paystack selected; Telegram first; no existing Heroku app.
+Provider decisions: [PROVIDER_DECISIONS.md](PROVIDER_DECISIONS.md). Paystack selected; Telegram first; Heroku backend provisioned on 24 November 2026; see cloud/CONNECTION_GUIDE.md.
 
 Reconciled against source and recent commits on 14 November 2026. Use five specialist agents in waves within the available concurrency limit, integrate their work, and make small, explicitly scoped commits. An agent task is not a completion claim.
 
 A checked box means that specific item has implementation and recorded verification. It does not mark its whole module production-ready. Keep unfinished subtasks unchecked. External prerequisites are dependencies, not completed features. Do not invent credentials, successful integrations, merchant studies or hardware results.
+
+24 November update: initial desktop/Android cloud connection and Heroku/Postgres deployment are implemented. See the latest BUILD_STATUS.md and cloud/IMPLEMENTATION_PLAN.md for exact verification and outstanding rollout acceptance. The older dated batches below retain their historical scope.
 
 ## Current batch and evidence rules
 

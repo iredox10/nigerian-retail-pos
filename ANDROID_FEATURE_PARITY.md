@@ -2,7 +2,7 @@
 
 24 November 2026 · Implementation checklist, not a claim of full product completion.
 
-Cloud sync remains excluded. Android is an independent offline device. Reusing a repository does not connect its records to a desktop shop or make an Android editing flow available. **Source implemented** below means code is present; consult ANDROID_IMPLEMENTATION_PLAN.md and BUILD_STATUS.md for actual build, test, emulator and device evidence. Nothing in this matrix claims physical hardware or merchant acceptance.
+Initial cloud connection is now implemented under **More → Cloud connection** with a deployed Heroku/Postgres backend and native HTTPS verification. Shop records connect only after explicit owner setup; Android stays usable offline. See cloud/CONNECTION_GUIDE.md and the latest BUILD_STATUS.md checkpoint. Reusing a repository alone does not connect shops or make an Android editing flow available. **Source implemented** below means code is present; consult ANDROID_IMPLEMENTATION_PLAN.md and BUILD_STATUS.md for actual build, test, emulator and device evidence. Nothing in this matrix claims physical hardware or merchant acceptance.
 
 | Feature group | Android source coverage | Remaining Android work / acceptance |
 |---|---|---|
@@ -54,7 +54,7 @@ Cloud sync remains excluded. Android is an independent offline device. Reusing a
 | Platform peripherals | Android print/share/file APIs | Camera barcode permission/scan, Bluetooth/USB printers, scanners, cash drawers, scales, customer displays and physical-device matrix |
 | Specialist retail modules | No fake success actions | Loyalty, containers/deposits, warranty/repairs, restaurant/pharmacy workflows; most also remain unfinished on desktop |
 | Accounting/tax | Exact local financial source history; no estimated profit | Journals/chart/periods/trial balance, complete expense recognition, inclusive/exclusive tax settings and tax invoices remain unfinished generally |
-| Online/multiple branches | Explicitly unavailable | Cloud sync excluded; backend/device enrollment/branches, provider confirmation and consented messaging require separate implementation and real acceptance |
+| Cloud / multiple branches | Owner cloud account, first-shop publication, new-local-shop download, device enrollment/revocation, foreground sync and status; native HTTPS checks pass | Manual two-app enrollment, large data, conflict/recovery acceptance and physical devices remain pending. Branch/register isolation, provider confirmation and consented messaging remain separate unfinished scope |
 
 ## Delivery rule
 

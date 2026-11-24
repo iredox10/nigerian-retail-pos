@@ -13,17 +13,22 @@ Requested 23 November 2026. Supersedes the earlier cloud-excluded scope for this
 - Download ordered changes with a committed cursor. Apply remote work atomically while preserving newer local transactions; advance the local checkpoint only after durable application. Device credentials, local drafts and device preferences remain local.
 - Foreground automatic synchronization and resume/retry on both installed apps. Connection, local save, synchronization and external payment verification remain separate statuses. No cloud/payment success without a real acknowledgment.
 
-## Delivery tasks
+## Delivery tasks — 24 November checkpoint
 
-- [ ] Versioned protocol, schema identities, structural deltas, exact deterministic merge and conflict tests.
-- [ ] Local repository export/import bridge preserving completed records, local history and tenant isolation.
-- [ ] Durable account/device authorization and Postgres migrations; idempotent push/paginated pull.
-- [ ] Secure desktop/Android HTTP transport, local checkpoints, secret storage, backoff and lifecycle.
-- [ ] Owner cloud setup: create/sign in, publish an existing shop, connect another device to the same shop, and revoke device access.
-- [ ] Truthful sync status, retry and conflict review in both apps without expanding primary navigation.
-- [ ] Real two-database/two-client HTTP/Postgres checks: disconnected edits, duplicate requests, stale credentials, concurrent sales/returns/counts and restart recovery.
-- [ ] Desktop/Android regressions, native builds and rendered checks.
-- [ ] Heroku deployment configuration and actual staging checks when the hosting account/app is available. No purchased resources or live deployment is implied by local tests.
+- [x] Versioned protocol, trusted schema, exact deltas/merges and conflict tests.
+- [x] Transactional local export/import bridge, history retention, tenant isolation and idempotent checkpoints/imports.
+- [x] Durable PostgreSQL accounts/devices, migrations, enrollment/revocation and idempotent push/paginated pull.
+- [x] HTTPS transport, durable retries, foreground lifecycle, owner-only desktop files and Android Keystore secrets.
+- [x] Owner setup and truthful status/retry/conflict screens in both apps under More.
+- [x] Real two-SQLite/HTTP/Postgres checks for disconnected sales, duplicate requests, expired/revoked access and restart/lost-reply recovery.
+- [x] Deployed HTTPS two-repository convergence plus native Android HTTP publication/retry/download checks.
+- [x] Shared/desktop/Android JVM regressions, 29 native Android tests, a separate airplane-mode check, native builds and actual rendered desktop inspection.
+- [x] Heroku deployment: app `nigerian-retail-pos-cloud`, Basic dyno, Essential-0 Postgres, release v6; actual public health and staging checks pass.
+- [ ] Full manual desktop/Android setup, publication, import and revocation journeys; keyboard-only and accessibility acceptance.
+- [ ] Broader concurrent returns/counts over HTTP, large photos/data and slower-device performance; power-loss and independent-machine recovery drills.
+- [ ] Windows packaging/ACL execution, physical Android hardware and merchant usability research.
+
+See BUILD_STATUS.md and artifacts/cloud-verification/test-summary.json for exact evidence. Source implementation and selective execution are not complete production rollout acceptance. Conflicts retain records and require underlying business review; no force-overwrite action is provided. Hosting is now actually provisioned (currently $12/month combined); the previous planning text did not authorize or imply a deployment by itself.
 
 ## Protocol contract for parallel implementation
 

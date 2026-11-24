@@ -2,6 +2,8 @@
 
 Local trading remains available without a server. Synchronization shares saved business records, including managed images; it never confirms a bank transfer, card payment or settlement.
 
+The initial backend address is `https://nigerian-retail-pos-cloud-a03da41beea8.herokuapp.com`. Heroku is configured for one Basic dyno and Essential-0 Postgres (currently $7 + $5 per month).
+
 ## Connect the first device
 
 1. Open the shop as its local owner, then **More → Cloud connection**.
@@ -28,7 +30,7 @@ Cloud checkpoints and device tokens are installation metadata and are intentiona
 
 ## Backend deployment
 
-`app.json`, `Procfile` and `system.properties` describe a Java 17 Spring Boot service and PostgreSQL database. Heroku builds only the backend with `GRADLE_TASK=-PcloudOnly=true :server:bootJar`; no Android SDK is required. Flyway applies the schema at startup. `DATABASE_URL` is supplied privately by Heroku Postgres, never committed to the repository.
+`app.json`, `Procfile` and `system.properties` describe a Java 17 Spring Boot service and PostgreSQL database. Heroku builds only the backend with `GRADLE_TASK=-PcloudOnly=true :server:bootJar`; no Android SDK is required. `ORG_GRADLE_PROJECT_cloudOnly=true` also applies to the buildpack’s initialization tasks. Flyway applies the schema at startup. `DATABASE_URL` is supplied privately by Heroku Postgres, never committed to the repository.
 
 For local PostgreSQL verification, set `CLOUD_TEST_JDBC_URL`, `CLOUD_TEST_DB_USER` and `CLOUD_TEST_DB_PASSWORD`, then run `gradle -PcloudOnly=true :cloudProtocol:test :businessCore:test :cloudClient:test :server:test`. Backend HTTP is allowed only from loopback development or Heroku's HTTPS termination. Installed app setup accepts HTTPS addresses only. Do not expose the local development database to the internet.
 

@@ -1,0 +1,68 @@
+{
+  "verifiedAtUtc": "2026-11-24T16:09:47.390566+00:00",
+  "modules": {
+    "cloudProtocol": {
+      "tests": 25,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "cloudClient": {
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "businessCore": {
+      "tests": 4,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "server": {
+      "tests": 11,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "shared": {
+      "tests": 79,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "desktopApp": {
+      "tests": 601,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "androidApp": {
+      "tests": 9,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    }
+  },
+  "androidNative": {
+    "tests": 29,
+    "failures": 0,
+    "separateAirplaneModeCheckpointTest": 1,
+    "emulator": "RetailPOS_QA API 37",
+    "liveHttpsTestIncluded": true
+  },
+  "backend": {
+    "url": "https://nigerian-retail-pos-cloud-a03da41beea8.herokuapp.com",
+    "herokuApp": "nigerian-retail-pos-cloud",
+    "release": "v6",
+    "deployedSourceCommit": "a669335",
+    "dyno": "1 Basic",
+    "postgres": "Essential-0",
+    "health": {
+      "status": "ok",
+      "protocolVersion": 1
+    },
+    "disposableQaRecordsOnly": true
+  },
+  "androidDebugApkSha256": "774d893b45c2a4c587493d566330319c8e11c47bd73eb127e70b7d2fe00bdc9a"
+}
