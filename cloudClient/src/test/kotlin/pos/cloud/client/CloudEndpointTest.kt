@@ -17,4 +17,18 @@ class CloudEndpointTest {
         assertFails {CloudStateStore(files).installationId}
         assertEquals("damaged",files.read("installation-id"))
     }
+    @Test fun failedPrivateCheckpointWriteKeepsThePreviousDurableValue() {
+        val directory=java.nio.file.Files.createTempDirectory("cloud-write-failure")
+        var fail=false
+        val files=PrivateCloudFiles(directory,CloudFileProtection {_,isDirectory ->
+            if(fail && !isDirectory)throw java.io.IOException("Injected storage failure")
+        })
+        files.write("checkpoint","acknowledged")
+        fail=true
+        assertFailsWith<java.io.IOException> {files.write("checkpoint","unacknowledged")}
+        fail=false
+        assertEquals("acknowledged",files.read("checkpoint"))
+        assertFalse(files.names().any {it.startsWith(".cloud-")})
+    }
+
 }

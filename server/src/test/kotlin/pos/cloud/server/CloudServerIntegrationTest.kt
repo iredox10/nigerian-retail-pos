@@ -222,6 +222,37 @@ class CloudServerIntegrationTest {
         }}
     }
 
+
+    @Test fun restartAfterDatabaseApplyBeforeCheckpointSaveDoesNotRepeatBusinessEffects() {
+        PosRepository(":memory:").use {repo ->
+            val shop=repo.createTenant("Crash gap QA");val product=repo.addProduct(shop.id,"Soap","piece",100,10.0);repo.openCashShift(shop.id,1000)
+            val endpoint=CloudEndpoint.parse("http://127.0.0.1:$port",true);val transport=HttpCloudTransport()
+            val owner=transport.register(endpoint,CloudAccountRequest("crash-${UUID.randomUUID()}@example.test","Cloud-test-password-2026"))
+            val local=object:CloudLocalStore {
+                override fun authorizeCloudSetup(localShopId:String) {require(localShopId==shop.id)}
+                override fun schema(localShopId:String)=repo.cloudBusinessSchema()
+                override fun snapshot(localShopId:String,businessId:String)=repo.cloudBusinessSnapshot(localShopId,businessId)
+                override fun applyRemote(localShopId:String,checkpointId:String,base:CloudSnapshot,remote:CloudSnapshot,schema:CloudSchema)=repo.applyCloudBusinessSnapshot(localShopId,checkpointId,base,remote)
+                override fun importShop(authorizingLocalShopId:String,importId:String,bootstrap:CloudBootstrapReply,localName:String,localPassword:String):String=error("Not used")
+            }
+            val files=PrivateCloudFiles(Files.createTempDirectory("cloud-crash-gap"));val state=CloudStateStore(files);val credentials=FileCloudCredentialStore(files)
+            CloudCoordinator(local,transport,state,credentials).use {it.publish(shop.id,endpoint,owner,"Crash QA")}
+            repo.checkout(shop.id,listOf(CartLine(product,1)),100,operationId="one-sale")
+            val crash=object:CloudLocalStore by local {
+                override fun applyRemote(localShopId:String,checkpointId:String,base:CloudSnapshot,remote:CloudSnapshot,schema:CloudSchema):CloudSnapshot {
+                    local.applyRemote(localShopId,checkpointId,base,remote,schema)
+                    throw CloudConnectionException("Simulated stop after database commit")
+                }
+            }
+            CloudCoordinator(crash,transport,state,credentials).use {assertEquals("retry_wait",it.syncNow(shop.id).phase)}
+            assertNotNull(state.load(shop.id)!!.pendingPull)
+            repo.recordExpense(shop.id,"Transport","Written after interrupted sync",25,"late-expense")
+            CloudCoordinator(local,transport,state,credentials).use {assertEquals("up_to_date",it.syncNow(shop.id).phase)}
+            assertNull(state.load(shop.id)!!.pendingPull)
+            assertEquals(1,repo.sales(shop.id).size);assertEquals(9L,repo.products(shop.id).single().exactStockScaled)
+            assertEquals(1075L,repo.expectedCash(shop.id,repo.activeCashShift(shop.id)!!.id))
+        }
+    }
     private fun localChange(base:CloudBootstrapReply,change:(PosRepository,Tenant)->Unit):CloudSnapshot=PosRepository(":memory:").use {r ->
         val t=r.restoreTenantSnapshot(TenantSnapshot(Tenant(base.businessId,base.snapshot.tenantName),base.snapshot.tables),base.snapshot.tenantName)
         change(r,t)
