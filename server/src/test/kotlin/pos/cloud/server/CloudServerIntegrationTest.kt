@@ -221,6 +221,50 @@ class CloudServerIntegrationTest {
             assertEquals(2,a.sales(shop.id).size)
         }}
     }
+
+    private fun localChange(base:CloudBootstrapReply,change:(PosRepository,Tenant)->Unit):CloudSnapshot=PosRepository(":memory:").use {r ->
+        val t=r.restoreTenantSnapshot(TenantSnapshot(Tenant(base.businessId,base.snapshot.tenantName),base.snapshot.tables),base.snapshot.tenantName)
+        change(r,t)
+        r.cloudBusinessSnapshot(t.id,base.businessId)
+    }
+    private fun push(device:CloudDeviceSession,base:CloudBootstrapReply,changed:CloudSnapshot,id:String):CloudPushReply {
+        val reply=send("POST","/businesses/${device.businessId}/sync/push",CloudCodec.encode(CloudPushRequest(id,base.revision,schema.fingerprint,CloudMerge.diff(base.snapshot,changed,schema))),device.deviceToken)
+        assertEquals(200,reply.status,reply.body)
+        return CloudCodec.decode(reply.body)
+    }
+    @Test fun staleCountCannotEraseAConcurrentSaleAndItsRetryKeepsTheAcceptedHistory() {
+        val owner=account();val business=publish(owner);val a=enroll(owner,business);val b=enroll(owner,business)
+        val base=bootstrap(a)
+        val counted=localChange(base) {r,t ->val item=r.products(t.id).single();r.adjustStock(t.id,item.id,8,"Offline shelf count","count-a",10.0)}
+        assertEquals("accepted",push(b,base,localSale(base,1,"sale-b"),"upload-sale").status)
+        val rejected=push(a,base,counted,"upload-count")
+        assertEquals("conflict",rejected.status)
+        assertEquals(rejected,push(a,base,counted,"upload-count"))
+        val head=bootstrap(a)
+        assertEquals(1L,head.revision);assertEquals("9",head.snapshot.tables.getValue("products").single()["stock_scaled"])
+        assertEquals(1,head.snapshot.tables.getValue("sales").size)
+        assertTrue(head.snapshot.tables.getValue("stock_adjustments").isEmpty())
+    }
+    @Test fun concurrentReturnsCannotRefundOrRestockMoreThanWasSold() {
+        val owner=account();val business=publish(owner);val a=enroll(owner,business);val b=enroll(owner,business)
+        val initial=bootstrap(a)
+        assertEquals("accepted",push(a,initial,localSale(initial,3,"original-sale"),"sell-three").status)
+        val base=bootstrap(a)
+        fun returned(id:String)=localChange(base) {r,t ->
+            val sale=r.sales(t.id).single();r.returnItems(t.id,sale.id,mapOf(sale.lines.single().key to 2),true,"Returned unopened",id)
+        }
+        assertEquals("accepted",push(a,base,returned("return-a"),"upload-return-a").status)
+        val second=returned("return-b")
+        assertEquals("conflict",push(b,base,second,"upload-return-b").status)
+        val head=bootstrap(a)
+        assertEquals(2L,head.revision)
+        PosRepository(":memory:").use {r ->
+            val t=r.restoreTenantSnapshot(TenantSnapshot(Tenant(head.businessId,head.snapshot.tenantName),head.snapshot.tables),"Reviewed")
+            assertEquals(1,r.saleReturns(t.id).size);assertEquals(9L,r.products(t.id).single().exactStockScaled)
+            assertEquals(1100L,r.expectedCash(t.id,r.activeCashShift(t.id)!!.id))
+            assertEquals(1,r.returnableQuantities(t.id,"original-sale").values.single())
+        }
+    }
     companion object {
         @JvmStatic @DynamicPropertySource fun properties(registry:DynamicPropertyRegistry) {
             registry.add("CLOUD_JDBC_URL") {System.getenv("CLOUD_TEST_JDBC_URL")}
