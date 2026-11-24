@@ -119,11 +119,20 @@ private fun AndroidSignIn(repo:PosRepository,access:StaffAccess,onEnter:(Tenant,
     var name by remember {mutableStateOf("")}
     var password by remember {mutableStateOf("")}
     var memberId by remember {mutableStateOf<String?>(null)}
+    var usePin by remember {mutableStateOf(false)}
+    var configuringPin by remember {mutableStateOf(false)}
+    var recovering by remember {mutableStateOf(false)}
+    var notice by remember {mutableStateOf<String?>(null)}
     var error by remember {mutableStateOf<String?>(null)}
     val owners=remember {WorkspaceAccess()}
     val scope=rememberCoroutineScope()
     var busy by remember {mutableStateOf(false)}
     val members=remember(selected?.id) {selected?.let {access.signInMembers(it.id)}.orEmpty()}
+    LaunchedEffect(selected?.id,memberId,create) {usePin=false;password="";notice=null;error=null;configuringPin=false;recovering=false}
+    if(configuringPin && selected!=null && memberId!=null) AndroidPinSetupDialog(access,requireNotNull(selected).id,requireNotNull(memberId),
+        onDismiss={configuringPin=false},onSaved={configuringPin=false;password="";notice="PIN settings saved. Use your PIN while its authorization remains valid."})
+    if(recovering && selected!=null) AndroidRecoveryDialog(access,requireNotNull(selected).id,
+        onDismiss={recovering=false},onRecovered={recovering=false;password="";usePin=false;notice="Owner access recovered. Sign in with your new password."})
     Column(Modifier.fillMaxSize().safeDrawingPadding().imePadding().padding(24.dp).verticalScroll(rememberScrollState()),verticalArrangement=Arrangement.spacedBy(16.dp)) {
         SectionHeader("Retail POS", "Sell and keep shop records without internet")
         Text("Records stay on this Android device. Cloud sync is not connected.")
@@ -132,21 +141,33 @@ private fun AndroidSignIn(repo:PosRepository,access:StaffAccess,onEnter:(Tenant,
             FilterChip(memberId==null,{memberId=null;password=""},label={Text("Owner")})
             members.forEach {member ->FilterChip(memberId==member.id,{memberId=member.id;password=""},label={Text("${member.name} · ${member.role}")})}
         } else PosTextField(name,{name=it},"Shop name")
-        OutlinedTextField(password,{password=it},label={Text(if(create)"Owner password (at least 8 characters)" else "Password")},visualTransformation=PasswordVisualTransformation(),modifier=Modifier.fillMaxWidth(),singleLine=true)
+        if(!create && memberId!=null) {
+            Row(horizontalArrangement=Arrangement.spacedBy(12.dp)) {
+                FilterChip(!usePin,{usePin=false;password=""},label={Text("Password")})
+                FilterChip(usePin,{usePin=true;password=""},label={Text("Staff PIN")})
+            }
+            Text("PIN access must first be authorized using this staff member's full password and expires under the shop's security policy.",style=MaterialTheme.typography.bodySmall)
+        }
+        OutlinedTextField(password,{password=it},label={Text(if(create)"Owner password (at least 8 characters)" else if(usePin && memberId!=null) "Staff PIN" else "Password")},visualTransformation=PasswordVisualTransformation(),modifier=Modifier.fillMaxWidth(),singleLine=true)
+        notice?.let {InlineNotice(it,tone=NoticeTone.Info)}
         error?.let {InlineNotice("Could not sign in",it,NoticeTone.Danger)}
         Button(onClick={
+            val creating=create;val chosen=selected;val staff=memberId;val pinLogin=usePin
+            val attemptPassword=password;val shopName=name.trim()
             busy=true;error=null
             scope.launch {
                 try {
                     val result=kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-                        val shop=if(create) {require(name.isNotBlank());require(password.length in 8..1024);repo.createTenant(name.trim()) {owners.register(it.id,password)}} else requireNotNull(selected)
-                        val identity=if(create || memberId==null) access.unlockOwner(shop.id,password) else access.unlockStaff(shop.id,requireNotNull(memberId),password)
-                        shop to requireNotNull(identity) {"Password was not accepted or sign-in is temporarily locked."}
+                        val shop=if(creating) {require(shopName.isNotBlank());require(attemptPassword.length in 8..1024);repo.createTenant(shopName) {owners.register(it.id,attemptPassword)}} else requireNotNull(chosen)
+                        val identity=if(creating || staff==null) access.unlockOwner(shop.id,attemptPassword) else if(pinLogin) access.unlockStaffPin(shop.id,staff,attemptPassword) else access.unlockStaff(shop.id,staff,attemptPassword)
+                        shop to requireNotNull(identity) {"Password or PIN was not accepted, authorization expired, or sign-in is temporarily locked."}
                     }
                     password="";onEnter(result.first,result.second)
                 } catch(e:Exception){error=e.message ?: "Try again."} finally {busy=false}
             }
         },enabled=!busy,modifier=Modifier.fillMaxWidth().heightIn(min=56.dp)) {Text(if(busy)"Opening shop…" else if(create)"Create shop" else "Open shop")}
+        if(!create && selected!=null && memberId==null) TextButton({recovering=true;password=""}) {Text("Recover owner access")}
+        if(!create && selected!=null && memberId!=null) TextButton({configuringPin=true;password=""}) {Text("Set up or remove staff PIN")}
         if(shops.isNotEmpty()) TextButton({create=!create;error=null;password=""}) {Text(if(create && shops.isNotEmpty())"Use an existing shop" else "Create another shop")}
     }
 }
