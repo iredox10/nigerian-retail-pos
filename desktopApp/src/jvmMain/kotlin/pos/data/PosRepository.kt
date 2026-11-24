@@ -1116,16 +1116,25 @@ class PosRepository(path: String = File(System.getProperty("user.home"), ".niger
     private fun supplierPayment(r:ResultSet)=SupplierPayment(r.getString("id"),r.getString("tenant_id"),r.getString("receipt_id"),r.getString("supplier_name"),r.getLong("amount_minor"),r.getString("created_at"))
 
     private val snapshotTableOrder get() = listOf("products","product_metadata_changes","selling_units","stock_settings_changes","purchase_units","customers","customer_changes","cash_shifts","sales","sale_lines","repayments","repayment_allocations","allocation_reversals","stock_receipts","expenses","sale_returns","return_lines","supplier_payments","cash_entries","catalogue_changes","stock_adjustments","outbox","activity_audit") + supplierProfileSnapshotTables + purchaseOrderSnapshotTables + purchaseDiscrepancySnapshotTables + inventoryDispositionSnapshotTables + stockCountSessionSnapshotTables + shopProfileSnapshotTables + externalPaymentSnapshotTables + priceListSnapshotTables + bulkCatalogueUpdateSnapshotTables + supplierInvoiceSnapshotTables + creditReturnSnapshotTables + quotationSnapshotTables + localImageSnapshotTables + ownerCashSnapshotTables + minimumPriceSnapshotTables + repackingSnapshotTables + expenseAttachmentSnapshotTables + saleTenderSnapshotTables + reminderSnapshotTables + variantSnapshotTables + purchaseReturnSnapshotTables + debtAdjustmentSnapshotTables + cashExchangeSnapshotTables + customerOrderSnapshotTables + orderReservationSnapshotTables + landedCostSnapshotTables + promotionSnapshotTables + replenishmentPolicySnapshotTables + supplierCreditSnapshotTables + customerDisputeSnapshotTables + orderDispatchSnapshotTables + variantMatrixSnapshotTables + customerAdvanceSnapshotTables + inventoryCostingSnapshotTables + cashHandoverSnapshotTables + bundleSnapshotTables + quotationOrderSnapshotTables
+    internal fun cloudBusinessTables():List<String> = snapshotTableOrder
     @Synchronized fun exportTenantSnapshot(tenantId:String):TenantSnapshot = transaction {
         requirePermission(tenantId, StaffPermission.BACKUP)
         requireTenant(tenantId)
+        readBusinessSnapshot(tenantId)
+    }
+    @Synchronized fun exportCloudBusinessSnapshot(tenantId:String):TenantSnapshot = transaction {
+        requirePermission(tenantId, StaffPermission.SELL)
+        requireTenant(tenantId)
+        readBusinessSnapshot(tenantId)
+    }
+    private fun readBusinessSnapshot(tenantId:String):TenantSnapshot {
         val tenant=tenants().single { it.id==tenantId }
         val tables=snapshotTableOrder.associateWith { table ->
             query("SELECT * FROM $table WHERE tenant_id=?",tenantId) { row ->
                 (1..row.metaData.columnCount).associate { column -> row.metaData.getColumnName(column) to row.getString(column) }
             }
         }
-        TenantSnapshot(tenant,tables)
+        return TenantSnapshot(tenant,tables)
     }
     @Synchronized fun restoreTenantSnapshot(snapshot:TenantSnapshot,newName:String,provisionOwner:(Tenant)->Unit={}):Tenant = transaction {
         // Login recovery uses its own explicit trusted connection. Never disable the running
