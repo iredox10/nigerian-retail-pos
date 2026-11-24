@@ -183,9 +183,11 @@ class CloudCoordinator(
             val downloaded=download(state,token)
             ensureScope(scope,automatic,localShopId)
             val receivedAt=clock().toString()
-            state=state.copy(pendingPull=CloudPendingPull(UUID.randomUUID().toString(),localBase,downloaded.first,downloaded.second))
-            states.save(state) // crash-safe before any local business mutation
-            state=finishPull(state,receivedAt)
+            if(pending!=null || downloaded.second!=state.revision) {
+                state=state.copy(pendingPull=CloudPendingPull(UUID.randomUUID().toString(),localBase,downloaded.first,downloaded.second))
+                states.save(state) // crash-safe before any local business mutation
+                state=finishPull(state,receivedAt)
+            }
             ensureScope(scope,automatic,localShopId)
             val remaining=CloudMerge.diff(state.baseline,current(state),state.schema)
             val count=remaining.changes.size
