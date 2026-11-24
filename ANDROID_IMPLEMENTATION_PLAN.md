@@ -46,10 +46,12 @@ The unchecked journey rows above remain broader parity/acceptance work, even whe
 
 Continue from the verified 680 desktop/shared + 6 Android JVM + 16 native Android checkpoint. Separate pre-existing in-progress cloud modules are preserved and are not counted as Android feature completion in this wave.
 
-- [ ] Catalogue edit/archive/restore, metadata and selling/buying pack editors.
-- [ ] Owner recovery enrollment/reset, staff PIN setup/sign-in and authenticated counted drawer handover.
-- [ ] Editable quotations, orders/deposits/reservations/collection and dispatch proof.
-- [ ] Merchant-controlled Android CSV export with exact money and spreadsheet-safe text.
-- [ ] Integrate routes, rerun desktop/Android tests, install APK and record actual phone evidence.
+- [x] Catalogue edit/archive/restore, metadata and selling/buying pack editors.
+- [x] Owner recovery enrollment/reset, staff PIN setup/sign-in and authenticated counted drawer handover.
+- [x] Editable quotations, orders/deposits/reservations/collection and dispatch proof.
+- [x] Merchant-controlled Android CSV export with exact money and spreadsheet-safe text.
+- [x] Integrate routes, rerun desktop/Android tests, install APK and record actual phone evidence.
 
 Four subagent assignments run in dependency waves; root integrates and verifies. These are additional Android workflows, not a claim that the complete parity matrix is finished.
+
+Verified checkpoint: 680 shared/desktop + 9 Android JVM + 26 native API 37 tests pass. Final APK installed; offline phone catalogue editing, restart retention and actual Downloads CSV save were checked. BUILD_STATUS.md distinguishes the tested source rules from unperformed full manual workflows and device/release acceptance.

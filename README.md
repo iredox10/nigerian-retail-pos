@@ -33,7 +33,7 @@ Desktop distributions are built for the host operating system. Build and test th
 
 ## Android development build
 
-Requires JDK 17 and Android SDK platform 35/build tools, configured through Android Studio or an untracked `local.properties`. The initial minimum is Android 11 (API 30). Manager price-approval signing is currently available on API 33+ only. The APK is signed with the development debug key; it is not a production release or physical-hardware compatibility claim.
+Requires JDK 17 and Android SDK platform 35/build tools, configured through Android Studio or an untracked `local.properties`. The initial minimum is Android 11 (API 30). Manager price-approval signing and authenticated cash handover are currently available on API 33+ only. The APK is signed with the development debug key; it is not a production release or physical-hardware compatibility claim.
 
 ```sh
 ./gradlew :androidApp:testDebugUnitTest :androidApp:assembleDebug :androidApp:assembleDebugAndroidTest
@@ -41,6 +41,8 @@ adb install -r androidApp/build/outputs/apk/debug/androidApp-debug.apk
 adb install -r androidApp/build/outputs/apk/androidTest/debug/androidApp-debug-androidTest.apk
 adb shell am instrument -w ng.retailpos.android.test/androidx.test.runner.AndroidJUnitRunner
 ```
+
+Android now also includes catalogue/metadata/package editing, owner recovery and staff PIN access, authenticated shared-drawer handover, editable quotations/orders/dispatch, and guarded CSV previews/exports. Additional native workflows remain tracked in the Android coverage matrix.
 
 The APK is at `androidApp/build/outputs/apk/debug/androidApp-debug.apk`. Records stay in Android app-private storage; they do not synchronize with desktop. The app declares no internet permission and disables Android automatic app-data backup. Explicit encrypted document export/restore is available to the owner. Working records are not encrypted. See [Android plan](ANDROID_IMPLEMENTATION_PLAN.md), [coverage](ANDROID_FEATURE_PARITY.md) and [build evidence](BUILD_STATUS.md) for implementation and acceptance limits.
 

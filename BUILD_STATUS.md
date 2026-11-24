@@ -2,6 +2,31 @@
 
 23 November 2026 · Orders, stock holds, promotions and purchasing
 
+## Android catalogue, security, orders and CSV — 24 November 2026
+
+**680 shared/desktop tests pass** (79 shared + 601 desktop), **9 Android JVM tests pass**, and **26 native Android instrumentation tests pass**, with zero reported failures/errors/skips. Ran `gradle :shared:jvmTest :desktopApp:jvmTest :androidApp:testDebugUnitTest :androidApp:assembleDebug :androidApp:assembleDebugAndroidTest --offline --max-workers=2` successfully in 2m 58s using installed Gradle 8.13/JDK17. Both APKs installed successfully; the native runner completed in 54.754 seconds on the task-owned API 37 emulator. After a phone-width tab adjustment, the APK and all 9 JVM tests rebuilt successfully in 21 seconds and the final APK was installed again.
+
+Four subagents supplied catalogue, security, trade/order and CSV slices; root integrated the routes, sign-in and verification. Micro commits separate the source changes. This extends the prior Android checkpoint; it does not complete the full parity matrix.
+
+- Stock now has active/archive views, reviewed atomic item/metadata editing, immutable catalogue history, and fixed selling/buying package creation/archive/restore. Unit meanings and existing sales stay preserved.
+- Locked sign-in supports full-password-authorized temporary staff PINs and single-use owner recovery. Owner recovery enrollment is owner-only and displays the proof once, in memory. Recipient-password cash handover on API 33+ retains shortages and atomically closes/opens the existing shared drawer. It does not implement multiple registers.
+- Quotations support reviewed creation/revision, acceptance/cancellation and full-cash/order conversion. Orders support actual deposits, cancellation refunds, dated stock holds, partial/final collection and saved receipts. Dispatch records retain merchant-entered recipient/courier/tracking and delivered/failed/retry/returned proof history; they do not claim external courier confirmation.
+- CSV exports cover consistent tenant-scoped sales, current catalogue, current customer accounts and signed cash movements. Preview and save recheck permissions. Exact numeric columns stay distinct from formula-neutralized text. Android's document picker controls the local destination. Import remains unavailable.
+
+### Actual Android phone evidence
+
+Used the existing task-owned 720 × 1280 API 37 emulator (280 dpi), with airplane mode recorded as 1 and Wi-Fi/mobile data disabled. Existing shop records were preserved; a new `Android wave 24 sample` shop supplied these checks.
+
+Created a whole-unit QA product with 10 pieces at ₦550, opened Manage item, reviewed/saved its SKU and retained the same count/price. Force-stopped/reopened the final app, authenticated again and verified the retained product through a CSV snapshot. Native review found the last catalogue tab partially clipped; the final layout uses three equal-width 48-dp controls and the short “Packs” label. [Catalogue review](artifacts/android-catalogue-review-24nov.png), [saved metadata](artifacts/android-catalogue-saved-24nov.png), [visible installed app](artifacts/android-visible-24nov.png), [shop tools](artifacts/android-tools-24nov.png).
+
+Generated the exact one-row Stock CSV preview and saved it through the actual Android Downloads picker. Pulled and parsed the resulting file: one product from the selected shop, price `550.00`, quantity `10` and the saved SKU. [Preview](artifacts/android-csv-preview-24nov.png), [saved](artifacts/android-csv-saved-24nov.png). Keyboard text entry and Tab were used; this is not a complete keyboard-only navigation study.
+
+Native tests additionally cover edit rollback on duplicate SKU, stale/denied changes, measured/packs and historical receipts, PIN expiry/removal/reset, recovery consumption/revocation, genuine signed handover/retry/shortage/recovery, quotations/orders/reservations/dispatch and exact cash/stock histories, and CSV tenant/permission/no-financial-mutation rules. Earlier native receipt/image/storage tests remain in the 26-test suite.
+
+Full manual PIN/recovery/handover and quotation/order/dispatch phone journeys, export cancellation/failure, tablet/large-font/TalkBack, API 30–36, physical peripherals, another-device migration and merchant usability remain unperformed in this continuation. See ANDROID_FEATURE_PARITY.md for remaining editing/reporting modules.
+
+The final debug APK is `androidApp/build/outputs/apk/debug/androidApp-debug.apk`, SHA-256 `f8864a02236ced9e756bb2fa5787b9561df57eb63fb01239876819dc14487ea8`. It declares no Internet permission. This is a development build, not production release acceptance. Separate pre-existing cloud work remains uncommitted; one list/array type-compatibility correction in its CloudRepository source was needed for this workspace build. These Android results do not validate or complete cloud synchronization.
+
 ## Android product quantity selector — 23 November 2026
 
 A phone user reported “Choose zero to six quantity decimal places” while adding goods. Replaced the free-text precision field with a labeled selector limited to the supported 0–6 choices. Whole quantities (0) remain the explicit default; measured options show examples such as 1.250 for three places. The existing precision/quantity persistence rules remain unchanged, including immutable product precision.
