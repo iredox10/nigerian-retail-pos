@@ -1,0 +1,32 @@
+{
+  "name": "Retail POS cloud",
+  "description": "Offline-first desktop and Android business record synchronization",
+  "stack": "heroku-24",
+  "buildpacks": [
+    {
+      "url": "heroku/gradle"
+    }
+  ],
+  "env": {
+    "GRADLE_TASK": {
+      "value": "-PcloudOnly=true :server:bootJar"
+    },
+    "ORG_GRADLE_PROJECT_cloudOnly": {
+      "value": "true"
+    },
+    "GRADLE_OPTS": {
+      "value": "-Dorg.gradle.project.kotlin.compiler.execution.strategy=in-process -Dorg.gradle.workers.max=2 -Dorg.gradle.jvmargs=-Xmx1400m"
+    }
+  },
+  "formation": {
+    "web": {
+      "quantity": 1,
+      "size": "basic"
+    }
+  },
+  "addons": [
+    {
+      "plan": "heroku-postgresql:essential-0"
+    }
+  ]
+}

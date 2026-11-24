@@ -1,0 +1,7 @@
+artifacts/
+androidApp/
+.design/
+.git/
+**/build/
+**/src/test/
+**/src/androidTest/
