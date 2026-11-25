@@ -1,0 +1,10 @@
+{
+  "verifiedAtUtc": "2026-11-25T10:04:33.987722+00:00",
+  "package": "ng.retailpos.android",
+  "installMode": "adb install --user 0 -r",
+  "installSucceeded": true,
+  "savedDataFilesBefore": 10,
+  "savedDataFilesAfter": 10,
+  "savedDataHashesUnchanged": true,
+  "apkSha256": "0fd9b51fa0a8ea90b0a4c6b148b2ecd293179bbc625b3e810a0ea87dbc8193e9"
+}

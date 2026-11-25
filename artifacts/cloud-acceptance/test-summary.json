@@ -1,5 +1,5 @@
 {
-  "verifiedAtUtc": "2026-11-25T09:29:47.442848+00:00",
+  "verifiedAtUtc": "2026-11-25T10:05:48.444056+00:00",
   "modules": {
     "shared": {
       "tests": 79,
@@ -49,12 +49,16 @@
     "android": "13",
     "api": 33,
     "qaPackage": "ng.retailpos.android.acceptance",
-    "regularAppChanged": false,
+    "regularAppChanged": true,
     "lastFullSuite": {
-      "tests": 30,
-      "passed": 28,
+      "tests": 31,
+      "passed": 29,
       "failed": 2,
-      "failureReason": "Phone could not resolve the HTTPS backend hostname; both live registration checks failed before business actions."
+      "ignored": 0,
+      "assumptions": 0,
+      "durationMillis": 182944,
+      "failureReason": "Both live cases failed at cloud registration. The phone ping command independently reported unknown host for the backend. The computer health request succeeded.",
+      "evidence": "physical-final-report.json"
     },
     "additionalOfflineOwnerImportTest": {
       "tests": 1,
@@ -62,11 +66,19 @@
       "seconds": 27.42,
       "scope": "Genuine owner/session adapter, separate local unlock, permission denial and idempotent import; executed before the extra image-byte assertion was added."
     },
-    "latestBuildPhoneVerification": "Awaiting stable USB reconnection; final image assertion and real-user-interaction wiring not yet verified on device.",
+    "latestBuildPhoneVerification": "All 29 local cases passed, including the final native image-byte and owner/session import assertions. Manual idle-timer and rendered UI acceptance remain unperformed.",
     "latestFullRunAttempt": {
       "testsExpected": 31,
-      "completed": false,
-      "reason": "USB device disconnected during owner-flow tests; no complete result received."
+      "completed": true,
+      "runId": "physical-final-20261125-1105"
+    },
+    "regularAppUpdate": {
+      "evidence": "regular-phone-update.json",
+      "savedDataFilesBefore": 10,
+      "savedDataFilesAfter": 10,
+      "savedDataHashesUnchanged": true,
+      "foregroundActivityVerified": true,
+      "renderedScreenVerified": false
     }
   },
   "backend": {
@@ -87,6 +99,7 @@
     "persistentResultsCompiled": true,
     "screenWakeLockPermissionAcceptanceOnlyVerified": true,
     "regularAppWakeLockPermission": false,
-    "deviceExecutionPending": true
+    "deviceExecutionPending": false,
+    "finishedReportRetrieved": true
   }
 }

@@ -9,7 +9,8 @@ Existing shop records and ordinary offline operation stay independent of the ser
 - [x] Real HTTP/Postgres stale-count, concurrent over-return, database/checkpoint crash-gap and compressed-bootstrap checks pass.
 - [x] Configure Windows MSI/EXE packaging, private-file ACL tests and a Windows CI job.
 - [x] Build the final QA/regular Android APKs and Linux application; 738 JVM tests pass.
-- [ ] Reinstall final QA build and rerun live owner/image publication/import/revocation after stable USB and working phone DNS are available. The extra native image-byte assertion and latest activity wiring still need that final run.
-- [ ] Update the regular phone app with data-preserving `adb install -r` after final phone acceptance; it has not been changed by this continuation.
+- [x] Reinstall final QA build and complete its 31-case physical run with a saved final report: all 29 local cases pass, including exact native image bytes and guarded owner import.
+- [ ] Rerun the two live owner/image publication/import/revocation cases after working phone DNS is available; both still fail at registration because the hostname cannot be resolved. Manual idle-timer acceptance remains unperformed.
+- [x] Update the regular phone app with data-preserving `adb install --user 0 -r`; all 10 saved data files have identical hashes before/after. Launch and resumed Activity verified; screenshot/interactive acceptance remains unperformed because the phone returned to its lock screen.
 - [ ] Execute the Windows workflow on a Windows runner. GitHub API/CLI timed out here; configuration is not a passing Windows run.
 - [ ] Complete interactive two-app enrollment, keyboard/accessibility acceptance, large-data/performance, power-loss/independent-machine recovery and merchant research.
