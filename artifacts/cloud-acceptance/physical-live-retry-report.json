@@ -1,0 +1,17 @@
+{
+  "runId": "physical-live-retry-20261125-1",
+  "status": "finished",
+  "startedAtMillis": 1795601172647,
+  "package": "ng.retailpos.android.acceptance",
+  "androidApi": 33,
+  "tests": 2,
+  "failures": 0,
+  "ignored": 0,
+  "assumptions": 0,
+  "durationMillis": 74909,
+  "completed": [
+    "ownerPublishImageImportUnlockSyncAndRevokeUseTheRealApplicationBoundary(pos.android.AndroidCloudOwnerFlowTest)",
+    "nativeHttpsTransportPublishesAndDownloadsRealCloudRecords(pos.android.AndroidCloudTest)"
+  ],
+  "failed": []
+}

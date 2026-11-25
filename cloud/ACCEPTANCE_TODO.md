@@ -10,7 +10,8 @@ Existing shop records and ordinary offline operation stay independent of the ser
 - [x] Configure Windows MSI/EXE packaging, private-file ACL tests and a Windows CI job.
 - [x] Build the final QA/regular Android APKs and Linux application; 738 JVM tests pass.
 - [x] Reinstall final QA build and complete its 31-case physical run with a saved final report: all 29 local cases pass, including exact native image bytes and guarded owner import.
-- [ ] Rerun the two live owner/image publication/import/revocation cases after working phone DNS is available; both still fail at registration because the hostname cannot be resolved. Manual idle-timer acceptance remains unperformed.
+- [x] Rerun both live cases once phone DNS recovers: both passed in 74.909 seconds, verifying HTTPS publication/download, exact image import, guarded owner unlock, sync, revocation and reconnect. Preserve the prior two DNS failures; this is a targeted retry, not a second full-suite run.
+- [ ] Complete manual idle-timer and rendered UI acceptance.
 - [x] Update the regular phone app with data-preserving `adb install --user 0 -r`; all 10 saved data files have identical hashes before/after. Launch and resumed Activity verified; screenshot/interactive acceptance remains unperformed because the phone returned to its lock screen.
 - [ ] Execute the Windows workflow on a Windows runner. GitHub API/CLI timed out here; configuration is not a passing Windows run.
 - [ ] Complete interactive two-app enrollment, keyboard/accessibility acceptance, large-data/performance, power-loss/independent-machine recovery and merchant research.

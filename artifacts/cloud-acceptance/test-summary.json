@@ -1,5 +1,5 @@
 {
-  "verifiedAtUtc": "2026-11-25T10:05:48.444056+00:00",
+  "verifiedAtUtc": "2026-11-25T10:08:02.531060+00:00",
   "modules": {
     "shared": {
       "tests": 79,
@@ -66,7 +66,7 @@
       "seconds": 27.42,
       "scope": "Genuine owner/session adapter, separate local unlock, permission denial and idempotent import; executed before the extra image-byte assertion was added."
     },
-    "latestBuildPhoneVerification": "All 29 local cases passed, including the final native image-byte and owner/session import assertions. Manual idle-timer and rendered UI acceptance remain unperformed.",
+    "latestBuildPhoneVerification": "All 31 cases passed across the full run (29 local passed, two live DNS failures) and targeted live retry (both passed). Not a single all-green full-suite run. Manual idle-timer and rendered UI acceptance remain unperformed.",
     "latestFullRunAttempt": {
       "testsExpected": 31,
       "completed": true,
@@ -79,6 +79,16 @@
       "savedDataHashesUnchanged": true,
       "foregroundActivityVerified": true,
       "renderedScreenVerified": false
+    },
+    "liveRetry": {
+      "tests": 2,
+      "passed": 2,
+      "failed": 0,
+      "ignored": 0,
+      "assumptions": 0,
+      "durationMillis": 74909,
+      "evidence": "physical-live-retry-report.json",
+      "runId": "physical-live-retry-20261125-1"
     }
   },
   "backend": {
