@@ -1,0 +1,29 @@
+{
+  "verifiedAtUtc": "2026-11-25T13:20:17.219465+00:00",
+  "modules": {
+    "desktopApp": {
+      "tests": 605,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "androidApp": {
+      "tests": 9,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "cloudClient": {
+      "tests": 4,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "serverLocal": {
+      "tests": 17,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    }
+  }
+}

@@ -32,3 +32,7 @@ adb -s DEVICE_SERIAL shell run-as ng.retailpos.android.acceptance cat files/qa-r
 Require the expected unique `runId`, `status=finished`, zero failures/ignored/assumptions and the expected test count. A `running` report is not a completed run. The report contains test names and counts, never account passwords or merchant records.
 
 Only the acceptance build declares `WAKE_LOCK`. When this listener is selected it holds a screen wake lock during the run, releases it on completion, and has a ten-minute maximum. It does not dismiss a secure lock screen or change the user's screen-timeout settings. This prevents screen sleep from interrupting unattended QA where the device permits it; it cannot fix a physically disconnected USB cable. The regular app has no extra wake-lock permission.
+
+## Guided setup build
+
+The latest guided-setup test APK contains **32 cases**, including a new live owner-approved pairing test that imports into an entirely empty native installation, verifies a separate local unlock password, resumes its Keystore-backed pairing ticket and checks revocation without deleting saved stock. This case is compiled but not yet executed after the physical phone disconnected. The earlier 31-case physical reports apply to the previous build. Use a new unique run ID and require all 32 results before claiming a full run of the new build. Never use the other project's emulator or clear/uninstall the normal phone app to make installation succeed.

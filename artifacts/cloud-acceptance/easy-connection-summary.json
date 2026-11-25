@@ -1,0 +1,80 @@
+{
+  "verifiedAtUtc": "2026-11-25T13:30:49.162427+00:00",
+  "backend": {
+    "release": "v9",
+    "sourceCommit": "0ca7155",
+    "healthVerified": true,
+    "pairingLifecycleVerifiedOnRelease": "v8",
+    "convergenceVerifiedOnRelease": "v8"
+  },
+  "tests": {
+    "desktopApp": {
+      "tests": 605,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "androidApp": {
+      "tests": 9,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "cloudClient": {
+      "tests": 4,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "serverLocal": {
+      "tests": 17,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    }
+  },
+  "hostedConvergence": {
+    "tests": 1,
+    "failures": 0,
+    "evidence": "easy-remote-convergence.json"
+  },
+  "monitoring": {
+    "repositoryPublished": true,
+    "schedule": "Every 15 minutes",
+    "firstManualRun": "success",
+    "url": "https://github.com/iredox10/nigerian-retail-pos/actions/runs/45624028583",
+    "scheduledExecutionVerified": false,
+    "alertDeliveryVerified": false
+  },
+  "backup": {
+    "actualIsolatedRestorePassed": true,
+    "dailySchedule": "02:00 Africa/Lagos",
+    "firstScheduledExecutionVerified": false
+  },
+  "email": {
+    "provider": "Resend SMTP",
+    "deliveryConfigured": false,
+    "verifiedSenderProvided": false,
+    "realInboxDeliveryVerified": false,
+    "testOnlyMailboxUsedForIntegrationTests": true
+  },
+  "android": {
+    "normalApkSha256": "44061a1aac257207334de608a8161339c186faec585bfe31ce0d3b7bea1ce20b",
+    "qaApkSha256": "17e4243118659e01d69d6cd9c5b20732502989428746134a93bf87eee6a03eb7",
+    "nativeTestsCompiled": 32,
+    "newBuildNativeExecutionVerified": false,
+    "phoneUpdatedToThisBuild": false,
+    "reason": "Physical USB disconnected; isolated emulator startup twice exited 139. Other project emulator left untouched."
+  },
+  "desktop": {
+    "offlineNetworkNamespace": true,
+    "sampleDataOnly": true,
+    "nativeFrameRendered": true,
+    "image": "easy-desktop-choices.png",
+    "keyboardF11Sent": true,
+    "keyboardFullscreenChanged": true,
+    "fullKeyboardAccountJourneyVerified": false,
+    "merchantUsabilityResearchPerformed": false
+  },
+  "merchantResearchPerformed": false
+}
