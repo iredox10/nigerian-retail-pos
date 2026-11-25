@@ -1,0 +1,15 @@
+name: Cloud readiness
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '*/15 * * * *'
+permissions:
+  contents: read
+jobs:
+  readiness:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v7
+      - name: Check service and database readiness
+        run: python3 cloud/ops/check_health.py

@@ -1,0 +1,10 @@
+{
+  "verifiedAtUtc": "2026-11-25T11:56:14.255741+00:00",
+  "app": "nigerian-retail-pos-cloud",
+  "attachment": "DATABASE_URL",
+  "frequency": "daily",
+  "time": "02:00",
+  "timezone": "Africa/Lagos",
+  "scheduleCommandSucceeded": true,
+  "firstScheduledExecutionVerified": false
+}
