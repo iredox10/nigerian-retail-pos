@@ -62,7 +62,12 @@
       "seconds": 27.42,
       "scope": "Genuine owner/session adapter, separate local unlock, permission denial and idempotent import; executed before the extra image-byte assertion was added."
     },
-    "latestBuildPhoneVerification": "Awaiting stable USB reconnection; final image assertion and real-user-interaction wiring not yet verified on device."
+    "latestBuildPhoneVerification": "Awaiting stable USB reconnection; final image assertion and real-user-interaction wiring not yet verified on device.",
+    "latestFullRunAttempt": {
+      "testsExpected": 31,
+      "completed": false,
+      "reason": "USB device disconnected during owner-flow tests; no complete result received."
+    }
   },
   "backend": {
     "release": "v7",
@@ -77,5 +82,11 @@
     "reason": "No Windows host; GitHub CLI/API connections timed out."
   },
   "debugApkSha256": "0fd9b51fa0a8ea90b0a4c6b148b2ecd293179bbc625b3e810a0ea87dbc8193e9",
-  "acceptanceApkSha256": "ff197d831a9138e89fbb94cb97edfe3fd4efa12a1883e902229a09a56767a501"
+  "acceptanceApkSha256": "c38c7c7ca0869b2846163b1e9f128cedc21bdf532a1d729a871647740e18e7d0",
+  "qaResilience": {
+    "persistentResultsCompiled": true,
+    "screenWakeLockPermissionAcceptanceOnlyVerified": true,
+    "regularAppWakeLockPermission": false,
+    "deviceExecutionPending": true
+  }
 }
