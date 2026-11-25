@@ -281,7 +281,7 @@ fun main(args: Array<String>) {
             }
             Column(Modifier.weight(1f).fillMaxHeight()) {
                 Row(Modifier.fillMaxWidth().height(64.dp).padding(horizontal = 24.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Text(if(route=="Audit") "Activity history" else route, style = MaterialTheme.typography.headlineSmall)
+                    Text(when(route) {"Audit"->"Activity history";"Cloud connection"->"Connected devices";else->route}, style = MaterialTheme.typography.headlineSmall)
                     if (route in setOf("Repayment follow-ups", "Customer disputes", "Customer advances")) TextButton({route="Customers"}) {Text("Back to customers")}
                     else if(route in setOf("Stock counts","Stock removed","Bulk update","Import product photos","Price lists","Repacking","Reorder suggestions","Purchase cost history","Landed costs","Promotions","Minimum prices","Variant matrix","Stock value & costs")) TextButton({route="Stock"}) {Text("Back to stock")}
                     else if (route == "Order dispatch") TextButton({route="Orders"}) {Text("Back to orders")}
