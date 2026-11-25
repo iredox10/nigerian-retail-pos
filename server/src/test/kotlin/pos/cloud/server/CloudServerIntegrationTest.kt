@@ -253,6 +253,21 @@ class CloudServerIntegrationTest {
             assertEquals(1075L,repo.expectedCash(shop.id,repo.activeCashShift(shop.id)!!.id))
         }
     }
+
+    @Test fun compressedBootstrapPreservesTheExactSchemaAndBusinessRecords() {
+        val owner=account();val business=publish(owner);val device=enroll(owner,business)
+        val request=HttpRequest.newBuilder(URI("http://127.0.0.1:$port/api/v1/businesses/${business.id}/bootstrap"))
+            .header("Authorization","Bearer ${device.deviceToken}").header("Accept-Encoding","gzip").GET().build()
+        val response=http.send(request,HttpResponse.BodyHandlers.ofByteArray())
+        assertEquals(200,response.statusCode());assertEquals("gzip",response.headers().firstValue("Content-Encoding").orElse(""))
+        val decoded=java.util.zip.GZIPInputStream(response.body().inputStream()).use {it.readBytes()}
+        assertTrue(response.body().size<decoded.size/2,"The metadata-heavy bootstrap should compress materially")
+        val exact=CloudCodec.decode<CloudBootstrapReply>(decoded.toString(Charsets.UTF_8))
+        val endpoint=CloudEndpoint.parse("http://127.0.0.1:$port",true)
+        assertEquals(exact,HttpCloudTransport().bootstrap(endpoint,device.deviceToken,business.id))
+        assertEquals(schema.fingerprint,exact.schema.fingerprint)
+        assertEquals("10",exact.snapshot.tables.getValue("products").single()["stock_scaled"])
+    }
     private fun localChange(base:CloudBootstrapReply,change:(PosRepository,Tenant)->Unit):CloudSnapshot=PosRepository(":memory:").use {r ->
         val t=r.restoreTenantSnapshot(TenantSnapshot(Tenant(base.businessId,base.snapshot.tenantName),base.snapshot.tables),base.snapshot.tenantName)
         change(r,t)
