@@ -74,7 +74,8 @@ class CloudAccountService(private val jdbc:JdbcTemplate,private val tx:Transacti
     internal fun device(header:String?,businessId:String,lock:Boolean=false):DeviceIdentity {
         val token=bearer(header)
         val query="SELECT d.id,d.account_id,d.business_id FROM cloud_devices d JOIN cloud_memberships m ON m.business_id=d.business_id AND m.account_id=d.account_id JOIN cloud_accounts a ON a.id=d.account_id WHERE d.token_hash=? AND d.business_id=? AND d.revoked_at IS NULL AND d.expires_at>? AND m.active=TRUE AND m.role='OWNER' AND a.disabled=FALSE"+(if(lock)" FOR SHARE OF d,m,a" else "")
-        return jdbc.query(query,RowMapper {r,_->DeviceIdentity(r.getString(1),r.getString(2),r.getString(3))},sha256(token),uuid(businessId),Timestamp.from(clock.instant())).singleOrNull() ?: unauthenticated()
+        val identity=jdbc.query(query,RowMapper {r,_->DeviceIdentity(r.getString(1),r.getString(2),r.getString(3))},sha256(token),uuid(businessId),Timestamp.from(clock.instant())).singleOrNull() ?: unauthenticated()
+        return identity
     }
     fun enroll(header:String?,businessId:String,request:CloudDeviceEnrollRequest):CloudDeviceSession=transaction {
         val account=account(header);owner(account,businessId)
@@ -88,6 +89,14 @@ class CloudAccountService(private val jdbc:JdbcTemplate,private val tx:Transacti
     fun devices(header:String?,businessId:String):List<CloudDeviceSummary> {
         val account=account(header);owner(account,businessId)
         return jdbc.query("SELECT id,name,created_at,expires_at,revoked_at FROM cloud_devices WHERE business_id=? ORDER BY created_at,id",RowMapper {r,_->CloudDeviceSummary(r.getString(1),r.getString(2),r.getTimestamp(3).toInstant().toString(),r.getTimestamp(4).toInstant().toString(),r.getTimestamp(5)?.toInstant()?.toString())},uuid(businessId))
+    }
+    fun deviceDetails(header:String?,businessId:String):List<CloudDeviceDetails> {
+        val devices=devices(header,businessId)
+        return devices.map {device ->CloudDeviceDetails(device,jdbc.queryForObject("SELECT last_seen_at FROM cloud_devices WHERE id=?",Timestamp::class.java,uuid(device.id))?.toInstant()?.toString())}
+    }
+    internal fun touchDevice(header:String?,businessId:String) {
+        val identity=device(header,businessId)
+        jdbc.update("UPDATE cloud_devices SET last_seen_at=?,expires_at=GREATEST(expires_at,?) WHERE id=? AND revoked_at IS NULL AND expires_at>? AND (last_seen_at IS NULL OR last_seen_at<?)",Timestamp.from(clock.instant()),Timestamp.from(clock.instant().plus(Duration.ofDays(30))),uuid(identity.id),Timestamp.from(clock.instant()),Timestamp.from(clock.instant().minusSeconds(60)))
     }
     fun revoke(header:String?,businessId:String,deviceId:String)=transaction {
         val account=account(header);owner(account,businessId)

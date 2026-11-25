@@ -25,6 +25,8 @@ data class CloudLinkState(
     val credentialKey:String get()="device:"+endpoint.url+":"+businessId+":"+installationId
 }
 @Serializable
+data class CloudPairingAttempt(val authorizingShop:String,val endpoint:CloudEndpoint,val ticket:CloudPairingTicket,val deviceName:String="Shop device")
+@Serializable
 data class CloudPublishAttempt(val localShopId:String,val endpoint:CloudEndpoint,val deviceName:String,val request:CloudCreateBusinessRequest)
 @Serializable
 data class CloudJoinAttempt(val authorizingLocalShopId:String,val endpoint:CloudEndpoint,val businessId:String,val deviceName:String,val importId:String)
@@ -67,6 +69,9 @@ class CloudStateStore(private val files:PrivateCloudFiles) {
             else UUID.randomUUID().toString().also {files.write("installation-id",it)}
         }
     }
+    fun pairing(shop:String):CloudPairingAttempt?=files.read(key(shop)+".pairing.json")?.let {CloudCodec.json.decodeFromString<CloudPairingAttempt>(it)}
+    fun savePairing(value:CloudPairingAttempt) {require(value.ticket.secret.isEmpty());files.write(key(value.authorizingShop)+".pairing.json",CloudCodec.encode(value))}
+    fun finishPairing(shop:String)=files.remove(key(shop)+".pairing.json")
     fun load(localShopId:String):CloudLinkState? = files.read(key(localShopId)+".link.json")?.let {
         CloudCodec.json.decodeFromString<CloudLinkState>(it).also {state ->require(state.localShopId==localShopId && state.installationId==installationId) {"Cloud checkpoint belongs to a different shop or installation."}}
     }

@@ -18,6 +18,17 @@ class HttpCloudTransport(
     private val maximumBytes: Int = 96 * 1024 * 1024,
 ) : CloudTransport {
     init { require(connectTimeoutMillis in 1..120_000 && readTimeoutMillis in 1..180_000 && maximumBytes in 1024..128 * 1024 * 1024) }
+    override fun startPairing(endpoint:CloudEndpoint,request:CloudPairingStart):CloudPairingTicket = decode(exchange(endpoint,"POST","/api/v1/pairings",null,CloudCodec.encode(request)))
+    override fun reviewPairing(endpoint:CloudEndpoint,accountToken:String,businessId:String,request:CloudPairingCode):CloudPairingReview = decode(exchange(endpoint,"POST",businessPath(businessId)+"/pairings/review",accountToken,CloudCodec.encode(request)))
+    override fun approvePairing(endpoint:CloudEndpoint,accountToken:String,businessId:String,request:CloudPairingCode) {exchange(endpoint,"POST",businessPath(businessId)+"/pairings/approve",accountToken,CloudCodec.encode(request))}
+    override fun claimPairing(endpoint:CloudEndpoint,request:CloudPairingClaim):CloudPairingResult = decode(exchange(endpoint,"POST","/api/v1/pairings/claim",null,CloudCodec.encode(request)))
+    override fun finishPairing(endpoint:CloudEndpoint,request:CloudPairingClaim) {exchange(endpoint,"POST","/api/v1/pairings/finish",null,CloudCodec.encode(request))}
+    override fun capabilities(endpoint:CloudEndpoint):CloudAccountCapabilities = decode(exchange(endpoint,"GET","/api/v1/accounts/capabilities",null))
+    override fun sendVerification(endpoint:CloudEndpoint,token:String):CloudAccountNotice = decode(exchange(endpoint,"POST","/api/v1/accounts/verification/send",token))
+    override fun verifyEmail(endpoint:CloudEndpoint,token:String,request:CloudVerifyEmail):CloudAccountNotice = decode(exchange(endpoint,"POST","/api/v1/accounts/verification/confirm",token,CloudCodec.encode(request)))
+    override fun requestReset(endpoint:CloudEndpoint,request:CloudEmailRequest):CloudAccountNotice = decode(exchange(endpoint,"POST","/api/v1/accounts/password/request",null,CloudCodec.encode(request)))
+    override fun resetPassword(endpoint:CloudEndpoint,request:CloudResetPassword):CloudAccountNotice = decode(exchange(endpoint,"POST","/api/v1/accounts/password/reset",null,CloudCodec.encode(request)))
+    override fun deviceDetails(endpoint:CloudEndpoint,accountToken:String,businessId:String):List<CloudDeviceDetails> = decode(exchange(endpoint,"GET",businessPath(businessId)+"/devices/details",accountToken))
     override fun register(endpoint: CloudEndpoint, request: CloudAccountRequest): CloudAccountSession = decode(exchange(endpoint,"POST","/api/v1/accounts/register",null,CloudCodec.json.encodeToString(request)))
     override fun login(endpoint: CloudEndpoint, request: CloudAccountRequest): CloudAccountSession = decode(exchange(endpoint,"POST","/api/v1/accounts/login",null,CloudCodec.json.encodeToString(request)))
     override fun businesses(endpoint: CloudEndpoint, accountToken: String): List<CloudBusinessSummary> = decode(exchange(endpoint,"GET","/api/v1/businesses",accountToken))
@@ -55,7 +66,15 @@ class HttpCloudTransport(
             if(status !in 200..299) {
                 val error=connection.errorStream?.use {readBounded(it,16*1024)}.orEmpty()
                 val code=runCatching {CloudCodec.json.parseToJsonElement(error).jsonObject["code"]?.jsonPrimitive?.content}.getOrNull()?.takeIf {it.matches(Regex("[a-z_]{1,80}"))} ?: "cloud_request_failed"
-                val message=when(status) {401->"Cloud sign-in expired or this device was revoked. Sign in again; local work is kept.";403->"This cloud account or device cannot access that shop.";409->if(code=="schema_mismatch") "This app and cloud server need matching data versions. Update the app before syncing." else "The cloud request needs review. Local work is kept.";413->"This sync batch exceeds the server's supported size. Local work is kept.";429->"Cloud requests are temporarily limited. Sync will retry later.";in 300..399->"The cloud server redirected the request. Check its configured HTTPS address.";else->"The cloud server could not complete the request. Local work is kept for retry."}
+                val message=when(code) {
+                    "email_unavailable"->"Email recovery is not configured yet. Your local shop access is unchanged."
+                    "pairing_expired","pairing_unavailable"->"This device code is incorrect, expired or already used. Get a new code on the new device."
+                    "code_not_accepted"->"The email code is incorrect, expired or already used. Request a new code."
+                    "device_already_connected"->"This device is already known. Sign in to renew its access."
+                    "sign_in_failed"->"The email or account password was not accepted. Try again or choose Forgot password."
+                    "account_exists"->"This email already has an account. Choose Sign in."
+                    else->when(status) {401->"Cloud sign-in expired or this device was revoked. Sign in again; local work is kept.";403->"This cloud account or device cannot access that shop.";409->if(code=="schema_mismatch") "This app and cloud server need matching data versions. Update the app before syncing." else "The cloud request needs review. Local work is kept.";413->"This sync batch exceeds the server's supported size. Local work is kept.";429->"Cloud requests are temporarily limited. Sync will retry later.";in 300..399->"The cloud server redirected the request. Check its configured HTTPS address.";else->"The cloud server could not complete the request. Local work is kept for retry."}
+                }
                 throw CloudHttpException(status,code,message,connection.getHeaderField("Retry-After")?.toLongOrNull()?.coerceIn(1,3600))
             }
             if(status==204) return ""

@@ -3,6 +3,8 @@ package pos.cloud.client
 import pos.cloud.protocol.*
 
 /** Business persistence remains owned by the installed app, never by the HTTP client. */
+const val CLOUD_NEW_INSTALLATION = "new-installation"
+
 interface CloudLocalStore {
     /** Require the current local owner before configuring access or publishing records. */
     fun authorizeCloudSetup(localShopId: String)
@@ -29,6 +31,17 @@ interface CloudCredentialStore {
 }
 
 interface CloudTransport {
+    fun startPairing(endpoint:CloudEndpoint,request:CloudPairingStart):CloudPairingTicket = error("Update the cloud connection client.")
+    fun reviewPairing(endpoint:CloudEndpoint,accountToken:String,businessId:String,request:CloudPairingCode):CloudPairingReview = error("Update the cloud connection client.")
+    fun approvePairing(endpoint:CloudEndpoint,accountToken:String,businessId:String,request:CloudPairingCode) {error("Update the cloud connection client.")}
+    fun claimPairing(endpoint:CloudEndpoint,request:CloudPairingClaim):CloudPairingResult = error("Update the cloud connection client.")
+    fun finishPairing(endpoint:CloudEndpoint,request:CloudPairingClaim) {error("Update the cloud connection client.")}
+    fun capabilities(endpoint:CloudEndpoint):CloudAccountCapabilities = CloudAccountCapabilities()
+    fun sendVerification(endpoint:CloudEndpoint,token:String):CloudAccountNotice = error("Email delivery is unavailable.")
+    fun verifyEmail(endpoint:CloudEndpoint,token:String,request:CloudVerifyEmail):CloudAccountNotice = error("Email delivery is unavailable.")
+    fun requestReset(endpoint:CloudEndpoint,request:CloudEmailRequest):CloudAccountNotice = error("Email delivery is unavailable.")
+    fun resetPassword(endpoint:CloudEndpoint,request:CloudResetPassword):CloudAccountNotice = error("Email delivery is unavailable.")
+    fun deviceDetails(endpoint:CloudEndpoint,accountToken:String,businessId:String):List<CloudDeviceDetails> = devices(endpoint,accountToken,businessId).map {CloudDeviceDetails(it)}
     fun register(endpoint: CloudEndpoint, request: CloudAccountRequest): CloudAccountSession
     fun login(endpoint: CloudEndpoint, request: CloudAccountRequest): CloudAccountSession
     fun businesses(endpoint: CloudEndpoint, accountToken: String): List<CloudBusinessSummary>

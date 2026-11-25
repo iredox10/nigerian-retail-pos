@@ -27,6 +27,7 @@ import kotlin.test.*
 /** Real PostgreSQL and real HTTP. Not substituted with an in-memory SQL dialect. */
 @EnabledIfEnvironmentVariable(named="CLOUD_TEST_JDBC_URL",matches=".+")
 @SpringBootTest(webEnvironment=SpringBootTest.WebEnvironment.RANDOM_PORT)
+@org.springframework.context.annotation.Import(CloudServerIntegrationTest.EmailConfiguration::class)
 class CloudServerIntegrationTest {
     @LocalServerPort private var port:Int=0
     @Autowired private lateinit var jdbc:JdbcTemplate
@@ -310,6 +311,82 @@ class CloudServerIntegrationTest {
             assertEquals(1100L,r.expectedCash(t.id,r.activeCashShift(t.id)!!.id))
             assertEquals(1,r.returnableQuantities(t.id,"original-sale").values.single())
         }
+    }
+    @Autowired private lateinit var mailbox:TestMailbox
+    @org.springframework.boot.test.context.TestConfiguration(proxyBeanMethods=false)
+    class EmailConfiguration {
+        @org.springframework.context.annotation.Bean @org.springframework.context.annotation.Primary
+        fun testMailbox()=TestMailbox()
+    }
+    class TestMailbox:CloudEmailDelivery {
+        @Volatile var enabled=true
+        val messages=java.util.concurrent.ConcurrentHashMap<String,String>()
+        override fun available()=enabled
+        override fun send(address:String,purpose:String,code:String) {messages["$address:$purpose"]=code}
+    }
+    @Test fun pairingRequiresOwnerReviewExpiresAndCannotReplayRevokedAccess() {
+        val owner=account();val stranger=account();val business=publish(owner)
+        val client=HttpCloudTransport();val endpoint=CloudEndpoint.parse("http://127.0.0.1:$port",true)
+        val ticket=client.startPairing(endpoint,CloudPairingStart("Owner phone",UUID.randomUUID().toString()))
+        assertFalse(ticket.toString().contains(ticket.secret))
+        assertEquals("waiting",client.claimPairing(endpoint,CloudPairingClaim(ticket.id,ticket.secret)).status)
+        assertEquals(401,send("POST","/pairings/claim",CloudCodec.encode(CloudPairingClaim(ticket.id,"A".repeat(43)))).status)
+        assertEquals(403,send("POST","/businesses/${business.id}/pairings/review",CloudCodec.encode(CloudPairingCode(ticket.code)),stranger.accessToken).status)
+        val review=client.reviewPairing(endpoint,owner.accessToken,business.id,CloudPairingCode(ticket.code))
+        assertEquals("Owner phone",review.deviceName)
+        assertEquals(400,send("POST","/businesses/${business.id}/pairings/approve",CloudCodec.encode(CloudPairingCode(ticket.code)),owner.accessToken).status)
+        client.approvePairing(endpoint,owner.accessToken,business.id,CloudPairingCode(ticket.code,review.id))
+        assertEquals(400,send("POST","/businesses/${business.id}/pairings/approve",CloudCodec.encode(CloudPairingCode(ticket.code,review.id)),owner.accessToken).status)
+        val result=client.claimPairing(endpoint,CloudPairingClaim(ticket.id,ticket.secret))
+        assertEquals("approved",result.status)
+        val device=requireNotNull(result.device)
+        assertEquals(device,client.claimPairing(endpoint,CloudPairingClaim(ticket.id,ticket.secret)).device)
+        assertEquals(business.id,client.bootstrap(endpoint,device.deviceToken,business.id).businessId)
+        assertNotNull(client.deviceDetails(endpoint,owner.accessToken,business.id).single().lastSeenAt)
+        client.revokeDevice(endpoint,owner.accessToken,business.id,device.deviceId)
+        assertEquals(401,send("POST","/pairings/claim",CloudCodec.encode(CloudPairingClaim(ticket.id,ticket.secret))).status)
+        client.finishPairing(endpoint,CloudPairingClaim(ticket.id,ticket.secret))
+        assertEquals(410,send("POST","/pairings/claim",CloudCodec.encode(CloudPairingClaim(ticket.id,ticket.secret))).status)
+        val expired=client.startPairing(endpoint,CloudPairingStart("Expired phone",UUID.randomUUID().toString()))
+        jdbc.update("UPDATE cloud_pairings SET expires_at=now()-interval '1 second' WHERE id=?",UUID.fromString(expired.id))
+        assertEquals(410,send("POST","/pairings/claim",CloudCodec.encode(CloudPairingClaim(expired.id,expired.secret))).status)
+    }
+    @Test fun verifiedEmailResetConsumesCodeAndRevokesAccountDeviceAndPairingAccess() {
+        val email="recovery-${UUID.randomUUID()}@example.test"
+        val original="Original-account-password-2026";val changed="Changed-account-password-2026"
+        val account:CloudAccountSession=CloudCodec.decode(send("POST","/accounts/register",CloudCodec.encode(CloudAccountRequest(email,original))).body)
+        val business=publish(account);val device=enroll(account,business)
+        val client=HttpCloudTransport();val endpoint=CloudEndpoint.parse("http://127.0.0.1:$port",true)
+        assertTrue(client.capabilities(endpoint).emailRecoveryAvailable)
+        client.requestReset(endpoint,CloudEmailRequest(email));assertNull(mailbox.messages["$email:reset"])
+        client.sendVerification(endpoint,account.accessToken)
+        val verification=requireNotNull(mailbox.messages["$email:verify"])
+        assertEquals(400,send("POST","/accounts/verification/confirm",CloudCodec.encode(CloudVerifyEmail("wrong")),account.accessToken).status)
+        client.verifyEmail(endpoint,account.accessToken,CloudVerifyEmail(verification))
+        assertEquals(400,send("POST","/accounts/verification/confirm",CloudCodec.encode(CloudVerifyEmail(verification)),account.accessToken).status)
+        val ticket=client.startPairing(endpoint,CloudPairingStart("Pending device",UUID.randomUUID().toString()))
+        val review=client.reviewPairing(endpoint,account.accessToken,business.id,CloudPairingCode(ticket.code))
+        client.approvePairing(endpoint,account.accessToken,business.id,CloudPairingCode(ticket.code,review.id))
+        val unknown=client.requestReset(endpoint,CloudEmailRequest("unknown-${UUID.randomUUID()}@example.test"))
+        val known=client.requestReset(endpoint,CloudEmailRequest(email));assertEquals(unknown,known)
+        val code=requireNotNull(mailbox.messages["$email:reset"])
+        client.resetPassword(endpoint,CloudResetPassword(email,code,changed))
+        assertEquals(400,send("POST","/accounts/password/reset",CloudCodec.encode(CloudResetPassword(email,code,changed))).status)
+        assertEquals(401,send("GET","/businesses",token=account.accessToken).status)
+        assertEquals(401,send("GET","/businesses/${business.id}/bootstrap",token=device.deviceToken).status)
+        assertEquals(410,send("POST","/pairings/claim",CloudCodec.encode(CloudPairingClaim(ticket.id,ticket.secret))).status)
+        assertEquals(401,send("POST","/accounts/login",CloudCodec.encode(CloudAccountRequest(email,original))).status)
+        assertEquals(200,send("POST","/accounts/login",CloudCodec.encode(CloudAccountRequest(email,changed))).status)
+        assertEquals(business.revision,jdbc.queryForObject("SELECT revision FROM cloud_businesses WHERE id=?",Long::class.java,UUID.fromString(business.id)))
+    }
+    @Test fun recoveryUnavailableWithoutDeliveryAndCodeGuessingIsBounded() {
+        val account=account();mailbox.enabled=false
+        try {
+            assertFalse(CloudCodec.decode<CloudAccountCapabilities>(send("GET","/accounts/capabilities").body).emailRecoveryAvailable)
+            assertEquals(503,send("POST","/accounts/password/request",CloudCodec.encode(CloudEmailRequest("missing@example.test"))).status)
+        } finally {mailbox.enabled=true}
+        repeat(5) {assertEquals(400,send("POST","/accounts/verification/confirm",CloudCodec.encode(CloudVerifyEmail("WRONG-CODEX")),account.accessToken).status)}
+        assertEquals(429,send("POST","/accounts/verification/confirm",CloudCodec.encode(CloudVerifyEmail("WRONG-CODEX")),account.accessToken).status)
     }
     companion object {
         @JvmStatic @DynamicPropertySource fun properties(registry:DynamicPropertyRegistry) {

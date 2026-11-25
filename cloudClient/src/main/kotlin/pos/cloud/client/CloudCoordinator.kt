@@ -48,6 +48,72 @@ class CloudCoordinator(
     fun signIn(endpoint:CloudEndpoint,email:String,password:String):CloudAccountSession=transport.login(endpoint,CloudAccountRequest(email.trim(),password))
     fun businesses(endpoint:CloudEndpoint,account:CloudAccountSession):List<CloudBusinessSummary> =transport.businesses(endpoint,account.accessToken)
 
+    fun capabilities(endpoint:CloudEndpoint)=transport.capabilities(endpoint)
+    fun sendVerification(endpoint:CloudEndpoint,account:CloudAccountSession)=transport.sendVerification(endpoint,account.accessToken)
+    fun verifyEmail(endpoint:CloudEndpoint,account:CloudAccountSession,code:String)=transport.verifyEmail(endpoint,account.accessToken,CloudVerifyEmail(code))
+    fun requestPasswordReset(endpoint:CloudEndpoint,email:String)=transport.requestReset(endpoint,CloudEmailRequest(email))
+    fun resetAccountPassword(endpoint:CloudEndpoint,email:String,code:String,password:String)=transport.resetPassword(endpoint,CloudResetPassword(email,code,password))
+    fun startPairing(shop:String,endpoint:CloudEndpoint,name:String):CloudPairingTicket=lockFor("pairing:$shop").withLock {
+        local.authorizeCloudSetup(shop);validDeviceName(name)
+        states.pairing(shop)?.let {attempt ->
+            if(attempt.endpoint==endpoint && Instant.parse(attempt.ticket.expiresAt).isAfter(clock())) {
+                credentials.read("pairing:"+attempt.ticket.id)?.let {return@withLock attempt.ticket.copy(secret=it)}
+            }
+        }
+        val ticket=transport.startPairing(endpoint,CloudPairingStart(name,states.installationId))
+        require(ticket.secret.matches(Regex("[A-Za-z0-9_-]{43}")) && Instant.parse(ticket.expiresAt).isAfter(clock()))
+        credentials.write("pairing:"+ticket.id,ticket.secret)
+        states.savePairing(CloudPairingAttempt(shop,endpoint,ticket.copy(secret=""),name))
+        ticket
+    }
+    fun discardPairing(shop:String) = lockFor("pairing:$shop").withLock {
+        states.pairing(shop)?.let {attempt ->
+            credentials.read("pairing:"+attempt.ticket.id)?.let {secret ->
+                runCatching {transport.finishPairing(attempt.endpoint,CloudPairingClaim(attempt.ticket.id,secret))}
+            }
+            credentials.remove("pairing:"+attempt.ticket.id)
+        }
+        states.finishPairing(shop)
+    }
+    fun pollPairing(endpoint:CloudEndpoint,ticket:CloudPairingTicket)=transport.claimPairing(endpoint,CloudPairingClaim(ticket.id,ticket.secret))
+    fun reviewPairing(shop:String,account:CloudAccountSession,code:String):CloudPairingReview {
+        local.authorizeCloudSetup(shop);val link=requireNotNull(states.load(shop))
+        return transport.reviewPairing(link.endpoint,account.accessToken,link.businessId,CloudPairingCode(code))
+    }
+    fun approvePairing(shop:String,account:CloudAccountSession,code:String,review:CloudPairingReview) {
+        local.authorizeCloudSetup(shop);val link=requireNotNull(states.load(shop))
+        transport.approvePairing(link.endpoint,account.accessToken,link.businessId,CloudPairingCode(code,review.id))
+    }
+    fun joinPaired(shop:String,endpoint:CloudEndpoint,ticket:CloudPairingTicket,localName:String,password:String):String=lockFor("pairing:$shop").withLock {
+        ensureOpen()
+        val result=pollPairing(endpoint,ticket)
+        val device=requireNotNull(result.device) {"Ask the owner to approve this device first."}
+        require(result.status=="approved")
+        states.links().find {it.endpoint==endpoint && it.businessId==device.businessId}?.let {return@withLock it.localShopId}
+        local.authorizeCloudSetup(shop)
+        require(localName.isNotBlank() && password.length in 8..1024) {"Enter a shop name and a device unlock password of at least 8 characters."}
+        val schema=local.schema(shop)
+        val bootstrap=transport.bootstrap(endpoint,device.deviceToken,device.businessId)
+        checkBootstrap(bootstrap,device.businessId,schema)
+        local.authorizeCloudSetup(shop)
+        val attempt=states.joinAttempt(shop,device.businessId) ?: CloudJoinAttempt(shop,endpoint,device.businessId,requireNotNull(states.pairing(shop)).deviceName,ticket.id).also(states::saveJoin)
+        require(attempt.endpoint==endpoint)
+        val key="device:"+endpoint.url+":"+device.businessId+":"+states.installationId
+        credentials.write(key,device.deviceToken)
+        val id=local.importShop(shop,attempt.importId,bootstrap,localName.trim(),password)
+        val now=clock().toString()
+        states.save(CloudLinkState(id,endpoint,device.businessId,device.deviceId,attempt.deviceName,states.installationId,bootstrap.revision,schema,bootstrap.snapshot,lastSyncedAt=now))
+        states.finishJoin(attempt);states.finishPairing(shop);credentials.remove("pairing:"+ticket.id)
+        // Local success is durable even when acknowledgment cleanup cannot reach the server.
+        runCatching {transport.finishPairing(endpoint,CloudPairingClaim(ticket.id,ticket.secret))}
+        statuses[id]=CloudSyncStatus("up_to_date",lastSyncedAt=now,lastContactAt=now,message="Shop downloaded and saved on this device.")
+        id
+    }
+    fun deviceDetails(shop:String,account:CloudAccountSession):List<CloudDeviceDetails> {
+        local.authorizeCloudSetup(shop);val link=requireNotNull(states.load(shop))
+        return transport.deviceDetails(link.endpoint,account.accessToken,link.businessId)
+    }
+
     /** The exact first request is checkpointed before publication, including across lost replies. */
     fun publish(localShopId:String,endpoint:CloudEndpoint,account:CloudAccountSession,deviceName:String):CloudConnectionInfo=lockFor(localShopId).withLock {
         ensureOpen();local.authorizeCloudSetup(localShopId);validDeviceName(deviceName)
