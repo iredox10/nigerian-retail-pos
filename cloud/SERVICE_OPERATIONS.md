@@ -14,7 +14,7 @@ Resend supports the server's SMTP integration. Configure these privately in the 
 
 You can also run `python3 cloud/ops/configure_resend.py --sender accounts@your-verified-domain` in your own terminal. It prompts privately for the key and sends the hosting API request without putting secrets in shell arguments.
 
-These are configuration names, not evidence that delivery is working. Test with an address you control before rollout. The apps explicitly say recovery is unavailable when the service lacks mail configuration. The server requires encrypted SMTP, uses bounded timeouts and never logs the challenge code. Verification and recovery codes expire after ten minutes, are single-use, and have bounded attempts. Do not use Resend's test sender for unrestricted production enrollment.
+These are configuration names, not evidence that delivery is working. Test with an address you control before rollout. The apps explicitly say recovery is unavailable when the service lacks mail configuration. The server requires encrypted SMTP with server-hostname verification and TLS 1.2/1.3, uses bounded timeouts and never logs the challenge code. Verification and recovery codes expire after ten minutes, are single-use, and have bounded attempts. Do not use Resend's test sender for unrestricted production enrollment.
 
 References: [Resend SMTP](https://resend.com/changelog/smtp-service), [Spring mail](https://docs.spring.io/spring-boot/reference/io/email.html).
 

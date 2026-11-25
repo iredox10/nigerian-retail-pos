@@ -31,6 +31,8 @@ class SmtpCloudEmailDelivery(private val environment:Environment):CloudEmailDeli
             javaMailProperties.apply {
                 setProperty("mail.smtp.auth",(!username.isNullOrBlank()).toString())
                 setProperty("mail.smtp.starttls.enable","true");setProperty("mail.smtp.starttls.required","true")
+                setProperty("mail.smtp.ssl.checkserveridentity","true")
+                setProperty("mail.smtp.ssl.protocols","TLSv1.3 TLSv1.2")
                 setProperty("mail.smtp.connectiontimeout","5000");setProperty("mail.smtp.timeout","5000");setProperty("mail.smtp.writetimeout","5000")
             }
         }
