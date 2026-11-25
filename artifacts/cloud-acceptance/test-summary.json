@@ -1,0 +1,81 @@
+{
+  "verifiedAtUtc": "2026-11-25T09:29:47.442848+00:00",
+  "modules": {
+    "shared": {
+      "tests": 79,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "desktopApp": {
+      "tests": 603,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "cloudProtocol": {
+      "tests": 25,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "cloudClient": {
+      "tests": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "businessCore": {
+      "tests": 4,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "server": {
+      "tests": 15,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "androidApp": {
+      "tests": 9,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    }
+  },
+  "physicalPhone": {
+    "model": "itel A666L",
+    "android": "13",
+    "api": 33,
+    "qaPackage": "ng.retailpos.android.acceptance",
+    "regularAppChanged": false,
+    "lastFullSuite": {
+      "tests": 30,
+      "passed": 28,
+      "failed": 2,
+      "failureReason": "Phone could not resolve the HTTPS backend hostname; both live registration checks failed before business actions."
+    },
+    "additionalOfflineOwnerImportTest": {
+      "tests": 1,
+      "passed": 1,
+      "seconds": 27.42,
+      "scope": "Genuine owner/session adapter, separate local unlock, permission denial and idempotent import; executed before the extra image-byte assertion was added."
+    },
+    "latestBuildPhoneVerification": "Awaiting stable USB reconnection; final image assertion and real-user-interaction wiring not yet verified on device."
+  },
+  "backend": {
+    "release": "v7",
+    "sourceCommit": "f9653b3",
+    "url": "https://nigerian-retail-pos-cloud-a03da41beea8.herokuapp.com",
+    "localHttpPostgresIntegrationTests": 11,
+    "gzipBootstrapVerified": true
+  },
+  "windows": {
+    "installerAndCiConfigured": true,
+    "executed": false,
+    "reason": "No Windows host; GitHub CLI/API connections timed out."
+  },
+  "debugApkSha256": "0fd9b51fa0a8ea90b0a4c6b148b2ecd293179bbc625b3e810a0ea87dbc8193e9",
+  "acceptanceApkSha256": "ff197d831a9138e89fbb94cb97edfe3fd4efa12a1883e902229a09a56767a501"
+}

@@ -6,6 +6,8 @@ An offline-first Kotlin desktop retail POS for Nigerian merchants, with an Andro
 
 Desktop and Android now have **More → Cloud connection** for owner cloud sign-in, connecting the first shop, downloading it on a second device, device revocation and foreground synchronization. The initial Heroku backend is deployed at [the POS cloud service](https://nigerian-retail-pos-cloud-a03da41beea8.herokuapp.com/api/v1/health). Ordinary local work remains available without internet. Sync does not confirm bank/card payments.
 
+Physical QA builds, device prerequisites and guarded upgrade steps are described in [physical Android acceptance](cloud/PHYSICAL_ANDROID_ACCEPTANCE.md); Windows installer/CI instructions are in [Windows acceptance](cloud/WINDOWS_ACCEPTANCE.md).
+
 Read [the connection guide](cloud/CONNECTION_GUIDE.md) before linking shop records, and [BUILD_STATUS.md](BUILD_STATUS.md) for tested behavior and outstanding acceptance. Local passwords, staff access and recovery codes remain device-local. Conflicts retain records for review; there is no force-overwrite action.
 
 ## Run

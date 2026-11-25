@@ -2,6 +2,22 @@
 
 23 November 2026 · Orders, stock holds, promotions and purchasing
 
+## Cloud acceptance and physical-phone findings — 25 November 2026
+
+The shared repository now requires the active-shop session for ordinary business reads as well as writes. A new physical-phone owner/import check exposed the prior gap; the correction retains workspace-name listing for the locked picker and leaves trusted recovery on a separate connection. Denial/revocation regression tests now inspect records only after restoring an authorized test session. Android automatic reads no longer count as user activity; actual Activity user-interaction events refresh the idle timer. System-bar icons use the app's light canvas rather than becoming white on white.
+
+**738 JVM tests pass**, zero failures/errors/skips: 79 shared + 603 desktop + 25 protocol + 3 client + 4 core + 15 backend + 9 Android JVM. Real HTTP/Postgres coverage now includes stale counts after another device's sale, competing returns that would exceed the original sale, and restart after database commit but before file checkpoint completion. Exact retries preserve accepted history and newer local work. JSON bootstrap downloads are gzip-compressed; the integration test verified a response smaller than half its decoded size and exact decoding by the real client.
+
+Heroku **release v7**, source `f9653b3`, is deployed and its public health endpoint returned `status=ok`, protocol 1. Existing service plans remain one Basic dyno and Essential-0 Postgres. No merchant shop was published by this acceptance work.
+
+A separate **Retail POS QA** package was installed on the user's physical **itel A666L, Android 13/API 33**. In the latest full 30-case run, **28 local cases passed and the two live HTTPS cases failed before registration because the phone could not resolve the backend hostname**. A separate genuine owner/import test then passed in 27.42 seconds without internet: current-shop access remained guarded, the imported shop required its own password, retry did not duplicate the shop, and cashier import was rejected. This was before the final image-byte assertion was added. Earlier failures are retained in local diagnostic logs; no all-green physical suite is claimed.
+
+The final normal and QA APKs compile successfully, including the later interaction-wiring fix. Final phone verification and regular-app installation remain pending because USB disconnected again after the user restored internet. The regular `ng.retailpos.android` installation/data were not changed. Current debug APK SHA-256: `0fd9b51fa0a8ea90b0a4c6b148b2ecd293179bbc625b3e810a0ea87dbc8193e9`; acceptance APK: `ff197d831a9138e89fbb94cb97edfe3fd4efa12a1883e902229a09a56767a501`.
+
+Windows per-user MSI/EXE configuration and a Windows Server 2022 GitHub Actions job are committed, including actual owner-ACL/secret round-trip assertions and installer/report artifacts. **No Windows run or installer is claimed:** this host is Linux and GitHub CLI/API connections timed out. The ACL test passed on Linux; its Windows branch awaits a Windows runner.
+
+[Reviewed execution summary](artifacts/cloud-acceptance/test-summary.json), [physical-phone instructions](cloud/PHYSICAL_ANDROID_ACCEPTANCE.md), [Windows instructions](cloud/WINDOWS_ACCEPTANCE.md), [remaining acceptance checklist](cloud/ACCEPTANCE_TODO.md). Interactive two-app enrollment, full keyboard/accessibility and idle-timer acceptance, final native image transport, large-data/low-spec performance, power-loss/independent-machine recovery and merchant usability remain unperformed. The initial phone screenshot captured the system-icon visibility problem before its fix; no after-fix phone render is claimed.
+
 ## Initial desktop–Android cloud connection — 24 November 2026
 
 Cloud exclusion is superseded for this requested connection work. The initial Spring Boot/Postgres backend is deployed on Heroku as `nigerian-retail-pos-cloud`, release **v6**, backend source **a669335**. Its public HTTPS `/api/v1/health` returned `{"status":"ok","protocolVersion":1}` against the provisioned database. Hosting uses **one Basic dyno and Essential-0 Postgres**, currently $7 + $5 per month. Only explicitly disposable QA accounts/businesses were published during verification; existing merchant workspaces were not uploaded or linked automatically.
