@@ -40,13 +40,44 @@ class AndroidCloudOwnerFlowTest {
         private fun files(name:String)=PrivateCloudFiles(directory.resolve(name).toPath(),CloudFileProtection {path,isDir ->
             LocalFilePermissions.restrict(path,if(isDir)"rwx------" else "rw-------")
         })
+        val local:RepositoryCloudLocalStore
         val cloud:CloudCoordinator
         init {
             repo.setPermissionCheck {id,permission ->val current=requireNotNull(active);require(current.tenantId==id);access.requireSession(current,permission,false)}
-            cloud=CloudCoordinator(RepositoryCloudLocalStore(repo,owners,{PosRepository(directory.resolve("pos.db").path)},::owner),
+            local=RepositoryCloudLocalStore(repo,owners,{PosRepository(directory.resolve("pos.db").path)},::owner)
+            cloud=CloudCoordinator(local,
                 HttpCloudTransport(),CloudStateStore(files("checkpoints")),AndroidCloudCredentials(files("tokens")))
         }
         override fun close() {cloud.close();access.close();repo.close()}
+    }
+    @Test fun importedShopRequiresItsOwnOwnerUnlockEvenWithoutInternet() {
+        val context=ApplicationProvider.getApplicationContext<Context>()
+        val root=File(context.cacheDir,"offline-owner-${UUID.randomUUID()}").apply {mkdirs()}
+        LocalSqlite.installPlatformAdapter(AndroidSqliteDriver::open);AndroidPrivateFiles.install()
+        try {Device(root.resolve("source").apply {mkdirs()}).use {a ->Device(root.resolve("receiver").apply {mkdirs()}).use {b ->
+            val product=a.repo.addProduct(a.setup.id,"Offline import soap","piece",55000,10.0)
+            val bitmap=Bitmap.createBitmap(64,64,Bitmap.Config.ARGB_8888).apply {eraseColor(Color.CYAN)}
+            val image=ImageUpload.fromBytes(ByteArrayOutputStream().also {bitmap.compress(Bitmap.CompressFormat.PNG,100,it)}.toByteArray());bitmap.recycle()
+            a.repo.saveImage(a.setup.id,"product",product.id,image,0,"Offline QA image","offline-image")
+            val original=CloudBootstrapReply("offline-business",0,a.repo.cloudBusinessSchema(),a.repo.cloudBusinessSnapshot(a.setup.id,"offline-business"))
+            val bootstrap=CloudCodec.decode<CloudBootstrapReply>(CloudCodec.encode(original))
+            val imported=b.local.importShop(b.setup.id,"offline-import",bootstrap,"Offline downloaded QA","Separate-owner-2026")
+            assertNotEquals(b.setup.id,imported)
+            assertThrows(IllegalArgumentException::class.java) {b.repo.products(imported)}
+            assertThrows(IllegalArgumentException::class.java) {b.repo.exportCloudBusinessSnapshot(imported)}
+            assertNull(b.access.unlockOwner(imported,"Local-QA-owner-2026"))
+            b.active=requireNotNull(b.access.unlockOwner(imported,"Separate-owner-2026"))
+            assertEquals(product.id,b.repo.products(imported).single().id)
+            assertArrayEquals(image.bytes,b.repo.imageBytes(imported,requireNotNull(b.repo.imageSelection(imported,"product",product.id).assetId)))
+            b.active=b.originalOwner
+            assertEquals(imported,b.local.importShop(b.setup.id,"offline-import",bootstrap,"Retry name","Other-password-2026"))
+            assertEquals(2,b.repo.tenants().size)
+            assertTrue(b.owners.unlock(imported,"Separate-owner-2026"))
+            val cashier=b.access.addMember(b.originalOwner,"QA cashier",StaffRole.CASHIER,"Cashier-owner-2026")
+            b.active=requireNotNull(b.access.unlockStaff(b.setup.id,cashier.id,"Cashier-owner-2026"))
+            assertThrows(IllegalArgumentException::class.java) {b.local.importShop(b.setup.id,"denied",bootstrap,"Denied shop","Separate-owner-2026")}
+            assertEquals(2,b.repo.tenants().size)
+        }}} finally {root.deleteRecursively()}
     }
     @Test fun ownerPublishImageImportUnlockSyncAndRevokeUseTheRealApplicationBoundary() {
         val url=InstrumentationRegistry.getArguments().getString("cloudUrl")

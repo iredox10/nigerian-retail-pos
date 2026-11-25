@@ -33,6 +33,8 @@ class MainActivity : ComponentActivity() {
     private val backgroundHandler = android.os.Handler(android.os.Looper.getMainLooper())
     private val backgroundLock = Runnable { lockAction?.invoke() }
     private var lockAction: (() -> Unit)? = null
+    private var interactionAction: (() -> Unit)? = null
+    private var lastInteractionMillis = Long.MIN_VALUE
     override fun onCreate(savedInstanceState:Bundle?) {
         super.onCreate(savedInstanceState)
         // PosTheme uses a light canvas; system icons must remain visible on it,
@@ -46,7 +48,15 @@ class MainActivity : ComponentActivity() {
         pos.android.platform.AndroidPrivateFiles.install()
         repo=PosRepository(filesDir.resolve("pos.db").path)
         access=StaffAccess(filesDir.toPath())
-        setContent {PosTheme {AndroidApp(repo,access) {lockAction=it}}}
+        setContent {PosTheme {AndroidApp(repo,access,{lockAction=it},{interactionAction=it})}}
+    }
+    override fun onUserInteraction() {
+        super.onUserInteraction()
+        val now=android.os.SystemClock.elapsedRealtime()
+        if(lastInteractionMillis==Long.MIN_VALUE || now-lastInteractionMillis>=1000) {
+            lastInteractionMillis=now
+            interactionAction?.invoke()
+        }
     }
     override fun onStart() {super.onStart();backgroundHandler.removeCallbacks(backgroundLock)}
     override fun onStop() {backgroundHandler.postDelayed(backgroundLock,60_000);super.onStop()}
@@ -54,7 +64,7 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-private fun AndroidApp(repo:PosRepository,access:StaffAccess,installLock:((()->Unit))->Unit) {
+private fun AndroidApp(repo:PosRepository,access:StaffAccess,installLock:((()->Unit))->Unit,installInteraction:((()->Unit))->Unit) {
     var session by remember {mutableStateOf<StaffSession?>(null)}
     var tenant by remember {mutableStateOf<Tenant?>(null)}
     var revision by remember {mutableIntStateOf(0)}
@@ -98,10 +108,13 @@ private fun AndroidApp(repo:PosRepository,access:StaffAccess,installLock:((()->U
     fun changed() {revision++;tenant?.let {cloud.localChanged(it.id)}}
     SideEffect {
         installLock(::lock)
+        installInteraction {session?.let {identity ->
+            try {access.touchSession(identity)} catch(_:Exception) {lock()}
+        }}
         repo.setPermissionCheck {id,permission ->
             val active=requireNotNull(session) {"Sign in to use this shop."}
             require(active.tenantId==id) {"Sign in to this shop."}
-            access.requireSession(active,permission,touch=!Thread.currentThread().name.startsWith("retail-cloud-sync"))
+            access.requireSession(active,permission,touch=false)
         }
         repo.setActorProvider {id ->session?.takeIf {it.tenantId==id}?.let {AuditActor(id,it.staffId,it.name,it.role)}}
         repo.setMinimumPriceApprovalCheck {id,grant,request -> val active=requireNotNull(session);require(active.tenantId==id);access.requireMinimumPriceApproval(active,grant,request)}
