@@ -184,14 +184,18 @@
     "packagesTab": "Packs"
   },
   "cloudConnection": {
-    "title": "Cloud connection",
-    "signIn": "Sign in to cloud",
-    "register": "Create cloud account",
-    "syncNow": "Sync now",
+    "title": "Connected devices",
+    "signIn": "Sign in",
+    "register": "Create account",
+    "syncNow": "Check for updates",
     "publish": "Connect this shop",
-    "join": "Download as a new local shop",
-    "notConnected": "Saved here · Cloud not connected",
-    "waiting": "Saved here · Waiting to sync",
-    "needsReview": "Saved here · Sync needs review"
+    "join": "Download my shop",
+    "notConnected": "Saved on this device",
+    "waiting": "Saved on this device · Waiting to share",
+    "needsReview": "Saved on this device · Some changes need checking",
+    "existing": "Use my existing shop",
+    "pair": "Get connection code",
+    "approve": "Allow this device",
+    "remove": "Remove access"
   }
 }

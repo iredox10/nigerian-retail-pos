@@ -48,7 +48,7 @@ class MainActivity : ComponentActivity() {
         pos.android.platform.AndroidPrivateFiles.install()
         repo=PosRepository(filesDir.resolve("pos.db").path)
         access=StaffAccess(filesDir.toPath())
-        setContent {PosTheme {AndroidApp(repo,access,{lockAction=it},{interactionAction=it})}}
+        setContent {PosTheme {pos.android.cloud.PairingScannerProvider {AndroidApp(repo,access,{lockAction=it},{interactionAction=it})}}}
     }
     override fun onUserInteraction() {
         super.onUserInteraction()
@@ -122,8 +122,12 @@ private fun AndroidApp(repo:PosRepository,access:StaffAccess,installLock:((()->U
     }
     LaunchedEffect(session?.token) {while(session!=null) {kotlinx.coroutines.delay(15_000);if(runCatching {access.requireSession(requireNotNull(session),StaffPermission.SELL,false)}.isFailure)lock()}}
     val current=tenant;val active=session
+    var bringExistingShop by remember {mutableStateOf(false)}
     if(current==null || active==null) {
-        AndroidSignIn(repo,access) {shop,identity ->tenant=shop;session=identity;changed()}
+        if(bringExistingShop) Column(Modifier.fillMaxSize().safeDrawingPadding().imePadding().padding(24.dp)) {
+            TextButton(onClick={bringExistingShop=false}) {Text("Back to shop sign-in")}
+            CloudConnectionScreen(cloud,CLOUD_NEW_INSTALLATION,"") {bringExistingShop=false;changed()}
+        } else key(revision) {AndroidSignIn(repo,access,onExistingShop={bringExistingShop=true}) {shop,identity ->tenant=shop;session=identity;changed()}}
         return
     }
     fun allowed(p:StaffPermission)=runCatching {access.requireSession(active,p,false)}.isSuccess
@@ -171,7 +175,7 @@ private fun AndroidApp(repo:PosRepository,access:StaffAccess,installLock:((()->U
 }
 
 @Composable
-private fun AndroidSignIn(repo:PosRepository,access:StaffAccess,onEnter:(Tenant,StaffSession)->Unit) {
+private fun AndroidSignIn(repo:PosRepository,access:StaffAccess,onExistingShop:()->Unit={},onEnter:(Tenant,StaffSession)->Unit) {
     var shops by remember {mutableStateOf(repo.tenants())}
     var selected by remember {mutableStateOf(shops.firstOrNull())}
     var create by remember {mutableStateOf(shops.isEmpty())}
@@ -194,7 +198,8 @@ private fun AndroidSignIn(repo:PosRepository,access:StaffAccess,onEnter:(Tenant,
         onDismiss={recovering=false},onRecovered={recovering=false;password="";usePin=false;notice="Owner access recovered. Sign in with your new password."})
     Column(Modifier.fillMaxSize().safeDrawingPadding().imePadding().padding(24.dp).verticalScroll(rememberScrollState()),verticalArrangement=Arrangement.spacedBy(16.dp)) {
         SectionHeader("Retail POS", "Sell and keep shop records without internet")
-        Text("Records save on this device. After opening a shop, use More → Cloud connection to link your other devices.")
+        Text("Records save on this device. Manage sharing under More → Connected devices.")
+        if(shops.isEmpty()) OutlinedButton(onClick=onExistingShop,modifier=Modifier.fillMaxWidth().heightIn(min=48.dp)) {Text("Use my existing shop")}
         if(!create) {
             shops.forEach {shop -> FilterChip(selected?.id==shop.id,{selected=shop;memberId=null;password=""},label={Text(shop.name)})}
             FilterChip(memberId==null,{memberId=null;password=""},label={Text("Owner")})

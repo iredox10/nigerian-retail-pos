@@ -127,4 +127,49 @@ class AndroidCloudOwnerFlowTest {
             }
         }}} finally {root.deleteRecursively()}
     }
+    @Test fun ownerApprovedCodeConnectsAnEmptyNativeInstallationWithoutSendingLocalPasswords() {
+        val url=InstrumentationRegistry.getArguments().getString("cloudUrl")
+        assumeTrue("Provide a live HTTPS endpoint",!url.isNullOrBlank())
+        val context=ApplicationProvider.getApplicationContext<Context>()
+        val root=File(context.cacheDir,"paired-cloud-${UUID.randomUUID()}").apply {mkdirs()}
+        LocalSqlite.installPlatformAdapter(AndroidSqliteDriver::open);AndroidPrivateFiles.install()
+        try {Device(root.resolve("source").apply {mkdirs()}).use {source ->
+            val endpoint=CloudEndpoint.parse(requireNotNull(url))
+            val account=source.cloud.register(endpoint,"pair-flow-${UUID.randomUUID()}@example.test",UUID.randomUUID().toString())
+            val item=source.repo.addProduct(source.setup.id,"Paired soap","piece",55000,10.0)
+            source.cloud.publish(source.setup.id,endpoint,account,"Shop computer")
+            val target=root.resolve("target").apply {mkdirs()};val path=target.resolve("pos.db").path
+            val owners=WorkspaceAccess(target.toPath())
+            PosRepository(path).use {repo ->StaffAccess(target.toPath()).use {access ->
+                var session:StaffSession?=null
+                repo.setPermissionCheck {id,permission ->val current=requireNotNull(session);require(current.tenantId==id);access.requireSession(current,permission,false)}
+                val local=RepositoryCloudLocalStore(repo,owners,{PosRepository(path)}) {id ->val current=requireNotNull(session);require(current.tenantId==id && current.role==StaffRole.OWNER)}
+                fun files(name:String)=PrivateCloudFiles(target.resolve(name).toPath(),CloudFileProtection {p,isDir ->LocalFilePermissions.restrict(p,if(isDir)"rwx------" else "rw-------")})
+                val state=CloudStateStore(files("checkpoints"));val secrets=AndroidCloudCredentials(files("tokens"))
+                val ticket=CloudCoordinator(local,HttpCloudTransport(),state,secrets).use {it.startPairing(CLOUD_NEW_INSTALLATION,endpoint,"Owner phone")}
+                assertTrue(state.pairing(CLOUD_NEW_INSTALLATION)!!.ticket.secret.isEmpty())
+                CloudCoordinator(local,HttpCloudTransport(),state,secrets).use {cloud ->
+                    assertEquals(ticket,cloud.startPairing(CLOUD_NEW_INSTALLATION,endpoint,"Owner phone"))
+                    assertEquals("waiting",cloud.pollPairing(endpoint,ticket).status)
+                    val review=source.cloud.reviewPairing(source.setup.id,account,ticket.code)
+                    assertEquals("Owner phone",review.deviceName)
+                    source.cloud.approvePairing(source.setup.id,account,ticket.code,review)
+                    assertEquals("approved",cloud.pollPairing(endpoint,ticket).status)
+                    val id=cloud.joinPaired(CLOUD_NEW_INSTALLATION,endpoint,ticket,"My connected shop","Separate-device-password")
+                    assertEquals(1,repo.tenants().size)
+                    assertThrows(IllegalArgumentException::class.java) {repo.products(id)}
+                    session=requireNotNull(access.unlockOwner(id,"Separate-device-password"))
+                    assertEquals(item.id,repo.products(id).single().id)
+                    assertEquals("Owner phone",cloud.connection(id)!!.deviceName)
+                    assertEquals("up_to_date",cloud.syncNow(id).phase)
+                    source.cloud.revokeDevice(source.setup.id,account,cloud.connection(id)!!.deviceId)
+                    assertEquals("auth_required",cloud.syncNow(id).phase)
+                    assertEquals(10L,repo.products(id).single().exactStockScaled)
+                    assertNull(state.pairing(CLOUD_NEW_INSTALLATION))
+                }
+            }}
+            source.cloud.devices(source.setup.id,account).filter {it.revokedAt==null}.forEach {source.cloud.revokeDevice(source.setup.id,account,it.id)}
+        }} finally {root.deleteRecursively()}
+    }
+
 }

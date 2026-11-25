@@ -145,8 +145,12 @@ fun main(args: Array<String>) {
             AuditActor(tenantId,active.staffId,active.name,active.role)
         }
     }
+    var bringExistingShop by remember {mutableStateOf(false)}
     if (tenant == null) {
-        WorkspacePicker(repo, access, staffAccess) { shop, active -> tenant = shop; session = active; route = "Sell"; changed() }
+        if(bringExistingShop) Column(Modifier.fillMaxSize().padding(32.dp),verticalArrangement=Arrangement.spacedBy(16.dp)) {
+            TextButton(onClick={bringExistingShop=false}) {Text("Back to shop sign-in")}
+            CloudConnectionScreen(cloud,CLOUD_NEW_INSTALLATION,"") {bringExistingShop=false;changed()}
+        } else key(revision) {WorkspacePicker(repo, access, staffAccess,onExistingShop={bringExistingShop=true}) { shop, active -> tenant = shop; session = active; route = "Sell"; changed() }}
         return
     }
     val current = tenant!!
@@ -354,7 +358,7 @@ fun main(args: Array<String>) {
     }
 }
 
-@Composable private fun WorkspacePicker(repo: PosRepository, access: WorkspaceAccess, staffAccess: StaffAccess, onEnter: (Tenant,StaffSession)->Unit) {
+@Composable private fun WorkspacePicker(repo: PosRepository, access: WorkspaceAccess, staffAccess: StaffAccess, onExistingShop:()->Unit={}, onEnter: (Tenant,StaffSession)->Unit) {
     var tenants by remember { mutableStateOf(repo.tenants()) }
     var selected by remember { mutableStateOf<Tenant?>(null) }
     var name by remember { mutableStateOf("") }
@@ -394,6 +398,7 @@ fun main(args: Array<String>) {
             Text("Each business has its own workspace.\nYour records stay on this computer until online sync is configured.")
         }
         Surface(Modifier.width(440.dp), shape=MaterialTheme.shapes.large) { Column(Modifier.padding(32.dp).heightIn(max=760.dp).verticalScroll(rememberScrollState()), verticalArrangement=Arrangement.spacedBy(16.dp)) {
+            if(tenants.isEmpty()) OutlinedButton(onClick=onExistingShop,modifier=Modifier.fillMaxWidth().heightIn(min=48.dp)) {Text("Use my existing shop")}
             Text(if(selected == null) "Open your shop" else selected!!.name, style=MaterialTheme.typography.headlineSmall)
             if(tenants.isNotEmpty()) Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement=Arrangement.spacedBy(8.dp)) { tenants.forEach { t -> FilterChip(selected=selected?.id==t.id,onClick={selected=t; staffId=null;error=null;password=""},label={Text(t.name)}) } }
             if(selected==null) OutlinedTextField(name,{name=it},label={Text("Shop name")},singleLine=true,modifier=Modifier.fillMaxWidth())

@@ -240,6 +240,21 @@ class PosRepository(path: String = File(System.getProperty("user.home"), ".niger
         return query("SELECT * FROM activity_audit WHERE tenant_id=? ORDER BY created_at DESC,id DESC", tenantId, map=::auditEvent)
     }
 
+    /** Trusted recovery connection only: never disables the live repository's guard. */
+    @Synchronized internal fun firstCloudImportAvailable():Boolean {
+        if(tenants().isEmpty())return true
+        val exists=query("SELECT name FROM sqlite_master WHERE type='table' AND name='cloud_imports'") {it.getString(1)}.isNotEmpty()
+        return exists && tenants().size==1 && query("SELECT tenant_id FROM cloud_imports WHERE import_id LIKE 'first:%'") {it.getString(1)}.singleOrNull()==tenants().single().id
+    }
+    @Synchronized internal fun importFirstCloudShop(importId:String,snapshot:pos.cloud.protocol.CloudSnapshot,newName:String,provisionOwner:(Tenant)->Unit):Tenant = transaction {
+        val marker="first:$importId"
+        execute("CREATE TABLE IF NOT EXISTS cloud_imports(import_id TEXT PRIMARY KEY,tenant_id TEXT NOT NULL REFERENCES tenants(id))")
+        query("SELECT tenant_id FROM cloud_imports WHERE import_id=?",marker) {it.getString(1)}.singleOrNull()?.let {id ->return@transaction tenants().single {it.id==id}}
+        require(tenants().isEmpty()) {"Open your existing shop as its owner before adding another shop."}
+        restoreTenantSnapshot(TenantSnapshot(Tenant(snapshot.tenantId,snapshot.tenantName),snapshot.tables),newName) {created ->
+            provisionOwner(created);execute("INSERT INTO cloud_imports VALUES(?,?)",marker,created.id)
+        }
+    }
     @Synchronized fun tenants(): List<Tenant> = query("SELECT id,name FROM tenants ORDER BY name") { Tenant(it.getString(1), it.getString(2)) }
     @Synchronized fun createTenant(name: String, provisionOwner: (Tenant) -> Unit = {}): Tenant = transaction {
         require(name.isNotBlank()) { "Enter your shop name." }

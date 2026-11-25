@@ -25,7 +25,7 @@ private data class AndroidTool(val name: String, val description: String, val pe
 fun AndroidMoreScreen(repo: PosRepository, tenantId: String, access: StaffAccess, session: StaffSession, onChanged: () -> Unit, onCloud: () -> Unit = {}) = key(tenantId, session.token) {
     var tool by rememberSaveable { mutableStateOf<String?>(null) }
     val tools = listOf(
-        AndroidTool("Cloud connection", "Use this shop on desktop and Android", StaffPermission.BACKUP),
+        AndroidTool("Connected devices", "Use your shop on a phone or computer", StaffPermission.BACKUP),
         AndroidTool("CSV exports", "Review and save local records as a spreadsheet file", StaffPermission.VIEW_REPORTS),
         AndroidTool("Reports", "Recorded sales, customer debt and actual drawer cash", StaffPermission.VIEW_REPORTS),
         AndroidTool("Suppliers", "Supplier profiles, buying receipt debt and cash payments", StaffPermission.MANAGE_SUPPLIERS),
@@ -67,7 +67,7 @@ fun AndroidMoreScreen(repo: PosRepository, tenantId: String, access: StaffAccess
         } else LazyColumn(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(12.dp), contentPadding = PaddingValues(bottom = 24.dp)) {
             item { SectionHeader("Your shop tools", "Purchasing, records and workspace settings.") }
             items(tools, key = { it.name }) { entry ->
-                Surface(onClick = { if(entry.name=="Cloud connection")onCloud() else tool = entry.name }, shape = MaterialTheme.shapes.medium, tonalElevation = 1.dp) {
+                Surface(onClick = { if(entry.name=="Connected devices")onCloud() else tool = entry.name }, shape = MaterialTheme.shapes.medium, tonalElevation = 1.dp) {
                     Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         Text(entry.name, style = MaterialTheme.typography.titleMedium)
                         Text(entry.description, style = MaterialTheme.typography.bodyMedium)
@@ -75,7 +75,7 @@ fun AndroidMoreScreen(repo: PosRepository, tenantId: String, access: StaffAccess
                     }
                 }
             }
-            item { InlineNotice("Android feature coverage", "Some advanced tools currently show saved records only. Their screens say when Android editing is unavailable. Cloud access is configured separately by the owner under Cloud connection. Payment verification is separate from synchronization.", NoticeTone.Info) }
+            item { InlineNotice("Android feature coverage", "Some advanced tools currently show saved records only. Their screens say when Android editing is unavailable. Cloud access is configured separately by the owner under Connected devices. Payment verification is separate from synchronization.", NoticeTone.Info) }
         }
     }
 }
