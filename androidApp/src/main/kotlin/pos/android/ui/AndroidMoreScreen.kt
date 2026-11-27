@@ -63,6 +63,7 @@ fun AndroidMoreScreen(repo: PosRepository, tenantId: String, access: StaffAccess
                 "Stock counts" -> AndroidStockCountsScreen(repo,tenantId,onChanged)
                 "Supplier credit notes" -> AndroidSupplierCreditsScreen(repo,tenantId,onChanged)
                 "Purchase orders" -> AndroidPurchaseOrdersScreen(repo,tenantId,onChanged)
+                "Reorder suggestions" -> AndroidReplenishmentScreen(repo,tenantId,onChanged)
                 "Suppliers" -> AndroidSupplierTools(repo, tenantId, onChanged)
                 "Staff" -> AndroidStaffTools(access, session, onChanged)
                 "Customer advances" -> AndroidCustomerAdvancesScreen(repo, tenantId, onChanged)
