@@ -219,12 +219,18 @@ fun AndroidCustomersScreen(repo: PosRepository, tenantId: String, onChanged: () 
     var adding by remember { mutableStateOf(false) }
     var repaying by remember { mutableStateOf<Customer?>(null) }
     var history by remember { mutableStateOf<Customer?>(null) }
+    var editing by remember { mutableStateOf<Customer?>(null) }
+    var contactHistory by remember { mutableStateOf<Customer?>(null) }
+    var statement by remember { mutableStateOf<Customer?>(null) }
     var notice by remember { mutableStateOf<String?>(null) }
     val loaded = operationsLoad(repo, tenantId, revision) { repo.customers(tenantId) }
     fun changed(message: String) { revision++; notice = message; onChanged() }
     if (adding) AddAndroidCustomer(repo, tenantId, { adding = false }) { adding = false; changed("Customer saved on this device") }
     repaying?.let { customer -> AndroidRepayment(repo, tenantId, customer, { repaying = null }) { repaying = null; changed("Cash payment saved against customer debt") } }
     history?.let { customer -> AndroidCustomerHistory(repo, tenantId, customer, { history = null }) }
+    editing?.let { customer -> AndroidCustomerProfileEditor(repo, tenantId, customer, { editing = null }) { editing = null; changed("Customer details saved; existing debt retained") } }
+    contactHistory?.let { customer -> AndroidCustomerProfileHistory(repo, tenantId, customer, { contactHistory = null }) }
+    statement?.let { customer -> AndroidCustomerStatement(repo, tenantId, customer, { statement = null }) }
     LazyColumn(Modifier.fillMaxSize().imePadding(), verticalArrangement = Arrangement.spacedBy(12.dp), contentPadding = PaddingValues(bottom = 24.dp)) {
         item { SectionHeader("Customers", "Keep customer debt separate from money you hold for them.") }
         item { PosButton("Add customer", { adding = true }, modifier = Modifier.fillMaxWidth()) }
@@ -242,6 +248,11 @@ fun AndroidCustomersScreen(repo: PosRepository, tenantId: String, onChanged: () 
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     OutlinedButton({ history = customer }, Modifier.weight(1f).heightIn(min = 48.dp)) { Text("History") }
                     Button({ repaying = customer }, Modifier.weight(1f).heightIn(min = 48.dp), enabled = customer.balanceMinor > 0) { Text("Record payment") }
+                }
+                OutlinedButton({ editing = customer }, Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text("Manage customer") }
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedButton({ contactHistory = customer }, Modifier.weight(1f).heightIn(min = 48.dp)) { Text("Contact history") }
+                    OutlinedButton({ statement = customer }, Modifier.weight(1f).heightIn(min = 48.dp)) { Text("Dated statement") }
                 }
             }
         }
