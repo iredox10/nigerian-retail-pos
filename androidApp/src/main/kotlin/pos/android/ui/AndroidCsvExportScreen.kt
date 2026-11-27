@@ -49,7 +49,7 @@ fun AndroidCsvExportScreen(repo: PosRepository, tenantId: String) = key(tenantId
     }
     Column(Modifier.fillMaxSize().imePadding().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         SectionHeader("Export CSV records", "Review this shop's saved records before choosing a destination")
-        Text("This saves a file through Android's document picker. It does not upload, send or synchronize records. CSV import is not available here.")
+        Text("This saves a file through Android's document picker. It does not upload, send or synchronize records. For reviewed item imports, open CSV import from the shop tools.")
         Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             AndroidCsvKind.entries.forEach { option -> FilterChip(kind==option, {kind=option;preview=null;error=null;notice=null}, enabled=!busy, label={Text(option.label)}) }
         }

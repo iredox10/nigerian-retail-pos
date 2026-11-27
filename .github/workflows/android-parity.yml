@@ -1,0 +1,70 @@
+name: Android parity acceptance
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - feat/remaining-features-20261127
+permissions:
+  contents: read
+concurrency:
+  group: android-parity-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  android:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Verify portable reports and build isolated native QA
+        run: >-
+          ./gradlew --no-daemon -PandroidAcceptance=true --max-workers=2
+          -Dorg.gradle.jvmargs='-Xmx2300m -XX:ActiveProcessorCount=2 -Dfile.encoding=UTF-8'
+          -Pkotlin.compiler.execution.strategy=in-process
+          :desktopApp:jvmTest --tests 'pos.output.*'
+          :androidApp:testDebugUnitTest
+          :androidApp:assembleAcceptance :androidApp:assembleAcceptanceAndroidTest
+      - name: Prepare isolated API 35 emulator
+        run: |
+          sudo chmod a+rw /dev/kvm
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" 'system-images;android-35;google_apis;x86_64'
+          printf 'no\n' | "$ANDROID_HOME/cmdline-tools/latest/bin/avdmanager" create avd -n RetailPOS_Parity_CI -k 'system-images;android-35;google_apis;x86_64' --device pixel_4
+          "$ANDROID_HOME/emulator/emulator" -avd RetailPOS_Parity_CI -port 5580 -no-window -no-snapshot -no-boot-anim -no-audio -gpu swiftshader_indirect -feature -Vulkan -memory 1536 -cores 2 > emulator.log 2>&1 &
+          adb -s emulator-5580 wait-for-device
+          timeout 240 bash -c 'until [[ "$(adb -s emulator-5580 shell getprop sys.boot_completed 2>/dev/null | tr -d "\r")" == "1" ]]; do sleep 2; done'
+          adb -s emulator-5580 shell input keyevent KEYCODE_WAKEUP
+          adb -s emulator-5580 shell wm dismiss-keyguard
+          adb -s emulator-5580 shell wm size 720x1280
+          adb -s emulator-5580 shell wm density 280
+      - name: Run all native cases against actual hosted cloud
+        env:
+          QA_RUN_ID: github-${{ github.run_id }}-${{ github.run_attempt }}
+        run: |
+          adb -s emulator-5580 install --user 0 -r androidApp/build/outputs/apk/acceptance/androidApp-acceptance.apk
+          adb -s emulator-5580 install --user 0 -r androidApp/build/outputs/apk/androidTest/acceptance/androidApp-acceptance-androidTest.apk
+          adb -s emulator-5580 shell am instrument --user 0 -w -e listener pos.android.qa.PersistentQaResults -e qaRunId "$QA_RUN_ID" -e cloudUrl https://nigerian-retail-pos-cloud-a03da41beea8.herokuapp.com ng.retailpos.android.acceptance.test/androidx.test.runner.AndroidJUnitRunner > native-results.log
+          adb -s emulator-5580 shell run-as ng.retailpos.android.acceptance cat files/qa-results/last-run.json > native-results.json
+          python3 -c 'import json,os; r=json.load(open("native-results.json")); assert r["runId"]==os.environ["QA_RUN_ID"] and r["status"]=="finished" and r["tests"]==40 and r["failures"]==r["ignored"]==r["assumptions"]==0, r; print("All 40 native cases passed")'
+      - name: Inspect actual Android screens while offline
+        run: python3 androidApp/qa/capture_parity.py emulator-5580 parity-screens
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: Android-parity-evidence
+          path: |
+            native-results.json
+            native-results.log
+            emulator.log
+            parity-screens/
+            androidApp/build/test-results/
+            desktopApp/build/test-results/
+            androidApp/build/outputs/apk/acceptance/*.apk
+            androidApp/build/outputs/apk/androidTest/acceptance/*.apk
+          retention-days: 7
+          if-no-files-found: warn
+      - name: Stop only this job's emulator
+        if: always()
+        run: adb -s emulator-5580 emu kill || true

@@ -26,8 +26,12 @@ fun AndroidMoreScreen(repo: PosRepository, tenantId: String, access: StaffAccess
     var tool by rememberSaveable { mutableStateOf<String?>(null) }
     val tools = listOf(
         AndroidTool("Connected devices", "Use your shop on a phone or computer", StaffPermission.BACKUP),
+        AndroidTool("CSV import", "Review new goods or update the existing catalogue", StaffPermission.MANAGE_STOCK),
         AndroidTool("CSV exports", "Review and save local records as a spreadsheet file", StaffPermission.VIEW_REPORTS),
         AndroidTool("Reports", "Recorded sales, customer debt and actual drawer cash", StaffPermission.VIEW_REPORTS),
+        AndroidTool("Stock counts", "Save and review multi-item physical counts", StaffPermission.MANAGE_STOCK),
+        AndroidTool("Supplier credit notes", "Record and reconcile supplier-issued credit", StaffPermission.MANAGE_SUPPLIERS),
+        AndroidTool("Purchase orders", "Draft orders, approve terms and record actual deliveries", StaffPermission.MANAGE_SUPPLIERS),
         AndroidTool("Suppliers", "Supplier profiles, buying receipt debt and cash payments", StaffPermission.MANAGE_SUPPLIERS),
         AndroidTool("Orders", "Agreed goods, deposits, stock holds and collection", StaffPermission.MANAGE_CUSTOMERS),
         AndroidTool("Quotations", "Prepare agreed prices and create customer orders", StaffPermission.VIEW_SALES),
@@ -53,8 +57,12 @@ fun AndroidMoreScreen(repo: PosRepository, tenantId: String, access: StaffAccess
                 "Cash handover" -> AndroidHandoverScreen(repo,tenantId,access,session,onChanged)
                 "Orders" -> AndroidOrdersScreen(repo,tenantId,onChanged)
                 "Quotations" -> AndroidQuotationsScreen(repo,tenantId,onChanged,canManage=session.role.allows(StaffPermission.DISCOUNT))
+                "CSV import" -> AndroidCsvImportScreen(repo,tenantId,onChanged)
                 "CSV exports" -> AndroidCsvExportScreen(repo,tenantId)
                 "Reports" -> AndroidLocalReports(repo, tenantId)
+                "Stock counts" -> AndroidStockCountsScreen(repo,tenantId,onChanged)
+                "Supplier credit notes" -> AndroidSupplierCreditsScreen(repo,tenantId,onChanged)
+                "Purchase orders" -> AndroidPurchaseOrdersScreen(repo,tenantId,onChanged)
                 "Suppliers" -> AndroidSupplierTools(repo, tenantId, onChanged)
                 "Staff" -> AndroidStaffTools(access, session, onChanged)
                 "Customer advances" -> AndroidCustomerAdvancesScreen(repo, tenantId, onChanged)
@@ -80,42 +88,8 @@ fun AndroidMoreScreen(repo: PosRepository, tenantId: String, access: StaffAccess
     }
 }
 
-private data class AndroidReportTotals(val sales: Long, val cashApplied: Long, val originalCredit: Long, val external: Long, val refunds: Long, val debt: Long, val expectedDrawer: Long?, val receipts: Int)
-
 @Composable
-private fun AndroidLocalReports(repo: PosRepository, tenantId: String) {
-    var revision by remember { mutableIntStateOf(0) }
-    val loaded = operationsLoad(repo, tenantId, revision) {
-        val sales = repo.sales(tenantId)
-        fun total(values: List<Long>) = values.fold(0L, Math::addExact)
-        AndroidReportTotals(total(sales.map { it.totalMinor }), total(sales.map { it.cashMinor }), total(sales.map { it.creditMinor }),
-            total(sales.map { it.externalRecordedMinor }), total(repo.saleReturns(tenantId).map { it.refundMinor }),
-            total(repo.customers(tenantId).map { it.balanceMinor }), repo.activeCashShift(tenantId)?.let { repo.expectedCash(tenantId, it.id) }, sales.size)
-    }
-    LazyColumn(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        item { SectionHeader("Reports", "All recorded dates · This shop on this device") }
-        item { TextButton({ revision++ }) { Text("Refresh records") } }
-        item { OperationsLoadState(loaded, "reports", { revision++ }) }
-        loaded?.getOrNull()?.let { report ->
-            item { OperationsCard {
-                Text("Saved sales", style = MaterialTheme.typography.titleMedium)
-                LabelValueRow("Number of receipts", report.receipts.toString())
-                LabelValueRow("Original sales total", money(report.sales), emphasized = true)
-                LabelValueRow("Cash applied at sale", money(report.cashApplied))
-                LabelValueRow("Original credit granted", money(report.originalCredit))
-                LabelValueRow("External portions · not confirmed", money(report.external))
-                LabelValueRow("Cash refunded on returns", money(report.refunds))
-                Text("Original sales and credit do not change after repayments or returns. External portions are cashier records, not bank confirmation.", style = MaterialTheme.typography.bodySmall)
-            } }
-            item { OperationsCard {
-                LabelValueRow("Customers currently owe you", money(report.debt), emphasized = true)
-                LabelValueRow("Current shared-drawer cash expected", report.expectedDrawer?.let(::money) ?: "No drawer open")
-                Text("Drawer cash includes later cash movements. It is not the same as sales cash applied.", style = MaterialTheme.typography.bodySmall)
-            } }
-        }
-        item { InlineNotice("Profit is unavailable", "Sales minus purchases is not profit. Complete historical cost and expense coverage is required. Android date-range, category charts and report CSV export are not available in this screen yet.", NoticeTone.Info) }
-    }
-}
+private fun AndroidLocalReports(repo:PosRepository,tenantId:String) = AndroidReportsScreen(repo,tenantId)
 
 private data class AndroidSupplierData(val profiles: List<SupplierProfile>, val receipts: List<Pair<StockReceipt, Long>>, val credits: List<SupplierCreditBalance>)
 
@@ -123,27 +97,38 @@ private data class AndroidSupplierData(val profiles: List<SupplierProfile>, val 
 private fun AndroidSupplierTools(repo: PosRepository, tenantId: String, onChanged: () -> Unit) {
     var revision by remember { mutableIntStateOf(0) }
     var add by remember { mutableStateOf(false) }
+    var archived by remember {mutableStateOf(false)}
+    var editing by remember {mutableStateOf<SupplierProfile?>(null)}
+    var history by remember {mutableStateOf<SupplierProfile?>(null)}
     var paying by remember { mutableStateOf<Pair<StockReceipt, Long>?>(null) }
     var notice by remember { mutableStateOf<String?>(null) }
     val loaded = operationsLoad(repo, tenantId, revision) {
-        AndroidSupplierData(repo.supplierProfiles(tenantId), repo.stockReceipts(tenantId).map { it to repo.supplierOutstanding(tenantId, it.id) }, repo.supplierCreditBalances(tenantId))
+        AndroidSupplierData(repo.supplierProfiles(tenantId,true), repo.stockReceipts(tenantId).map { it to repo.supplierOutstanding(tenantId, it.id) }, repo.supplierCreditBalances(tenantId))
     }
     fun changed(message: String) { revision++; notice = message; onChanged() }
     if (add) AddAndroidSupplier(repo, tenantId, { add = false }) { add = false; changed("Supplier saved on this device") }
+    editing?.let {profile ->AndroidSupplierProfileEditor(repo,tenantId,profile,{editing=null}) {editing=null;changed("Supplier changes saved with history")}}
+    history?.let {profile ->AndroidSupplierProfileHistory(repo,tenantId,profile,{history=null})}
     paying?.let { (receipt, owed) -> AndroidSupplierPayment(repo, tenantId, receipt, owed, { paying = null }) { paying = null; changed("Supplier cash payment saved") } }
     LazyColumn(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(12.dp), contentPadding = PaddingValues(bottom = 24.dp)) {
         item { SectionHeader("Suppliers", "Profiles, purchase balances and cash payments.") }
         item { PosButton("Add supplier", { add = true }, Modifier.fillMaxWidth()) }
+        item {Row(horizontalArrangement=Arrangement.spacedBy(8.dp)) {
+            FilterChip(!archived,{archived=false},label={Text("Active suppliers")})
+            FilterChip(archived,{archived=true},label={Text("Archived suppliers")})
+        }}
         notice?.let { item { InlineNotice(it, tone = NoticeTone.Success) } }
         item { OperationsLoadState(loaded, "suppliers", { revision++ }) }
         loaded?.getOrNull()?.let { data ->
             if (data.profiles.isEmpty()) item { EmptyState("No supplier profiles yet", "Add a supplier to keep a stable account identity.") }
-            items(data.profiles, key = { it.id }) { supplier -> OperationsCard {
+            items(data.profiles.filter {it.archived==archived}, key = { it.id }) { supplier -> OperationsCard {
                 Text(supplier.details.name, style = MaterialTheme.typography.titleMedium)
                 supplier.details.phone?.let { Text(it) }
                 supplier.details.contactPerson?.let { Text("Contact · $it") }
                 supplier.details.paymentTerms?.let { Text("Terms · $it") }
                 Text("Profile revision ${supplier.version}", style = MaterialTheme.typography.bodySmall)
+                OutlinedButton(onClick={editing=supplier},modifier=Modifier.fillMaxWidth().heightIn(min=48.dp)) {Text("Manage supplier")}
+                TextButton(onClick={history=supplier}) {Text("View profile history")}
             } }
             item { Text("Buying receipts", style = MaterialTheme.typography.titleMedium) }
             if (data.receipts.isEmpty()) item { Text("No buying receipts recorded") }
@@ -163,7 +148,7 @@ private fun AndroidSupplierTools(repo: PosRepository, tenantId: String, onChange
                 if (credit.voided) Text("Unused note voided · history retained")
             } }
         }
-        item { Text("Editing supplier profiles, purchase orders, credit allocation/reversal and statement exports are not available in this Android screen yet.", style = MaterialTheme.typography.bodySmall) }
+        item { Text("Purchase orders and supplier credit notes have their own tools. Use them to review deliveries and apply or reverse supplier credits. Statement exports are not available in this screen yet.", style = MaterialTheme.typography.bodySmall) }
     }
 }
 

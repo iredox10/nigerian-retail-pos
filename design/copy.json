@@ -181,7 +181,14 @@
     "catalogueManage": "Manage item",
     "activeItems": "Active items",
     "archivedItems": "Archived items",
-    "packagesTab": "Packs"
+    "packagesTab": "Packs",
+    "csvImport": "CSV import",
+    "purchaseOrders": "Purchase orders",
+    "stockCounts": "Stock counts",
+    "supplierCreditNotes": "Supplier credit notes",
+    "manageSupplier": "Manage supplier",
+    "reviewDelivery": "Review delivery",
+    "postCount": "Post these stock corrections"
   },
   "cloudConnection": {
     "title": "Connected devices",

@@ -29,6 +29,8 @@ Requested 27 November 2026. This is the active full-scope checklist, superseding
 
 ## 2. Payment and external services
 
+Live payment-provider work is deferred by the user on 27 November. Do not implement or activate payment initiation, bank/card verification, provider refunds, settlement or provider webhooks in this batch. Existing local/manual money records retain their truthful status. Other non-payment tasks continue.
+
 - [ ] Select actual payment provider and configure private sandbox credentials.
 - [ ] Provider initiation/status adapter, authenticated signed webhooks, exact amount/currency/reference checks and idempotent event history.
 - [ ] Verified-payment UI and safe retry/recheck; offline manual records remain unconfirmed.
