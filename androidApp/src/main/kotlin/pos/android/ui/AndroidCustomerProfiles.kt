@@ -23,6 +23,7 @@ import java.util.UUID
     var reviewed by remember {mutableStateOf(false)}
     val operation=rememberSaveable {UUID.randomUUID().toString()}
     fun requested():Customer {
+        require(name.isNotBlank()) { "Enter the customer’s name." }
         val number=phone.trim().ifBlank {null}?.let {requireNotNull(normalizeNigerianPhone(it)) {"Enter a valid Nigerian customer phone number."}}
         val amount=if(limit.isBlank())null else requireNotNull(parseNaira(limit)) {"Enter an exact non-negative credit limit, or leave it blank."}
         return customer.copy(name=name.trim(),phone=number,address=address.trim().ifBlank {null},creditLimitMinor=amount)
@@ -70,6 +71,7 @@ import java.util.UUID
     var visibleEvents by remember(from,through) {mutableIntStateOf(20)}
     val loaded=operationsLoad(repo,tenantId,Triple(from,through,revision)) {
         repo.featureRead(tenantId,StaffPermission.MANAGE_CUSTOMERS) {
+            require(isValidCreditDueDate(from) && isValidCreditDueDate(through)) { "Enter valid dates as YYYY-MM-DD." }
             val range=ReportDateRange(LocalDate.parse(from),LocalDate.parse(through))
             val current=customers(tenantId).single {it.id==customer.id}
             val complete=CustomerStatementService.build(tenantId,current,sales(tenantId),repayments(tenantId),creditReturnReductions(tenantId),debtAdjustments(tenantId),advanceFundedRepaymentIds(tenantId))

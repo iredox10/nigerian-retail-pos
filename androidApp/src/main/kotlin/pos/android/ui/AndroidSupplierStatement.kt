@@ -20,6 +20,7 @@ internal fun AndroidSupplierStatement(repo: PosRepository, tenantId: String, pro
     var visibleEvents by remember(from, through) { mutableIntStateOf(20) }
     val loaded = operationsLoad(repo, tenantId, Triple(from, through, revision)) {
         repo.featureRead(tenantId, StaffPermission.MANAGE_SUPPLIERS) {
+            require(isValidCreditDueDate(from) && isValidCreditDueDate(through)) { "Enter valid dates as YYYY-MM-DD." }
             val current = supplierProfiles(tenantId, true).single { it.id == profile.id }
             SupplierAccountStatementService.build(current, supplierReceiptLinks(tenantId), stockReceipts(tenantId),
                 supplierPayments(tenantId), LocalDate.parse(from), LocalDate.parse(through),
