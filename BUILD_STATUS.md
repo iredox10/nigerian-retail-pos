@@ -2,6 +2,16 @@
 
 23 November 2026 · Orders, stock holds, promotions and purchasing
 
+## Android parity implementation — 27 November 2026
+
+The active delivery checklist is [REMAINING_FEATURES_TODO.md](REMAINING_FEATURES_TODO.md). Live payment-provider integration is deferred by the user. Resend recovery remains unavailable until a verified sender and private credentials are configured; the response “yes” did not supply a sender address.
+
+The feature branch adds reviewed add-only/catalogue-update CSV migration with strict bounded UTF-8 input; supplier edit/archive/restore and contact history; stable supplier/buying-pack receiving; purchase-order drafts, approval, partial delivery and discrepancy history; saved multi-item counts with stale-movement protection; supplier-credit allocation/reversal/void; WAT-dated product/staff/category reports and reviewed CSV export; and customer editing/history/dated statements. These reuse existing local repository transactions and keep stock, debt and cash corrections separate. CSV encoding and statement calculations are portable, while desktop file pickers and PDFBox remain desktop-only.
+
+The first remote Android acceptance run [46004654246](https://github.com/iredox10/nigerian-retail-pos/actions/runs/46004654246) successfully built both QA APKs and ran the selected desktop output tests and Android JVM checks. It then failed before native execution because `adb` was absent from the runner PATH. That infrastructure problem is corrected; no passing native result or screen inspection is claimed for that run. The customer extension and all native test sources compiled locally with Java 17/Gradle 8.13 in 2m 3s. The suite now expects 41 cases; their execution is pending.
+
+The task's separate API 37 emulator exited 139 during boot; the other project's emulator and the regular phone app were untouched. CI uses a fresh API 35 emulator and a separate QA package. New screen screenshots, picker journeys, keyboard/offline walkthroughs, merchant research and accessibility acceptance remain pending. This checkpoint does not complete the full specification or production distribution.
+
 ## Guided shop connection — 25 November 2026
 
 The shared installed-app screen is now **Connected devices**. Setup starts with **Connect this shop** or **Use my existing shop**; the server address stays under Advanced settings. New installations can download a shop directly from welcome without a placeholder workspace. Pairing displays a ten-character code/QR, requires account-owner review of the named device, expires after ten minutes, and separates the public code from a high-entropy claim secret. Retry identity and native/local owner credentials are retained without overwriting existing shops. Android can read a code through its camera app; typed codes remain available everywhere.

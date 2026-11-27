@@ -18,9 +18,11 @@ Requested 27 November 2026. This is the active full-scope checklist, superseding
 - [ ] Variant-matrix creation/editing and bundle-definition editing.
 - [ ] Replenishment policy editing and stock analysis/export.
 - [ ] Product galleries, crop/rotate controls and bulk photos.
-- [ ] Customer profile editing/history, repayment assignments/corrections, write-offs/reinstatement and dated statements.
+- [ ] Customer profile editing/history and dated statements/CSV.
+- [ ] Repayment assignments/corrections and debt write-offs/reinstatement on Android.
 - [ ] Cash owner contributions/drawings/corrections, denomination sheets and expense evidence.
-- [ ] Date-range/product/staff/category reports and CSV/PDF output.
+- [ ] Date-range/product/staff/category reports and CSV output.
+- [ ] Native PDF report output.
 - [ ] Exchange, credit-return and external-return workflows corresponding to supported core rules.
 - [ ] Full receipt style/frame/accent/layout/artwork preview and rendering parity.
 - [ ] Quotation and other trade document exports, dispatch images and held-sale removal.
@@ -106,3 +108,5 @@ Live payment-provider work is deferred by the user on 27 November. Do not implem
 ## Current implementation batch
 
 Start with Android CSV migration, then supplier/purchasing and stock workflows. Reuse the desktop's tested repositories and existing light/teal visual roles. For every new workflow: load → explicit edit → review → authorized durable commit → saved result/history. Source reference: design/DESIGN_BRIEF.md, DESIGN_GUIDE.md, design/tokens.json and design/copy.json; form/copy decisions follow Refero's bundled craft guidance. Preserve existing local/cloud authorization boundaries.
+
+27 November checkpoint: the first implementation wave and customer editing/statements compile. Native execution and visual acceptance are still pending, so the corresponding tasks are intentionally unchecked. See BUILD_STATUS.md for the failed CI setup run and corrected runner configuration.
