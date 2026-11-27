@@ -46,6 +46,21 @@ def screenshot(name, expected):
     own_foreground()
     (out/(name+'.png')).write_bytes(image)
 
+def retain_failure(kind, error, traceback):
+    # Only retain our disposable fixture; never capture another foreground app.
+    try:
+        own_foreground()
+        call('shell', 'uiautomator', 'dump', '/sdcard/retailpos-parity-ui.xml')
+        (out/'failure-ui.xml').write_text(call('shell', 'cat', '/sdcard/retailpos-parity-ui.xml'))
+        own_foreground()
+        result=subprocess.run(adb+['exec-out','screencap','-p'],capture_output=True,check=True,timeout=20)
+        own_foreground()
+        (out/'failure-screen.png').write_bytes(result.stdout)
+    except Exception:
+        pass
+    sys.__excepthook__(kind, error, traceback)
+sys.excepthook=retain_failure
+
 call('shell','am','start','--user','0','-W','-n',package+'/pos.android.MainActivity')
 time.sleep(2)
 fields=[n for n in nodes() if n.attrib.get('class')=='android.widget.EditText']
