@@ -36,7 +36,7 @@ dependencies {
 }
 val prepareLocalCore by tasks.registering(Sync::class) {
     from("../desktopApp/src/jvmMain/kotlin") {
-        include("pos/data/**", "pos/security/**", "pos/output/BackupService.kt", "pos/cloud/app/**", "pos/cloud/ui/**")
+        include("pos/data/**", "pos/security/**", "pos/output/BackupService.kt", "pos/output/ProductImportService.kt", "pos/output/CsvUtf8.kt", "pos/output/CsvData.kt", "pos/screens/ReportDateRange.kt", "pos/output/CategoryPerformanceService.kt", "pos/output/ProductPerformanceService.kt", "pos/output/StaffPerformanceService.kt", "pos/output/SupplierStatementService.kt", "pos/output/SupplierAccountStatementService.kt", "pos/output/CustomerStatementService.kt", "pos/output/DatedCustomerStatementService.kt", "pos/output/BulkCatalogueCsvService.kt", "pos/cloud/app/**", "pos/cloud/ui/**")
         exclude("pos/data/ImageUpload.kt", "pos/data/SupplierInvoiceAttachmentUpload.kt", "pos/data/DiagnosticRepository.kt")
     }
     into(layout.buildDirectory.dir("generated/localCore"))

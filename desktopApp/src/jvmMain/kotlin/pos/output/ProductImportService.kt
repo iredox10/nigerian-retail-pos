@@ -10,7 +10,7 @@ object ProductImportService {
     const val TEMPLATE = "name,unit,price_naira,stock\r\nMalt drink,bottle,500.00,24\r\n"
     fun read(path:Path):List<ProductImportRow> {
         require(Files.size(path)<=5*1024*1024) { "Choose a CSV file smaller than 5 MB." }
-        return parse(Files.readString(path,Charsets.UTF_8))
+        return parse(Files.newInputStream(path).use(CsvUtf8::read))
     }
     fun parse(text:String):List<ProductImportRow> {
         require(text.toByteArray(Charsets.UTF_8).size<=5*1024*1024) { "CSV exceeds 5 MB." }

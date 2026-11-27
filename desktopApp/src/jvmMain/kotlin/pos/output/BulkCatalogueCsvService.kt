@@ -23,7 +23,7 @@ object BulkCatalogueCsvService {
     }
     fun read(path:Path):BulkCatalogueCsvResult {
         require(Files.size(path)<=maximumBytes) {"Choose a CSV file no larger than 5 MB."}
-        return parse(Files.readString(path,Charsets.UTF_8))
+        return parse(Files.newInputStream(path).use(CsvUtf8::read))
     }
     fun parse(text:String):BulkCatalogueCsvResult {
         require(text.toByteArray(Charsets.UTF_8).size<=maximumBytes) {"CSV exceeds 5 MB."}

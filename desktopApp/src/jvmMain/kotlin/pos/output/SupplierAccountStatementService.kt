@@ -50,6 +50,6 @@ object SupplierAccountStatementService {
         val rows=listOf(row("Opening balance before period",balance=s.openingMinor))+s.events.map {event ->
             row(event.activity,event.id,event.receiptId,event.createdAt,event.purchaseMinor,event.paidAtReceiptMinor,event.laterPaymentMinor,event.balanceAfterMinor,event.returnCreditMinor,event.returnCashMinor,event.creditNoteMinor)
         }+listOf(row("Closing balance through selected WAT date",balance=s.closingMinor),row("Current outstanding — all recorded dates",balance=s.currentOutstandingMinor))
-        return CsvService.encode(listOf("Supplier account ID","Current supplier profile name","Supplier name saved on receipt","From WAT","Through WAT","Activity","Source ID","Stock receipt ID","Recorded at UTC","Purchase total NGN","Cash paid at receipt NGN","Later cash payment NGN","Recorded balance NGN","Purchase return credit NGN","Cash received on return NGN","Credit note adjustment NGN"),rows)
+        return CsvData.encode(listOf("Supplier account ID","Current supplier profile name","Supplier name saved on receipt","From WAT","Through WAT","Activity","Source ID","Stock receipt ID","Recorded at UTC","Purchase total NGN","Cash paid at receipt NGN","Later cash payment NGN","Recorded balance NGN","Purchase return credit NGN","Cash received on return NGN","Credit note adjustment NGN"),rows)
     }
 }

@@ -46,7 +46,7 @@ object DatedCustomerStatementService {
                 event.debtAdjustment?.review?.deltaMinor?.let(::amount) ?: text(""),
                 text(event.debtAdjustment?.review?.saleId.orEmpty()), text(event.debtAdjustment?.reason.orEmpty()))
         }+listOf(summary("Closing debt through selected WAT date",dated.closingMinor),summary("Current debt — all saved dates",customer.balanceMinor))
-        return CsvService.encode(listOf("Customer ID","Current customer name","From WAT","Through WAT","Recorded at UTC","Activity","Source ID","Original sale total NGN","Credit added NGN","Later repayment NGN","Debt balance NGN","Debt reduced on return NGN","Cash refunded on credit return NGN",
+        return CsvData.encode(listOf("Customer ID","Current customer name","From WAT","Through WAT","Recorded at UTC","Activity","Source ID","Original sale total NGN","Credit added NGN","Later repayment NGN","Debt balance NGN","Debt reduced on return NGN","Cash refunded on credit return NGN",
             "Debt adjustment NGN", "Adjusted receipt ID", "Adjustment reason"),rows)
     }
 }

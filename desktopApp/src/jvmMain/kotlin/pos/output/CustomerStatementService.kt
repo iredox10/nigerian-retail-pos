@@ -96,7 +96,7 @@ object CustomerStatementService {
                 event.debtAdjustment?.review?.deltaMinor?.let(::amount) ?: text(""),
                 text(event.debtAdjustment?.review?.saleId.orEmpty()), text(event.debtAdjustment?.reason.orEmpty()))
         } + listOf(listOf(text(customer.id), text(customer.name), text(""), text("Current debt — all dates"), text(""), text(""), text(""), text(""), text(""), amount(customer.balanceMinor),text(""),text(""),text(""),text(""),text(""),text("")))
-        return CsvService.encode(listOf("Customer ID", "Customer name", "Recorded at UTC", "Activity", "Record ID", "Original sale total NGN", "Cash applied at sale NGN", "Credit added at sale NGN", "Later repayment NGN", "Current debt NGN", "Agreed repayment due date WAT","Debt reduced on return NGN","Cash refunded on credit return NGN",
+        return CsvData.encode(listOf("Customer ID", "Customer name", "Recorded at UTC", "Activity", "Record ID", "Original sale total NGN", "Cash applied at sale NGN", "Credit added at sale NGN", "Later repayment NGN", "Current debt NGN", "Agreed repayment due date WAT","Debt reduced on return NGN","Cash refunded on credit return NGN",
             "Debt adjustment NGN", "Adjusted receipt ID", "Adjustment reason"), rows)
     }
 }

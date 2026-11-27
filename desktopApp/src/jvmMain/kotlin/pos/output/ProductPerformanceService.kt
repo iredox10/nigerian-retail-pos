@@ -65,7 +65,7 @@ object ProductPerformanceService {
         fun text(value:String)=CsvCell.Text(value)
         fun number(value:Long)=CsvCell.Number(value.toString())
         fun amount(value:Long)=CsvCell.Number(BigDecimal.valueOf(value,2).toPlainString())
-        return CsvService.encode(listOf("Product ID","Latest recorded item name in range","Base unit","From WAT","Through WAT","Sold base quantity","Returned base quantity","Net sold base quantity","Sales after discounts NGN","Returned goods value in range NGN","Net sales NGN"),
+        return CsvData.encode(listOf("Product ID","Latest recorded item name in range","Base unit","From WAT","Through WAT","Sold base quantity","Returned base quantity","Net sold base quantity","Sales after discounts NGN","Returned goods value in range NGN","Net sales NGN"),
             build(tenantId,sales,returns,range).map { row -> listOf(text(row.productId),text(row.name),text(row.baseUnit),text(range.from.toString()),text(range.through.toString()),CsvCell.Number(quantityLabel(row.soldBaseQuantity,row.quantityPrecision)),CsvCell.Number(quantityLabel(row.returnedBaseQuantity,row.quantityPrecision)),CsvCell.Number(if(row.netBaseQuantity<0) "-"+quantityLabel(-row.netBaseQuantity,row.quantityPrecision) else quantityLabel(row.netBaseQuantity,row.quantityPrecision)),amount(row.salesMinor),amount(row.refundsMinor),amount(row.netSalesMinor)) })
     }
 }

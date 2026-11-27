@@ -35,7 +35,7 @@ object StaffPerformanceService {
         fun text(value:String)=CsvCell.Text(value)
         fun count(value:Long)=CsvCell.Number(value.toString())
         fun amount(value:Long)=CsvCell.Number(BigDecimal.valueOf(value,2).toPlainString())
-        return CsvService.encode(listOf("Actor recorded","Actor ID","Name at event","Role at event","From WAT","Through WAT","Sales recorded count","Sales after discounts NGN","Returns recorded count","Cash refunded NGN","Returned goods value NGN","Customer debt reduced NGN"),
+        return CsvData.encode(listOf("Actor recorded","Actor ID","Name at event","Role at event","From WAT","Through WAT","Sales recorded count","Sales after discounts NGN","Returns recorded count","Cash refunded NGN","Returned goods value NGN","Customer debt reduced NGN"),
             build(tenantId,sales,returns,events,range).map {row -> listOf(text((row.actor!=null).toString()),text(row.actor?.id.orEmpty()),text(row.actor?.name ?: "Actor not recorded"),text(row.actor?.role?.name.orEmpty()),text(range.from.toString()),text(range.through.toString()),count(row.salesCount),amount(row.salesMinor),count(row.refundsCount),amount(row.refundsMinor),amount(row.returnedValueMinor),amount(row.debtReducedMinor)) })
     }
 }

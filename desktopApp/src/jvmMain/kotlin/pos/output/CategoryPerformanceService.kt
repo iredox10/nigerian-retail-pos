@@ -36,7 +36,7 @@ object CategoryPerformanceService {
 
     fun csv(value: CategoryComparison): String {
         fun amount(v: Long) = CsvCell.Number(BigDecimal.valueOf(v, 2).toPlainString())
-        return CsvService.encode(listOf("Current catalogue category", "From WAT", "Through WAT", "Sales", "Returned goods value",
+        return CsvData.encode(listOf("Current catalogue category", "From WAT", "Through WAT", "Sales", "Returned goods value",
             "Net sales", "Previous from WAT", "Previous through WAT", "Previous net sales", "Change in net sales"),
             value.rows.map { row -> listOf(CsvCell.Text(row.category), CsvCell.Text(value.range.from.toString()),
                 CsvCell.Text(value.range.through.toString()), amount(row.salesMinor), amount(row.returnsMinor), amount(row.netMinor),
