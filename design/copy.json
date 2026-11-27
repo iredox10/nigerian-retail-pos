@@ -188,7 +188,11 @@
     "supplierCreditNotes": "Supplier credit notes",
     "manageSupplier": "Manage supplier",
     "reviewDelivery": "Review delivery",
-    "postCount": "Post these stock corrections"
+    "postCount": "Post these stock corrections",
+    "manageCustomer": "Manage customer",
+    "customerContactHistory": "Contact history",
+    "customerStatement": "Dated statement",
+    "supplierStatement": "Dated supplier statement"
   },
   "cloudConnection": {
     "title": "Connected devices",

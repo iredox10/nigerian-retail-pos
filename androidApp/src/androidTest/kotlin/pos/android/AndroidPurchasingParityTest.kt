@@ -7,6 +7,9 @@ import org.junit.Assert.*
 import pos.android.storage.AndroidSqliteDriver
 import pos.data.*
 import pos.domain.*
+import pos.output.SupplierAccountStatementService
+import java.time.LocalDate
+import java.time.ZoneId
 
 @RunWith(AndroidJUnit4::class)
 class AndroidPurchasingParityTest {
@@ -28,6 +31,12 @@ class AndroidPurchasingParityTest {
         assertEquals(receipt,r.receiveStockForSupplier(t,item.id,2,110000,120000,supplier.id,"received",pack.id,24,1))
         assertEquals("Original supplier",r.stockReceipts(t).single().supplierName)
         assertEquals(3,r.supplierProfileChanges(t,supplier.id).size)
+        val today=LocalDate.now(ZoneId.of("Africa/Lagos"))
+        val account=SupplierAccountStatementService.build(r.supplierProfiles(t,true).single(),r.supplierReceiptLinks(t),r.stockReceipts(t),r.supplierPayments(t),today.minusDays(1),today)
+        assertEquals(100000L,account.statement.currentOutstandingMinor)
+        assertEquals(100000L,account.statement.closingMinor)
+        assertTrue(SupplierAccountStatementService.csv(account).contains("Original supplier"))
+        assertTrue(SupplierAccountStatementService.csv(account).contains("Renamed supplier"))
         assertThrows(IllegalArgumentException::class.java) {r.receiveStockForSupplier(t,item.id,1,110000,0,supplier.id,"new-after-archive",pack.id,24,1)}
         assertEquals(58L,r.products(t).single().exactStockScaled)
     }

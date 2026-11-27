@@ -100,6 +100,7 @@ private fun AndroidSupplierTools(repo: PosRepository, tenantId: String, onChange
     var archived by remember {mutableStateOf(false)}
     var editing by remember {mutableStateOf<SupplierProfile?>(null)}
     var history by remember {mutableStateOf<SupplierProfile?>(null)}
+    var statement by remember {mutableStateOf<SupplierProfile?>(null)}
     var paying by remember { mutableStateOf<Pair<StockReceipt, Long>?>(null) }
     var notice by remember { mutableStateOf<String?>(null) }
     val loaded = operationsLoad(repo, tenantId, revision) {
@@ -109,6 +110,7 @@ private fun AndroidSupplierTools(repo: PosRepository, tenantId: String, onChange
     if (add) AddAndroidSupplier(repo, tenantId, { add = false }) { add = false; changed("Supplier saved on this device") }
     editing?.let {profile ->AndroidSupplierProfileEditor(repo,tenantId,profile,{editing=null}) {editing=null;changed("Supplier changes saved with history")}}
     history?.let {profile ->AndroidSupplierProfileHistory(repo,tenantId,profile,{history=null})}
+    statement?.let {profile ->AndroidSupplierStatement(repo,tenantId,profile,{statement=null})}
     paying?.let { (receipt, owed) -> AndroidSupplierPayment(repo, tenantId, receipt, owed, { paying = null }) { paying = null; changed("Supplier cash payment saved") } }
     LazyColumn(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(12.dp), contentPadding = PaddingValues(bottom = 24.dp)) {
         item { SectionHeader("Suppliers", "Profiles, purchase balances and cash payments.") }
@@ -129,6 +131,7 @@ private fun AndroidSupplierTools(repo: PosRepository, tenantId: String, onChange
                 Text("Profile revision ${supplier.version}", style = MaterialTheme.typography.bodySmall)
                 OutlinedButton(onClick={editing=supplier},modifier=Modifier.fillMaxWidth().heightIn(min=48.dp)) {Text("Manage supplier")}
                 TextButton(onClick={history=supplier}) {Text("View profile history")}
+                OutlinedButton(onClick={statement=supplier},modifier=Modifier.fillMaxWidth().heightIn(min=48.dp)) {Text("Dated supplier statement")}
             } }
             item { Text("Buying receipts", style = MaterialTheme.typography.titleMedium) }
             if (data.receipts.isEmpty()) item { Text("No buying receipts recorded") }
@@ -148,7 +151,7 @@ private fun AndroidSupplierTools(repo: PosRepository, tenantId: String, onChange
                 if (credit.voided) Text("Unused note voided · history retained")
             } }
         }
-        item { Text("Purchase orders and supplier credit notes have their own tools. Use them to review deliveries and apply or reverse supplier credits. Statement exports are not available in this screen yet.", style = MaterialTheme.typography.bodySmall) }
+        item { Text("Purchase orders and supplier credit notes have their own tools. Use them to review deliveries and apply or reverse supplier credits. Open a supplier profile’s dated statement to review and export its linked history.", style = MaterialTheme.typography.bodySmall) }
     }
 }
 
