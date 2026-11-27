@@ -12,6 +12,10 @@ The first remote Android acceptance run [46004654246](https://github.com/iredox1
 
 A second [remote run 46006990736](https://github.com/iredox10/nigerian-retail-pos/actions/runs/46006990736) again passed the selected output/JVM checks and built both QA APKs. At last inspection its emulator setup had not reached native execution. The follow-up explicitly installs SDK platform/emulator tools, bounds device discovery, retains QA-only UI evidence on capture failures, and tests the QA variant directly to avoid compiling the same screens twice.
 
+The latest local QA build completed in **3m 7s**, including both APKs and **9 passing QA JVM tests**, zero failures/errors/skips. The current portable-output test run also passed **159 cases**, zero failures/errors/skips, in **3m 2s**. These are scoped checks, not a rerun of every desktop test. [QA build and APK hashes](artifacts/cloud-acceptance/parity-local-build.json), [portable output results](artifacts/cloud-acceptance/parity-output-tests.json).
+
+The downloaded first-run emulator log also revealed `Unknown AVD name`: the creation and launch tools used different default AVD locations. The workflow now creates the real configuration in an explicit shared directory, verifies it exists, and registers that location for the launcher. Native execution and actual screen captures remain pending; successful compilation is not substituted for those checks.
+
 The task's separate API 37 emulator exited 139 during boot; the other project's emulator and the regular phone app were untouched. CI uses a fresh API 35 emulator and a separate QA package. New screen screenshots, picker journeys, keyboard/offline walkthroughs, merchant research and accessibility acceptance remain pending. This checkpoint does not complete the full specification or production distribution.
 
 ## Guided shop connection — 25 November 2026

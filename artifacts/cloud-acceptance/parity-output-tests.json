@@ -1,0 +1,14 @@
+{
+  "command": ":desktopApp:jvmTest --tests pos.output.*",
+  "status": "passed",
+  "durationSeconds": 182,
+  "applicationCodeUnchangedSince": "535afce",
+  "counts": {
+    "tests": 159,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "scope": "Portable output/CSV/statement tests only; not the full desktop suite",
+  "nativeExecution": false
+}
