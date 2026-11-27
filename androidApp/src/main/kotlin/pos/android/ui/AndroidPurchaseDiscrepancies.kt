@@ -17,7 +17,8 @@ private data class PurchaseIssues(val history:List<PurchaseDiscrepancyHistory>,v
     var resolving by remember {mutableStateOf<PurchaseDiscrepancy?>(null)}
     val loaded=operationsLoad(repo,tenantId,revision) {PurchaseIssues(repo.purchaseDiscrepancies(tenantId,order.id),repo.purchaseOrderRemaining(tenantId,order.id),repo.products(tenantId))}
     resolving?.let {report ->
-        val receipts=operationsLoad(repo,tenantId,report.id) {repo.purchaseDiscrepancyReceipts(tenantId,report.id)}
+        var receiptRevision by remember {mutableIntStateOf(0)}
+        val receipts=operationsLoad(repo,tenantId,report.id to receiptRevision) {repo.purchaseDiscrepancyReceipts(tenantId,report.id)}
         var receiptId by rememberSaveable {mutableStateOf<String?>(null)}
         var reason by rememberSaveable {mutableStateOf("")}
         val operation=rememberSaveable {UUID.randomUUID().toString()}
@@ -28,7 +29,7 @@ private data class PurchaseIssues(val history:List<PurchaseDiscrepancyHistory>,v
         }) {
             Text("${report.productName} · ${report.quantityLabel} ${report.buyingUnit}")
             Text("Record the outcome without changing the original report. This does not receive goods, pay cash or change supplier debt.")
-            OperationsLoadState(receipts,"matching later receipts",{})
+            OperationsLoadState(receipts,"matching later receipts",{receiptRevision++})
             FilterChip(receiptId==null,{receiptId=null},label={Text("Outcome note only")})
             receipts?.getOrNull().orEmpty().forEach {receipt ->FilterChip(receiptId==receipt.id,{receiptId=receipt.id},label={Text("Link receipt ${receipt.createdAt.take(19)} · ${receipt.productName}")})}
             PosTextField(reason,{reason=it},"What was agreed or resolved?")

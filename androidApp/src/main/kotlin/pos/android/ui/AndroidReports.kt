@@ -16,7 +16,7 @@ import java.time.LocalDate
 import java.time.ZoneId
 import java.math.BigInteger
 
-private data class AndroidDatedReport(val sales:List<Sale>,val returns:List<SaleReturn>,val expenses:List<Expense>,val cash:List<CashEntry>,val customers:List<Customer>,val products:List<Product>,val events:List<AuditEvent>)
+private data class AndroidDatedReport(val sales:List<Sale>,val returns:List<SaleReturn>,val expenses:List<Expense>,val cash:List<CashEntry>,val customers:List<Customer>,val products:List<Product>,val events:List<AuditEvent>,val datedSales:List<Sale> = emptyList(),val datedReturns:List<SaleReturn> = emptyList(),val datedCash:List<CashEntry> = emptyList(),val datedExpenses:List<Expense> = emptyList())
 @Composable
 fun AndroidReportsScreen(repo:PosRepository,tenantId:String) {
     val today=LocalDate.now(ZoneId.of("Africa/Lagos"))
@@ -27,7 +27,10 @@ fun AndroidReportsScreen(repo:PosRepository,tenantId:String) {
     val range=rangeResult.getOrNull()
     val loaded=operationsLoad(repo,tenantId,Triple(from,through,revision)) {
         requireNotNull(range) {"Enter valid YYYY-MM-DD dates with the end date on or after the start date."}
-        repo.featureRead(tenantId,StaffPermission.VIEW_REPORTS) {AndroidDatedReport(sales(tenantId),saleReturns(tenantId),expenses(tenantId),cashEntries(tenantId),customers(tenantId),products(tenantId,true),auditEvents(tenantId))}
+        repo.featureRead(tenantId,StaffPermission.VIEW_REPORTS) {
+            val data=AndroidDatedReport(sales(tenantId),saleReturns(tenantId),expenses(tenantId),cashEntries(tenantId),customers(tenantId),products(tenantId,true),auditEvents(tenantId))
+            data.copy(datedSales=data.sales.filter {range.contains(it.createdAt)},datedReturns=data.returns.filter {range.contains(it.createdAt)},datedCash=data.cash.filter {range.contains(it.createdAt)},datedExpenses=data.expenses.filter {range.contains(it.createdAt)})
+        }
     }
     fun total(values:Iterable<Long>)=values.fold(BigInteger.ZERO) {sum,v ->sum+BigInteger.valueOf(v)}.longValueExact()
     LazyColumn(Modifier.fillMaxSize().imePadding(),verticalArrangement=Arrangement.spacedBy(12.dp),contentPadding=PaddingValues(bottom=24.dp)) {
@@ -40,10 +43,10 @@ fun AndroidReportsScreen(repo:PosRepository,tenantId:String) {
         }}
         item {OperationsLoadState(loaded,"dated reports",{revision++})}
         if(range!=null)loaded?.getOrNull()?.let {data ->
-            val selectedSales=data.sales.filter {range.contains(it.createdAt)}
-            val selectedReturns=data.returns.filter {range.contains(it.createdAt)}
-            val selectedCash=data.cash.filter {range.contains(it.createdAt)}
-            val selectedExpenses=data.expenses.filter {range.contains(it.createdAt)}
+            val selectedSales=data.datedSales
+            val selectedReturns=data.datedReturns
+            val selectedCash=data.datedCash
+            val selectedExpenses=data.datedExpenses
             val amounts=runCatching {listOf(total(selectedSales.map {it.totalMinor}),total(selectedSales.map {it.cashMinor}),total(selectedSales.map {it.creditMinor}),total(selectedSales.map {it.externalRecordedMinor}),total(selectedReturns.map {it.refundMinor}),total(selectedExpenses.map {it.amountMinor}),total(selectedCash.map {it.amountMinor}),total(data.customers.map {it.balanceMinor}))}
             amounts.exceptionOrNull()?.let {item {InlineNotice("Amounts need review","A saved total exceeds the supported exact range. No approximate amount is shown.",NoticeTone.Danger)}}
             amounts.getOrNull()?.let {value ->

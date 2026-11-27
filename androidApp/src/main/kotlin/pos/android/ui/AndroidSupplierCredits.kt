@@ -74,7 +74,8 @@ fun AndroidSupplierCreditsScreen(repo:PosRepository,tenantId:String,onChanged:()
     }
 }
 @Composable private fun AndroidNewSupplierCredit(repo:PosRepository,tenantId:String,dismiss:()->Unit,saved:()->Unit) {
-    val suppliers=operationsLoad(repo,tenantId,Unit) {repo.supplierProfiles(tenantId)}
+    var revision by remember {mutableIntStateOf(0)}
+    val suppliers=operationsLoad(repo,tenantId,revision) {repo.supplierProfiles(tenantId)}
     var supplierId by rememberSaveable {mutableStateOf<String?>(null)}
     var reference by rememberSaveable {mutableStateOf("")}
     var date by rememberSaveable {mutableStateOf(LocalDate.now(ZoneId.of("Africa/Lagos")).toString())}
@@ -90,7 +91,7 @@ fun AndroidSupplierCreditsScreen(repo:PosRepository,tenantId:String,onChanged:()
             withContext(Dispatchers.IO) {repo.recordSupplierCredit(tenantId,supplier.id,ref,issued,value,why,operation)};saved()
         }
     }) {
-        OperationsLoadState(suppliers,"suppliers",{})
+        OperationsLoadState(suppliers,"suppliers",{revision++;reviewed=false})
         suppliers?.getOrNull().orEmpty().forEach {supplier ->FilterChip(supplierId==supplier.id,{supplierId=supplier.id;reviewed=false},label={Text(supplier.details.name)})}
         PosTextField(reference,{reference=it;reviewed=false},"Supplier credit reference")
         PosTextField(date,{date=it;reviewed=false},"Issued on (YYYY-MM-DD)")
@@ -101,7 +102,8 @@ fun AndroidSupplierCreditsScreen(repo:PosRepository,tenantId:String,onChanged:()
 }
 private data class CreditReceipts(val receipts:List<Pair<StockReceipt,Long>>)
 @Composable private fun AndroidApplySupplierCredit(repo:PosRepository,tenantId:String,balance:SupplierCreditBalance,dismiss:()->Unit,saved:()->Unit) {
-    val loaded=operationsLoad(repo,tenantId,balance.note.id) {
+    var revision by remember {mutableIntStateOf(0)}
+    val loaded=operationsLoad(repo,tenantId,balance.note.id to revision) {
         val ids=repo.supplierReceiptLinks(tenantId).filter {it.supplierId==balance.note.supplierId}.map {it.receiptId}.toSet()
         CreditReceipts(repo.stockReceipts(tenantId).filter {it.id in ids}.map {it to repo.supplierOutstanding(tenantId,it.id)}.filter {it.second>0})
     }
@@ -121,7 +123,7 @@ private data class CreditReceipts(val receipts:List<Pair<StockReceipt,Long>>)
             withContext(Dispatchers.IO) {repo.applySupplierCredit(tenantId,current,why,operation)};saved()
         }
     }) {
-        Text(balance.note.reference);OperationsLoadState(loaded,"unpaid supplier receipts",{})
+        Text(balance.note.reference);OperationsLoadState(loaded,"unpaid supplier receipts",{revision++;reviewed=null})
         loaded?.getOrNull()?.receipts.orEmpty().forEach {(receipt,owed) ->FilterChip(receiptId==receipt.id,{receiptId=receipt.id;reviewed=null},label={Text("${receipt.productName} · ${money(owed)} owed · ${receipt.createdAt.take(10)}")})}
         if(loaded?.getOrNull()?.receipts?.isEmpty()==true)Text("No unpaid receipt is linked to this supplier. Link the correct supplier account when receiving goods.")
         PosTextField(amount,{amount=it;reviewed=null},"Credit amount to apply (₦)")

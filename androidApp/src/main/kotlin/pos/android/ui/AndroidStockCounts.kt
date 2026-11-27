@@ -83,17 +83,19 @@ fun AndroidStockCountsScreen(repo:PosRepository,tenantId:String,onChanged:()->Un
     }
 }
 @Composable private fun AndroidNewStockCount(repo:PosRepository,tenantId:String,dismiss:()->Unit,saved:()->Unit) {
-    val products=operationsLoad(repo,tenantId,Unit) {repo.products(tenantId)}
+    var revision by remember {mutableIntStateOf(0)}
+    val products=operationsLoad(repo,tenantId,revision) {repo.products(tenantId)}
     var name by rememberSaveable {mutableStateOf("")};var search by rememberSaveable {mutableStateOf("")}
     var selected by remember {mutableStateOf<Set<String>>(emptySet())}
     val operation=rememberSaveable {UUID.randomUUID().toString()}
     OperationsDialog("Start stock count",dismiss,"Save count session",action={
         val goods=requireNotNull(products?.getOrThrow()) {"Wait for stock to load."}
         val ids=goods.filter {it.id in selected}.map {it.id}
+        require(ids.size==selected.size) {"Some selected goods became unavailable. Reopen the count and review your selection."}
         require(ids.size in 1..500) {"Choose from 1 to 500 different goods."}
         withContext(Dispatchers.IO) {repo.createStockCountSession(tenantId,name.trim(),ids,operation)};saved()
     }) {
-        OperationsLoadState(products,"stock",{})
+        OperationsLoadState(products,"stock",{revision++})
         PosTextField(name,{name=it},"Count name")
         PosTextField(search,{search=it},"Find goods to count")
         Text("${selected.size} items selected. Choosing goods saves their current stock and movement baseline.")

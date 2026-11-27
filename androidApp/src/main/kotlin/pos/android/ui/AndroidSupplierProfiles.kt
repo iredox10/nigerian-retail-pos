@@ -62,11 +62,12 @@ internal fun AndroidSupplierProfileEditor(repo:PosRepository,tenantId:String,pro
 
 @Composable
 internal fun AndroidSupplierProfileHistory(repo:PosRepository,tenantId:String,profile:SupplierProfile,dismiss:()->Unit) {
-    val loaded=operationsLoad(repo,tenantId,profile.id) {repo.supplierProfileChanges(tenantId,profile.id)}
+    var revision by remember {mutableIntStateOf(0)}
+    val loaded=operationsLoad(repo,tenantId,profile.id to revision) {repo.supplierProfileChanges(tenantId,profile.id)}
     var limit by remember {mutableIntStateOf(20)}
     OperationsDialog("Supplier history",dismiss,"Close",action={dismiss()}) {
         Text(profile.details.name,style=MaterialTheme.typography.titleMedium)
-        OperationsLoadState(loaded,"supplier history",{})
+        OperationsLoadState(loaded,"supplier history",{revision++})
         loaded?.getOrNull()?.let {changes ->
             changes.asReversed().take(limit).forEach {change ->
                 HorizontalDivider()

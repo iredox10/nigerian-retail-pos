@@ -46,9 +46,10 @@ fun AndroidPurchaseOrdersScreen(repo:PosRepository,tenantId:String,onChanged:()-
     receiving?.let {order ->AndroidPurchaseReceiving(repo,tenantId,order,{receiving=null}) {changed("Delivery saved with its stock, cash and supplier balances.")}}
     discrepancies?.let {order ->AndroidPurchaseDiscrepancies(repo,tenantId,order,{discrepancies=null}) {revision++;onChanged()}}
     history?.let {order ->
-        val events=operationsLoad(repo,tenantId,order.id) {repo.purchaseOrderEvents(tenantId,order.id) to repo.purchaseOrderDeliveries(tenantId,order.id)}
+        var historyRevision by remember {mutableIntStateOf(0)}
+        val events=operationsLoad(repo,tenantId,order.id to historyRevision) {repo.purchaseOrderEvents(tenantId,order.id) to repo.purchaseOrderDeliveries(tenantId,order.id)}
         OperationsDialog("Purchase order history",{history=null},"Close",action={history=null}) {
-            Text(order.supplierName);OperationsLoadState(events,"purchase order history",{})
+            Text(order.supplierName);OperationsLoadState(events,"purchase order history",{historyRevision++})
             events?.getOrNull()?.let {(changes,deliveries) ->
                 changes.forEach {Text("${it.createdAt.take(19)} UTC · ${it.kind} · Revision ${it.version}");Text(it.reason)}
                 deliveries.forEach {delivery ->HorizontalDivider();Text("Delivery ${delivery.createdAt.take(19)} UTC");delivery.lines.forEach {line ->Text("Receipt ${line.receiptId} · ${money(line.paidCashMinor)} cash paid")}}
@@ -80,7 +81,8 @@ fun AndroidPurchaseOrdersScreen(repo:PosRepository,tenantId:String,onChanged:()-
 
 private data class PurchaseChoices(val products:List<Product>,val suppliers:List<SupplierProfile>,val units:List<PurchaseUnit>)
 @Composable private fun AndroidPurchaseDraft(repo:PosRepository,tenantId:String,original:PurchaseOrder?,dismiss:()->Unit,saved:()->Unit) {
-    val loaded=operationsLoad(repo,tenantId,original?.id) {PurchaseChoices(repo.products(tenantId),repo.supplierProfiles(tenantId),repo.purchaseUnits(tenantId))}
+    var revision by remember {mutableIntStateOf(0)}
+    val loaded=operationsLoad(repo,tenantId,original?.id to revision) {PurchaseChoices(repo.products(tenantId),repo.supplierProfiles(tenantId),repo.purchaseUnits(tenantId))}
     var supplierId by rememberSaveable {mutableStateOf(original?.supplierId)}
     var productId by rememberSaveable {mutableStateOf<String?>(null)}
     var unitId by rememberSaveable {mutableStateOf<String?>(null)}
@@ -108,7 +110,7 @@ private data class PurchaseChoices(val products:List<Product>,val suppliers:List
             };saved()
         }
     }) {
-        OperationsLoadState(loaded,"suppliers and stock",{})
+        OperationsLoadState(loaded,"suppliers and stock",{revision++;reviewed=false})
         Text("Supplier",style=MaterialTheme.typography.titleMedium)
         choices?.suppliers.orEmpty().forEach {supplier ->FilterChip(supplierId==supplier.id,{supplierId=supplier.id;edit()},label={Text(supplier.details.name)})}
         PosTextField(search,{search=it},"Find an item")
@@ -120,6 +122,7 @@ private data class PurchaseChoices(val products:List<Product>,val suppliers:List
             PosTextField(quantity,{quantity=it;edit()},"Quantity in ${unit?.name ?: p.unit}")
             PosTextField(cost,{cost=it;edit()},"Buying price per ${unit?.name ?: p.unit} (₦)")
             OutlinedButton(onClick={runCatching {
+                require(unitId==null || unit?.productId==p.id) {"Choose an available buying unit before adding this line."}
                 val places=if(unit==null)p.quantityPrecision else 0
                 val scaled=requireNotNull(parseQuantity(quantity,places)) {"Enter the quantity in the selected buying unit."}.scaledUnits
                 require(scaled in 1..Int.MAX_VALUE.toLong()) {"Enter a positive order quantity."}
@@ -148,7 +151,8 @@ private data class PurchaseChoices(val products:List<Product>,val suppliers:List
 
 private data class ReceivingState(val remaining:Map<String,Int>,val products:Map<String,Product>)
 @Composable private fun AndroidPurchaseReceiving(repo:PosRepository,tenantId:String,order:PurchaseOrder,dismiss:()->Unit,saved:()->Unit) {
-    val loaded=operationsLoad(repo,tenantId,order.id) {ReceivingState(repo.purchaseOrderRemaining(tenantId,order.id),repo.products(tenantId,true).associateBy {it.id})}
+    var revision by remember {mutableIntStateOf(0)}
+    val loaded=operationsLoad(repo,tenantId,order.id to revision) {ReceivingState(repo.purchaseOrderRemaining(tenantId,order.id),repo.products(tenantId,true).associateBy {it.id})}
     var quantities by remember {mutableStateOf<Map<String,String>>(emptyMap())}
     var paid by remember {mutableStateOf<Map<String,String>>(emptyMap())}
     var reviewed by remember {mutableStateOf<List<PurchaseDeliveryInput>?>(null)}
@@ -174,7 +178,7 @@ private data class ReceivingState(val remaining:Map<String,Int>,val products:Map
             withContext(Dispatchers.IO) {repo.receivePurchaseOrder(tenantId,order.id,delivery,order.version,operation)};saved()
         }
     }) {
-        Text(order.supplierName);OperationsLoadState(loaded,"current stock and remaining quantities",{})
+        Text(order.supplierName);OperationsLoadState(loaded,"current stock and remaining quantities",{revision++;reviewed=null;confirmed=false})
         order.lines.filter {(loaded?.getOrNull()?.remaining?.get(it.id) ?: 0)>0}.forEach {line ->
             Text(line.productName,style=MaterialTheme.typography.titleMedium)
             Text("Remaining ${quantityLabel(loaded?.getOrNull()?.remaining?.get(line.id)?.toLong() ?: 0,line.quantityPrecision)} ${line.buyingUnit} · ${money(line.unitCostMinor)} per ${line.buyingUnit}")
