@@ -1,0 +1,36 @@
+{
+  "sourceCommit": "bb01740a8d4e1ec3f6a3d2a2f2e09c21ee59fc64",
+  "qaPackage": "ng.retailpos.android.acceptance",
+  "gradle": "8.13",
+  "java": "17",
+  "localBuild": {
+    "tasks": [
+      "testAcceptanceUnitTest",
+      "assembleAcceptance",
+      "assembleAcceptanceAndroidTest"
+    ],
+    "status": "passed",
+    "durationSeconds": 187
+  },
+  "unitTests": {
+    "tests": 9,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "nativeTests": {
+    "declaredCases": 43,
+    "executedForThisBuild": false
+  },
+  "screensInspectedForThisBuild": false,
+  "apks": {
+    "androidApp/build/outputs/apk/acceptance/androidApp-acceptance.apk": {
+      "bytes": 40926318,
+      "sha256": "5342c0593c13e9a681565a8959db963491a1e4eacf482dc197ffd278c835e701"
+    },
+    "androidApp/build/outputs/apk/androidTest/acceptance/androidApp-acceptance-androidTest.apk": {
+      "bytes": 1219812,
+      "sha256": "1750f32b6086b9569e69b297f1a5543807ddaa4a24be00c636bd38c3a2072570"
+    }
+  }
+}
