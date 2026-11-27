@@ -4,6 +4,19 @@ on:
   push:
     branches:
       - feat/remaining-features-20261127
+    paths:
+      - '.github/workflows/android-parity.yml'
+      - 'androidApp/**'
+      - 'desktopApp/src/**'
+      - 'shared/src/**'
+      - 'cloudClient/src/**'
+      - 'cloudCore/src/**'
+      - 'cloudProtocol/src/**'
+      - 'design/**'
+      - '**/*.gradle.kts'
+      - 'gradle.properties'
+      - 'gradle/**'
+      - 'gradlew*'
 permissions:
   contents: read
 concurrency:
