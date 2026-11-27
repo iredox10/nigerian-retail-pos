@@ -192,7 +192,9 @@
     "manageCustomer": "Manage customer",
     "customerContactHistory": "Contact history",
     "customerStatement": "Dated statement",
-    "supplierStatement": "Dated supplier statement"
+    "supplierStatement": "Dated supplier statement",
+    "supplierInvoices": "Supplier invoices and evidence",
+    "buyingRules": "Manage buying rules"
   },
   "cloudConnection": {
     "title": "Connected devices",

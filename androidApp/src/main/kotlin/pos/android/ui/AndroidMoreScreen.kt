@@ -102,6 +102,7 @@ private fun AndroidSupplierTools(repo: PosRepository, tenantId: String, onChange
     var editing by remember {mutableStateOf<SupplierProfile?>(null)}
     var history by remember {mutableStateOf<SupplierProfile?>(null)}
     var statement by remember {mutableStateOf<SupplierProfile?>(null)}
+    var invoices by remember {mutableStateOf<SupplierProfile?>(null)}
     var paying by remember { mutableStateOf<Pair<StockReceipt, Long>?>(null) }
     var notice by remember { mutableStateOf<String?>(null) }
     val loaded = operationsLoad(repo, tenantId, revision) {
@@ -112,6 +113,7 @@ private fun AndroidSupplierTools(repo: PosRepository, tenantId: String, onChange
     editing?.let {profile ->AndroidSupplierProfileEditor(repo,tenantId,profile,{editing=null}) {editing=null;changed("Supplier changes saved with history")}}
     history?.let {profile ->AndroidSupplierProfileHistory(repo,tenantId,profile,{history=null})}
     statement?.let {profile ->AndroidSupplierStatement(repo,tenantId,profile,{statement=null})}
+    invoices?.let {profile ->AndroidSupplierInvoices(repo,tenantId,profile,{invoices=null}) {changed("Supplier invoice metadata saved")}}
     paying?.let { (receipt, owed) -> AndroidSupplierPayment(repo, tenantId, receipt, owed, { paying = null }) { paying = null; changed("Supplier cash payment saved") } }
     LazyColumn(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(12.dp), contentPadding = PaddingValues(bottom = 24.dp)) {
         item { SectionHeader("Suppliers", "Profiles, purchase balances and cash payments.") }
@@ -133,6 +135,7 @@ private fun AndroidSupplierTools(repo: PosRepository, tenantId: String, onChange
                 OutlinedButton(onClick={editing=supplier},modifier=Modifier.fillMaxWidth().heightIn(min=48.dp)) {Text("Manage supplier")}
                 TextButton(onClick={history=supplier}) {Text("View profile history")}
                 OutlinedButton(onClick={statement=supplier},modifier=Modifier.fillMaxWidth().heightIn(min=48.dp)) {Text("Dated supplier statement")}
+                OutlinedButton(onClick={invoices=supplier},modifier=Modifier.fillMaxWidth().heightIn(min=48.dp)) {Text("Supplier invoices and evidence")}
             } }
             item { Text("Buying receipts", style = MaterialTheme.typography.titleMedium) }
             if (data.receipts.isEmpty()) item { Text("No buying receipts recorded") }

@@ -35,7 +35,7 @@ jobs:
           "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" 'system-images;android-35;google_apis;x86_64'
           printf 'no\n' | "$ANDROID_HOME/cmdline-tools/latest/bin/avdmanager" create avd -n RetailPOS_Parity_CI -k 'system-images;android-35;google_apis;x86_64' --device pixel_4
           "$ANDROID_HOME/emulator/emulator" -avd RetailPOS_Parity_CI -port 5580 -no-window -no-snapshot -no-boot-anim -no-audio -gpu swiftshader_indirect -feature -Vulkan -memory 1536 -cores 2 > emulator.log 2>&1 &
-          adb -s emulator-5580 wait-for-device
+          timeout 180 adb -s emulator-5580 wait-for-device
           timeout 240 bash -c 'until [[ "$(adb -s emulator-5580 shell getprop sys.boot_completed 2>/dev/null | tr -d "\r")" == "1" ]]; do sleep 2; done'
           adb -s emulator-5580 shell input keyevent KEYCODE_WAKEUP
           adb -s emulator-5580 shell wm dismiss-keyguard
@@ -49,7 +49,7 @@ jobs:
           adb -s emulator-5580 install --user 0 -r androidApp/build/outputs/apk/androidTest/acceptance/androidApp-acceptance-androidTest.apk
           adb -s emulator-5580 shell am instrument --user 0 -w -e listener pos.android.qa.PersistentQaResults -e qaRunId "$QA_RUN_ID" -e cloudUrl https://nigerian-retail-pos-cloud-a03da41beea8.herokuapp.com ng.retailpos.android.acceptance.test/androidx.test.runner.AndroidJUnitRunner > native-results.log
           adb -s emulator-5580 shell run-as ng.retailpos.android.acceptance cat files/qa-results/last-run.json > native-results.json
-          python3 -c 'import json,os; r=json.load(open("native-results.json")); assert r["runId"]==os.environ["QA_RUN_ID"] and r["status"]=="finished" and r["tests"]==42 and r["failures"]==r["ignored"]==r["assumptions"]==0, r; print("All 42 native cases passed")'
+          python3 -c 'import json,os; r=json.load(open("native-results.json")); assert r["runId"]==os.environ["QA_RUN_ID"] and r["status"]=="finished" and r["tests"]==43 and r["failures"]==r["ignored"]==r["assumptions"]==0, r; print("All 43 native cases passed")'
       - name: Inspect actual Android screens while offline
         run: python3 androidApp/qa/capture_parity.py emulator-5580 parity-screens
       - uses: actions/upload-artifact@v7
