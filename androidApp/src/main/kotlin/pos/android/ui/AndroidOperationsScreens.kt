@@ -15,7 +15,7 @@ import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import pos.data.PosRepository
+import pos.data.*
 import pos.domain.*
 import pos.ui.components.*
 import java.util.UUID
@@ -118,43 +118,69 @@ internal fun quantityPrecisionChoiceLabel(places: Int?): String = when (places) 
     else -> "Choose how quantities are counted"
 }
 
+private data class AndroidReceivingOptions(val units:List<PurchaseUnit>,val suppliers:List<SupplierProfile>)
+
 @Composable
-private fun ReceiveAndroidStock(repo: PosRepository, tenantId: String, product: Product, dismiss: () -> Unit, saved: () -> Unit) {
-    var quantity by rememberSaveable { mutableStateOf("") }
-    var cost by rememberSaveable { mutableStateOf("") }
-    var paid by rememberSaveable { mutableStateOf("0") }
-    var supplier by rememberSaveable { mutableStateOf("") }
-    var reviewed by remember { mutableStateOf(false) }
-    var confirmed by remember { mutableStateOf(false) }
-    val operation = rememberSaveable { UUID.randomUUID().toString() }
-    val amount = parseNaira(cost)
-    val count = parseQuantity(quantity, product.quantityPrecision)
-    val total = runCatching { if (count != null && amount != null) count.lineTotalMinor(amount) else null }.getOrNull()
-    OperationsDialog("Add stock · ${product.name}", dismiss, if (reviewed) "Save stock received" else "Review stock received", action = {
-        val scaled = requireNotNull(count) { "Enter the received quantity in ${product.unit}." }.scaledUnits
-        require(scaled in 1..Int.MAX_VALUE.toLong()) { "Enter a positive quantity within the supported range." }
-        val unitCost = requireNotNull(amount) { "Enter the buying price per ${product.unit}." }
-        val cash = requireNotNull(parseNaira(paid)) { "Enter the cash paid, or zero." }
-        val value = requireNotNull(total) { "Purchase total exceeds the supported amount." }
-        require(cash in 0..value) { "Cash paid must be between zero and the buying total." }
-        require(cash == value || supplier.isNotBlank()) { "Name the supplier for the unpaid balance." }
-        if (!reviewed) reviewed = true
-        else {
-            require(confirmed) { "Confirm that these goods arrived and any cash payment was made." }
-            withContext(Dispatchers.IO) { repo.receiveStock(tenantId, product.id, scaled.toInt(), unitCost, cash, supplier, operation) }
+private fun ReceiveAndroidStock(repo:PosRepository,tenantId:String,product:Product,dismiss:()->Unit,saved:()->Unit) {
+    var revision by remember {mutableIntStateOf(0)}
+    val loaded=operationsLoad(repo,tenantId,revision) {AndroidReceivingOptions(repo.purchaseUnits(tenantId,product.id),repo.supplierProfiles(tenantId))}
+    var unitId by rememberSaveable {mutableStateOf<String?>(null)}
+    var supplierId by rememberSaveable {mutableStateOf<String?>(null)}
+    var quantity by rememberSaveable {mutableStateOf("")}
+    var cost by rememberSaveable {mutableStateOf("")}
+    var paid by rememberSaveable {mutableStateOf("0")}
+    var supplierName by rememberSaveable {mutableStateOf("")}
+    var reviewed by remember {mutableStateOf(false)}
+    var confirmed by remember {mutableStateOf(false)}
+    val operation=rememberSaveable {UUID.randomUUID().toString()}
+    val options=loaded?.getOrNull()
+    val unit=options?.units?.singleOrNull {it.id==unitId}
+    val supplier=options?.suppliers?.singleOrNull {it.id==supplierId}
+    val unitName=unit?.name ?: product.unit
+    val precision=if(unit==null)product.quantityPrecision else 0
+    val amount=parseNaira(cost);val count=parseQuantity(quantity,precision)
+    val total=runCatching {if(count!=null && amount!=null)count.lineTotalMinor(amount) else null}.getOrNull()
+    fun edit() {reviewed=false;confirmed=false}
+    fun chooseUnit(id:String?) {if(unitId!=id) {unitId=id;quantity="";cost="";edit()}}
+    OperationsDialog("Add stock · ${product.name}",dismiss,if(reviewed)"Save stock received" else "Review stock received",action={
+        requireNotNull(options) {"Wait for the buying units and supplier accounts to load, or retry."}
+        require(unitId==null || unit!=null) {"Choose an available buying unit again."}
+        require(supplierId==null || supplier!=null) {"Choose an active supplier again."}
+        val scaled=requireNotNull(count) {"Enter a received quantity in $unitName, with $precision decimal places."}.scaledUnits
+        require(scaled in 1..Int.MAX_VALUE.toLong()) {"Enter a positive received quantity within the supported range."}
+        val price=requireNotNull(amount) {"Enter the buying price per $unitName."}
+        val cash=requireNotNull(parseNaira(paid)) {"Enter actual cash paid, or zero."}
+        val value=requireNotNull(total) {"Buying total exceeds the supported amount."}
+        require(cash in 0..value) {"Cash paid must be from zero to the buying total."}
+        require(cash==value || supplier!=null || supplierName.isNotBlank()) {"Choose or name the supplier for the unpaid balance."}
+        if(!reviewed)reviewed=true else {
+            require(confirmed) {"Confirm that the goods arrived and cash paid is actual."}
+            withContext(Dispatchers.IO) {
+                if(supplier!=null)repo.receiveStockForSupplier(tenantId,product.id,scaled.toInt(),price,cash,supplier.id,operation,unit?.id,unit?.baseUnitsPerUnit,supplier.version)
+                else repo.receiveStock(tenantId,product.id,scaled.toInt(),price,cash,supplierName,operation,unit?.id,unit?.baseUnitsPerUnit)
+            }
             saved()
         }
     }) {
-        Text("Buying in ${product.unit}. This does not infer carton or pack conversions.")
-        PosTextField(quantity, { quantity = it; reviewed = false; confirmed = false }, "Quantity received in ${product.unit}")
-        PosTextField(cost, { cost = it; reviewed = false; confirmed = false }, "Buying price per ${product.unit} (₦)")
-        PosTextField(paid, { paid = it; reviewed = false; confirmed = false }, "Cash paid (₦)")
-        PosTextField(supplier, { supplier = it; reviewed = false; confirmed = false }, "Supplier name", hint = "Required if any amount remains unpaid")
-        total?.let { LabelValueRow("Buying total", money(it), emphasized = true) }
-        if (reviewed) {
-            LabelValueRow("Cash paid from drawer", money(parseNaira(paid) ?: 0))
-            LabelValueRow("Still owed to supplier", money(requireNotNull(total) - (parseNaira(paid) ?: 0)))
-            OperationsCheck(confirmed, { confirmed = it }, "I received these goods and recorded the actual cash paid.")
+        OperationsLoadState(loaded,"buying units and supplier accounts",{revision++})
+        Text("How did these goods arrive?",style=MaterialTheme.typography.titleMedium)
+        FilterChip(unitId==null,{chooseUnit(null)},label={Text(product.unit)})
+        options?.units.orEmpty().forEach {choice ->FilterChip(unitId==choice.id,{chooseUnit(choice.id)},label={Text("${choice.name} · ${choice.baseUnitsPerUnit} ${choice.baseUnit} each")})}
+        Text("Changing the buying unit clears quantity and buying price. Package quantities must be whole; stock remains in ${product.unit}.")
+        PosTextField(quantity,{quantity=it;edit()},"Quantity received in $unitName")
+        PosTextField(cost,{cost=it;edit()},"Buying price per $unitName (₦)")
+        PosTextField(paid,{paid=it;edit()},"Cash paid from drawer (₦)")
+        Text("Supplier account",style=MaterialTheme.typography.titleMedium)
+        FilterChip(supplierId==null,{supplierId=null;edit()},label={Text("Name only · not linked")})
+        options?.suppliers.orEmpty().forEach {profile ->FilterChip(supplierId==profile.id,{supplierId=profile.id;edit()},label={Text(profile.details.name)})}
+        if(supplierId==null)PosTextField(supplierName,{supplierName=it;edit()},"Supplier name",hint="Required if unpaid; choose an account above to link it")
+        total?.let {LabelValueRow("Buying total",money(it),emphasized=true)}
+        if(reviewed) {
+            LabelValueRow("Buying unit",if(unit==null)product.unit else "${unit.name} = ${unit.baseUnitsPerUnit} ${unit.baseUnit}")
+            LabelValueRow("Supplier",supplier?.details?.name ?: supplierName.ifBlank {"Cash purchase"})
+            LabelValueRow("Cash paid",money(parseNaira(paid) ?: 0))
+            LabelValueRow("Still owed",money(requireNotNull(total)-(parseNaira(paid) ?: 0)))
+            OperationsCheck(confirmed,{confirmed=it},"I received these goods and recorded the actual cash paid.")
         }
     }
 }
