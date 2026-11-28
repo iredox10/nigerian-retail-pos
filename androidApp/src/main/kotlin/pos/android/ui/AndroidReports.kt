@@ -62,6 +62,7 @@ fun AndroidReportsScreen(repo:PosRepository,tenantId:String) {
                     Text("Current debt is a present balance, not debt as of the selected end date.")
                 }}
             }
+            item {AndroidReportPdfSave(repo,tenantId,range)}
             item {AndroidReviewedCsvSave(repo,tenantId,StaffPermission.VIEW_REPORTS,"Preview sales CSV","sales-$from-$through.csv") {CsvData.sales(tenantId,selectedSales)}}
             item {AndroidReviewedCsvSave(repo,tenantId,StaffPermission.VIEW_REPORTS,"Preview cash-movement CSV","cash-$from-$through.csv") {CsvData.cashEntries(tenantId,selectedCash)}}
             item {AndroidReviewedCsvSave(repo,tenantId,StaffPermission.VIEW_REPORTS,"Preview cash-expense CSV","expenses-$from-$through.csv") {CsvData.expenses(tenantId,selectedExpenses)}}
