@@ -2,6 +2,14 @@
 
 23 November 2026 · Orders, stock holds, promotions and purchasing
 
+## Android staff and saved-sale follow-up — 28 November 2026
+
+Run [46137740261](https://github.com/iredox10/nigerian-retail-pos/actions/runs/46137740261), source `e589a3f`, completed **45 API 35 native cases with zero failures, ignored tests or assumptions**, in **159.737 seconds**. [Actual native report](artifacts/cloud-acceptance/staff-ui-review/native-results.json). This includes the reviewed staff name/role/active editor, exact-retry/stale-edit guards, PIN/session revocation and retained owner-only security history. Selected desktop output/security tests and the Android JVM checks also passed in that job.
+
+The offline walkthrough opened CSV import, suppliers, purchase orders, stock counts and supplier credit notes. Actual [CSV import](artifacts/cloud-acceptance/staff-ui-review/csv-import.png) and [purchase orders](artifacts/cloud-acceptance/staff-ui-review/purchase-orders.png) screenshots were inspected. It then searched below the retained More-list position for Reports, which was above it. The [failure screen](artifacts/cloud-acceptance/staff-ui-review/failure-screen.png) shows the app still running; no AndroidRuntime exception was captured. Automation now returns the tool list to the top before each search. Receipt save/restart visual acceptance is still pending.
+
+Android Saved sales now offers a confirmed removal of the selected unfinished draft. It uses the existing atomic tenant draft store; it does not refund a payment or reverse a completed sale. A new native regression checks restart, other drafts/shops, the active basket and unchanged completed sales, stock and cash. **The new 46-case suite is running; this draft-removal case has not yet passed native execution.**
+
 ## Android receipt design and signing correction — 28 November 2026
 
 The Android receipt editor now has separate shop/design views, Classic/Modern/Compact looks, frames, preset/custom accents, left/centre headings, logo visibility, retained artwork and settings history. Its paged preview is rendered from the actual native PDF and explicitly marks sample items/amounts as **DESIGN PREVIEW — Not a sale**; sample previews create no products or financial events. Settings/artwork save together under the existing version/permission guards. Logo changes retain unsaved receipt-detail entries. Saved receipt wording distinguishes debt at sale from today's debt and prevents a printed copy from implying another payment.
