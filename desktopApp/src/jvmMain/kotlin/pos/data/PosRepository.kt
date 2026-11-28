@@ -887,7 +887,7 @@ class PosRepository(path: String = File(System.getProperty("user.home"), ".niger
         requireTenant(tenantId)
         val shift=query("SELECT * FROM cash_shifts WHERE tenant_id=? AND id=?",tenantId,shiftId,map=::cashShift).singleOrNull()
             ?: throw IllegalArgumentException("Cash shift not found in this shop.")
-        return shift.expectedMinor ?: cashEntries(tenantId,shiftId).fold(java.math.BigInteger.valueOf(shift.openingMinor)) { balance,entry -> balance.add(java.math.BigInteger.valueOf(entry.amountMinor)) }.longValueExact().also { require(it>=0) { "Cash balance cannot be negative." } }
+        return shift.expectedMinor ?: cashEntries(tenantId,shiftId).fold(java.math.BigInteger.valueOf(shift.openingMinor)) { balance,entry -> balance.add(java.math.BigInteger.valueOf(entry.amountMinor)) }.toLongExact().also { require(it>=0) { "Cash balance cannot be negative." } }
     }
     @Synchronized fun recordCashMovement(tenantId:String,amountMinor:Long,description:String,operationId:String?=null):CashEntry = transaction {
         requirePermission(tenantId, StaffPermission.MANAGE_MONEY)
@@ -1314,7 +1314,7 @@ class PosRepository(path: String = File(System.getProperty("user.home"), ".niger
         sales(tenant.id).forEach { sale -> require(returnableQuantities(tenant.id,sale.id).values.all { it>=0 }) { "Backup returns exceed original quantities." } }
         stockReceipts(tenant.id).forEach { supplierOutstanding(tenant.id,it.id) }
         cashShifts(tenant.id).forEach { shift ->
-            val calculated=cashEntries(tenant.id,shift.id).fold(java.math.BigInteger.valueOf(shift.openingMinor)) { total,entry -> total.add(java.math.BigInteger.valueOf(entry.amountMinor)) }.longValueExact()
+            val calculated=cashEntries(tenant.id,shift.id).fold(java.math.BigInteger.valueOf(shift.openingMinor)) { total,entry -> total.add(java.math.BigInteger.valueOf(entry.amountMinor)) }.toLongExact()
             require(calculated>=0 && (shift.expectedMinor==null || shift.expectedMinor==calculated)) { "Backup cash count snapshot does not match its ledger." }
         }
         query("SELECT * FROM activity_audit WHERE tenant_id=?", tenant.id, map=::auditEvent).forEach { event ->
@@ -1443,7 +1443,7 @@ class PosRepository(path: String = File(System.getProperty("user.home"), ".niger
     private fun remainingAllocation(original:Long,allocated:java.math.BigInteger,message:String):Long {
         val remaining=java.math.BigInteger.valueOf(original).subtract(allocated)
         require(remaining.signum()>=0) { message }
-        return remaining.longValueExact()
+        return remaining.toLongExact()
     }
     private fun requireCustomer(tenantId:String,customerId:String):Customer=query("SELECT * FROM customers WHERE tenant_id=? AND id=?",tenantId,customerId,map=::customer).singleOrNull() ?: throw IllegalArgumentException("Customer not found in this shop.")
     private fun customerChange(r:ResultSet)=CustomerChange(r.getString("id"),r.getString("tenant_id"),r.getString("customer_id"),r.getString("previous_name"),r.getString("previous_phone"),r.getString("previous_address"),r.getObject("previous_credit_limit_minor")?.let { (it as Number).toLong() },r.getString("name"),r.getString("phone"),r.getString("address"),r.getObject("credit_limit_minor")?.let { (it as Number).toLong() },r.getString("created_at"))

@@ -1,5 +1,6 @@
 package pos.output
 
+import pos.data.toLongExact
 import pos.data.DebtAdjustment
 import pos.data.netWrittenOff
 import pos.data.validateDebtAdjustmentLinks
@@ -66,7 +67,7 @@ object CustomerStatementService {
             require(original.creditMinor>0 && original.externalPayments.isEmpty() && !Instant.parse(returned.createdAt).isBefore(Instant.parse(original.createdAt))) {"Credit return does not match its original sale."}
         }
         customerReturns.groupBy {it.saleId}.forEach {(id,rows) ->require(rows.fold(BigInteger.ZERO) {sum,row ->sum+BigInteger.valueOf(row.amountMinor)}<=BigInteger.valueOf(customerSales.single {it.id==id}.creditMinor)) {"Returned credit exceeds the original credit sale."}}
-        fun total(values: List<Long>): Long = values.fold(BigInteger.ZERO) { sum, value -> sum.add(BigInteger.valueOf(value)) }.longValueExact()
+        fun total(values: List<Long>): Long = values.fold(BigInteger.ZERO) { sum, value -> sum.add(BigInteger.valueOf(value)) }.toLongExact()
         val granted = total(customerSales.map { it.creditMinor })
         val paid = total(customerPayments.map { it.amountMinor })
         val returned=total(customerReturns.map {it.amountMinor})

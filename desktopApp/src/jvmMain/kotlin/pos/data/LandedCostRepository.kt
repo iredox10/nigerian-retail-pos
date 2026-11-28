@@ -188,7 +188,7 @@ internal fun splitLandedCost(amountMinor: Long, method: LandedCostMethod, receip
     require(totalWeight.signum() > 0) { "Purchase value is zero for these receipts. Choose Equal per receipt." }
     val amount = BigInteger.valueOf(amountMinor)
     val quotients = weights.mapValues { (_, weight) -> (amount * weight).divideAndRemainder(totalWeight) }
-    val roundedDown = quotients.mapValues { (_, portion) -> portion[0].longValueExact() }.toMutableMap()
+    val roundedDown = quotients.mapValues { (_, portion) -> portion[0].toLongExact() }.toMutableMap()
     val remaining = Math.subtractExact(amountMinor, roundedDown.values.fold(0L, Math::addExact)).toInt()
     val roundingOrder = quotients.entries.sortedWith(
         compareByDescending<Map.Entry<String, Array<BigInteger>>> { it.value[1] }.thenBy { it.key }

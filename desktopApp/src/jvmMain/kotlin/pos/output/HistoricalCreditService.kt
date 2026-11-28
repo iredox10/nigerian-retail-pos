@@ -1,5 +1,6 @@
 package pos.output
 
+import pos.data.toLongExact
 import pos.data.DebtAdjustment
 import pos.data.netWrittenOff
 import pos.domain.*
@@ -51,7 +52,7 @@ object HistoricalCreditService {
             val repaid=datedPayments.filter {it.customerId==customer.id}.fold(BigInteger.ZERO) {sum,payment -> sum+BigInteger.valueOf(payment.amountMinor)}
             val reduced=datedReturns.filter {it.customerId==customer.id}.fold(BigInteger.ZERO) {sum,row ->sum+BigInteger.valueOf(row.amountMinor)}
             val writtenOff = datedAdjustments.filter { it.review.customerId == customer.id }.netWrittenOff()
-            customer.copy(balanceMinor=(credit-repaid-reduced-BigInteger.valueOf(writtenOff)).longValueExact())
+            customer.copy(balanceMinor=(credit-repaid-reduced-BigInteger.valueOf(writtenOff)).toLongExact())
         }
         return HistoricalCreditReview(tenantId,through,DebtAgeingService.build(tenantId,historicalCustomers,datedSales,datedPayments,through,datedAssignments,datedReturns,datedAdjustments))
     }

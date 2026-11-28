@@ -135,7 +135,7 @@ internal fun PosRepository.netWrittenOffByReceipt(tenantId: String, saleId: Stri
         .filter { through == null || Instant.parse(it.createdAt) <= through }.netWrittenOff()
 
 internal fun List<DebtAdjustment>.netWrittenOff(): Long =
-    fold(BigInteger.ZERO) { total, event -> total - BigInteger.valueOf(event.review.deltaMinor) }.longValueExact()
+    fold(BigInteger.ZERO) { total, event -> total - BigInteger.valueOf(event.review.deltaMinor) }.toLongExact()
         .also { require(it >= 0) { "Restored debt exceeds written-off debt." } }
 
 internal fun PosRepository.debtAdjustmentDelta(tenantId: String, customerId: String): BigInteger =

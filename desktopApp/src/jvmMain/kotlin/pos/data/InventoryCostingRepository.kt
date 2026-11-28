@@ -127,7 +127,7 @@ private data class CostLayer(val sourceId: String, val quantity: Long, var total
     fun remainingCost(): Long? = totalCost?.let { it - proportionalCost(it, consumed, quantity) }
 }
 private fun proportionalCost(cost: Long, quantity: Long, total: Long): Long =
-    (BigInteger.valueOf(cost) * BigInteger.valueOf(quantity) / BigInteger.valueOf(total)).longValueExact()
+    (BigInteger.valueOf(cost) * BigInteger.valueOf(quantity) / BigInteger.valueOf(total)).toLongExact()
 private fun openingScaled(product: Product): Long? = product.openingStock?.let { value ->
     runCatching { BigDecimal.valueOf(value).movePointRight(product.quantityPrecision).longValueExact() }.getOrNull()
 }

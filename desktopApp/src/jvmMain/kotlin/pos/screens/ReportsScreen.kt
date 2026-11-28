@@ -1,5 +1,6 @@
 package pos.screens
 
+import pos.data.toLongExact
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -46,7 +47,7 @@ fun ReportsScreen(repo: PosRepository, tenantId: String) {
     val rangeResult = remember(start, end) { runCatching { ReportDateRange(LocalDate.parse(start), LocalDate.parse(end)) } }
     val range = rangeResult.getOrNull()
     val records = loaded.getOrNull()
-    fun sum(values: Iterable<Long>) = values.fold(BigInteger.ZERO) { total, value -> total.add(BigInteger.valueOf(value)) }.longValueExact()
+    fun sum(values: Iterable<Long>) = values.fold(BigInteger.ZERO) { total, value -> total.add(BigInteger.valueOf(value)) }.toLongExact()
 
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(20.dp)) {
         SectionHeader("Your shop's reports", "Local records only · Dates include the whole day in West Africa Time")

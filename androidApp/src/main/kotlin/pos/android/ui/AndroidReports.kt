@@ -32,7 +32,7 @@ fun AndroidReportsScreen(repo:PosRepository,tenantId:String) {
             data.copy(datedSales=data.sales.filter {range.contains(it.createdAt)},datedReturns=data.returns.filter {range.contains(it.createdAt)},datedCash=data.cash.filter {range.contains(it.createdAt)},datedExpenses=data.expenses.filter {range.contains(it.createdAt)})
         }
     }
-    fun total(values:Iterable<Long>)=values.fold(BigInteger.ZERO) {sum,v ->sum+BigInteger.valueOf(v)}.longValueExact()
+    fun total(values:Iterable<Long>)=values.fold(BigInteger.ZERO) {sum,v ->sum+BigInteger.valueOf(v)}.toLongExact()
     LazyColumn(Modifier.fillMaxSize().imePadding(),verticalArrangement=Arrangement.spacedBy(12.dp),contentPadding=PaddingValues(bottom=24.dp)) {
         item {SectionHeader("Reports","Saved local records · Inclusive dates in West Africa Time")}
         item {PosTextField(from,{from=it},"From (YYYY-MM-DD)")}

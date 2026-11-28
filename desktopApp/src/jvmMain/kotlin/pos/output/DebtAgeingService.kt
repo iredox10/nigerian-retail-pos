@@ -1,5 +1,6 @@
 package pos.output
 
+import pos.data.toLongExact
 import pos.data.DebtAdjustment
 import pos.data.netWrittenOff
 import pos.domain.Customer
@@ -77,7 +78,7 @@ data class CreditReviewRow(
 
 private fun exactTotal(values: List<Long>): Long = values.fold(BigInteger.ZERO) { sum, value ->
     sum.add(BigInteger.valueOf(value))
-}.longValueExact()
+}.toLongExact()
 
 object DebtAgeingService {
     const val ALLOCATION_NOTICE = "Payments not allocated to receipts remain explicitly unassigned. Assign them before calculating an exact overdue invoice balance. Current customer debt includes all saved dates."

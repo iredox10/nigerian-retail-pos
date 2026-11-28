@@ -16,6 +16,14 @@ import java.util.UUID
 
 @RunWith(AndroidJUnit4::class)
 class AndroidRepositoryTest {
+    @Test fun exactLongConversionsKeepSignedBoundariesAndRejectOverflowOnNativeRuntime() {
+        for (value in listOf(Long.MIN_VALUE, Long.MAX_VALUE, -1L, 0L, 1L))
+            assertEquals(value, java.math.BigInteger.valueOf(value).toLongExact())
+        assertThrows(ArithmeticException::class.java) { java.math.BigInteger.valueOf(Long.MAX_VALUE).add(java.math.BigInteger.ONE).toLongExact() }
+        assertThrows(ArithmeticException::class.java) { java.math.BigInteger.valueOf(Long.MIN_VALUE).subtract(java.math.BigInteger.ONE).toLongExact() }
+        assertThrows(ArithmeticException::class.java) { java.math.BigInteger.ONE.shiftLeft(200).toLongExact() }
+    }
+
     private fun fixture(block:(java.io.File)->Unit) {
         val context=ApplicationProvider.getApplicationContext<Context>()
         val dir=java.io.File(context.cacheDir,"repository-test-${UUID.randomUUID()}").apply {mkdirs()}

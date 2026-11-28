@@ -5,6 +5,7 @@ import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.Typeface
 import android.graphics.pdf.PdfDocument
+import pos.data.toLongExact
 import pos.data.PosRepository
 import pos.domain.*
 import pos.output.*
@@ -23,7 +24,7 @@ fun PosRepository.prepareAndroidReportDocument(tenantId: String, range: ReportDa
         val sales = sales(tenantId); val returns = saleReturns(tenantId)
         val products = products(tenantId, true); val events = auditEvents(tenantId)
         val selected = sales.filter { range.contains(it.createdAt) }
-        fun total(values: List<Long>) = values.fold(BigInteger.ZERO) { sum, value -> sum + BigInteger.valueOf(value) }.longValueExact()
+        fun total(values: List<Long>) = values.fold(BigInteger.ZERO) { sum, value -> sum + BigInteger.valueOf(value) }.toLongExact()
         val generated = Instant.now().toString()
         val text = buildString {
             appendLine("Saved local records report")

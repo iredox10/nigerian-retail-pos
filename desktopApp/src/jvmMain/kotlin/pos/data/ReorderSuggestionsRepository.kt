@@ -83,7 +83,7 @@ fun PosRepository.reorderSuggestions(
         val threshold = product.reorderLevel?.let { Math.multiplyExact(it.toLong(), scale) }
         val minimum = if (threshold == null) 0L else Math.addExact(threshold, 1L)
         val demandTarget = (BigInteger.valueOf(sold) * BigInteger.valueOf(coverDays.toLong() + (policy?.leadDays ?: 0)) +
-            BigInteger.valueOf(observationDays - 1)).divide(BigInteger.valueOf(observationDays)).longValueExact()
+            BigInteger.valueOf(observationDays - 1)).divide(BigInteger.valueOf(observationDays)).toLongExact()
         val target = maxOf(minimum, Math.addExact(demandTarget, policy?.safetyScaled ?: 0L))
         val need = ((target - available).coerceAtLeast(0) - pending).coerceAtLeast(0)
         val multiple = policy?.multipleScaled ?: 1L
