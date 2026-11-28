@@ -470,12 +470,14 @@ class StaffAccess(
         appendStaffAudit(ownerSession,"staff.created",person.id,"Created staff: name=${person.name}; role=${person.role.name}; active=${person.active}")
         person
     }
-    @Synchronized fun updateMember(ownerSession:StaffSession,id:String,name:String,role:StaffRole,active:Boolean) = transaction {
+    @Synchronized fun updateMember(ownerSession:StaffSession,id:String,name:String,role:StaffRole,active:Boolean,expected:StaffMember?=null) = transaction {
         requireSession(ownerSession,StaffPermission.MANAGE_STAFF)
         val old=requireMember(ownerSession.tenantId,id)
         val changed=old.copy(name=name.trim(),role=role,active=active)
+        expected?.let { require(it.tenantId==ownerSession.tenantId && it.id==id) {"This staff review belongs to another shop or account."} }
         requireUniqueName(changed.tenantId,changed.name,id)
         if(changed!=old) {
+            require(expected==null || expected==old) {"Staff details changed after review. Reload the account before saving."}
             execute("UPDATE local_staff SET name=?,role=?,active=?,version=version+1 WHERE tenant_id=? AND id=?",changed.name,role.name,if(active)1 else 0,changed.tenantId,id)
             execute("DELETE FROM staff_pins WHERE tenant_id=? AND staff_id=?",changed.tenantId,id)
             invalidate(changed.tenantId,id)

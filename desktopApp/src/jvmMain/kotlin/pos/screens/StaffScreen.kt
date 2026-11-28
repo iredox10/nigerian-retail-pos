@@ -145,7 +145,7 @@ private fun OwnerStaffScreen(access: StaffAccess, session: StaffSession, onChang
                 confirmButton = { PosButton("Save access", {
                     try {
                         require(editName.trim().isNotEmpty()) { "Enter the staff member's name." }
-                        access.updateMember(session, member.id, editName.trim(), editRole, editActive)
+                        access.updateMember(session, member.id, editName.trim(), editRole, editActive, expected = member)
                         editing = null; error = null; message = "Staff access updated on this computer."
                         changed()
                     } catch (e: Exception) { editError = e.message ?: "Access could not be changed. Your entries are still here." }

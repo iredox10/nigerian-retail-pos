@@ -16,6 +16,16 @@ class StaffAuditTest {
         } finally {dir.toFile().deleteRecursively()}
     }
 
+    @Test fun reviewedEditsRejectStaleDetailsAndForeignReviewsButRetryExactSavedState() = fixture { _, access, owner ->
+        val original = access.addMember(owner, "Amina", StaffRole.CASHIER, "staff-password")
+        val changed = access.updateMember(owner, original.id, "Amina manager", StaffRole.MANAGER, true, expected = original)
+        assertFailsWith<IllegalArgumentException> { access.updateMember(owner, original.id, "Stale name", StaffRole.CASHIER, false, expected = original) }
+        assertEquals(changed, access.updateMember(owner, original.id, changed.name, changed.role, changed.active, expected = original))
+        assertFailsWith<IllegalArgumentException> { access.updateMember(owner, original.id, changed.name, changed.role, changed.active, expected = original.copy(tenantId = "other")) }
+        assertEquals(listOf(changed), access.members(owner))
+        assertEquals(2, access.auditEvents(owner).size)
+    }
+
     @Test fun createUpdateAndResetKeepOwnerSnapshotAndExcludeCredentialSecrets() = fixture { _,access,owner ->
         val staff=access.addMember(owner,"Amina",StaffRole.CASHIER,"private-staff-password","create-once")
         val original=access.auditEvents(owner).single()
