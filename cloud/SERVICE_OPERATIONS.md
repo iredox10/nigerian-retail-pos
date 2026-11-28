@@ -2,7 +2,7 @@
 
 ## Email verification and recovery
 
-Email is available to the apps only when delivery is configured. Existing local unlock passwords are independent. Verify the account email before relying on password recovery. A completed reset consumes its code, invalidates account sessions, revokes device sharing and closes pending approvals; saved business records remain.
+Email is available to the apps only when the host, valid sender, authenticated username/password and valid port are configured. Partial settings leave recovery unavailable. Configuration readiness does not establish provider acceptance or inbox delivery. Existing local unlock passwords are independent. Verify the account email before relying on password recovery. A completed reset consumes its code, invalidates account sessions, revokes device sharing and closes pending approvals; saved business records remain.
 
 Resend supports the server's SMTP integration. Configure these privately in the hosting dashboard or an authenticated CLI session:
 
@@ -35,3 +35,5 @@ A fresh hosted backup was captured and restored into an isolated PostgreSQL 17 c
 Daily `DATABASE_URL` backups were scheduled successfully at **02:00 Africa/Lagos** using Heroku CLI. No schedule existed before this change. Heroku does not notify on scheduled-backup failure, so backup freshness must also be monitored. [Heroku backup scheduling/retention](https://devcenter.heroku.com/articles/heroku-postgres-backups).
 
 The repository is now published and the readiness workflow's first manual execution [passed](https://github.com/iredox10/nigerian-retail-pos/actions/runs/45624028583). Its 15-minute schedule is present on the default branch. An actual cron execution and failure-notification delivery are not yet verified; they are distinct from this successful manual check.
+
+28 November preference: the shop owner will provide verified sender/private Resend credentials later. No placeholder sender is installed. The configuration helper and app recovery flows are prepared; actual sending remains unavailable until configuration and inbox acceptance. The `Cloud server acceptance` workflow runs real HTTP/PostgreSQL recovery tests with an explicitly test-only mailbox, plus SMTP configuration validation; it sends no real provider email.

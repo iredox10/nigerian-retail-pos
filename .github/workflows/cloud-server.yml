@@ -1,0 +1,82 @@
+name: Cloud server acceptance
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/cloud-server.yml'
+      - 'server/**'
+      - 'businessCore/**'
+      - 'cloudProtocol/**'
+      - 'cloudClient/**'
+      - 'shared/src/**'
+      - 'desktopApp/src/jvmMain/kotlin/pos/data/**'
+      - 'desktopApp/src/jvmMain/kotlin/pos/security/**'
+      - '**/*.gradle.kts'
+      - 'gradle/**'
+      - 'gradlew*'
+  pull_request:
+    paths:
+      - '.github/workflows/cloud-server.yml'
+      - 'server/**'
+      - 'businessCore/**'
+      - 'cloudProtocol/**'
+      - 'cloudClient/**'
+permissions:
+  contents: read
+concurrency:
+  group: cloud-server-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  server:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_DB: retailpos_ci
+          POSTGRES_USER: retailpos
+          POSTGRES_PASSWORD: ci-only-disposable-password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd 'pg_isready -U retailpos -d retailpos_ci'
+          --health-interval 5s --health-timeout 5s --health-retries 12
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Verify real HTTP and PostgreSQL with isolated test mailbox
+        env:
+          CLOUD_TEST_JDBC_URL: jdbc:postgresql://localhost:5432/retailpos_ci
+          CLOUD_TEST_DB_USER: retailpos
+          CLOUD_TEST_DB_PASSWORD: ci-only-disposable-password
+        run: >-
+          ./gradlew --no-daemon --max-workers=2
+          -Dorg.gradle.jvmargs='-Xmx2300m -XX:ActiveProcessorCount=2 -Dfile.encoding=UTF-8'
+          -Pkotlin.compiler.execution.strategy=in-process
+          :server:test --tests pos.cloud.server.CloudServerIntegrationTest
+          --tests pos.cloud.server.CloudSecurityTest --tests pos.cloud.server.SmtpConfigurationTest
+      - name: Require all twenty local server cases without skips
+        run: |
+          python3 - <<'PY'
+          import pathlib, xml.etree.ElementTree as ET
+          reports = list(pathlib.Path('server/build/test-results/test').glob('TEST-*.xml'))
+          expected = {'CloudServerIntegrationTest': 14, 'CloudSecurityTest': 3, 'SmtpConfigurationTest': 3}
+          for name, count in expected.items():
+              matches = [ET.parse(p).getroot() for p in reports if p.stem.endswith('.'+name)]
+              assert len(matches) == 1, name
+              suite = matches[0]
+              assert int(suite.attrib['tests']) == count, suite.attrib
+              assert all(int(suite.attrib.get(key, 0)) == 0 for key in ['failures', 'errors', 'skipped']), suite.attrib
+          print('All 20 local server cases passed; no real provider email was sent.')
+          PY
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: Cloud-server-acceptance-reports
+          path: server/build/test-results/test/
+          if-no-files-found: warn
+          retention-days: 7
