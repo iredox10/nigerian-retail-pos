@@ -50,6 +50,7 @@ fun AndroidSellScreen(
     var adding by remember { mutableStateOf<Product?>(null) }
     var holding by remember { mutableStateOf(false) }
     var heldOpen by remember { mutableStateOf(false) }
+    var removingHeld by remember { mutableStateOf<HeldSale?>(null) }
     var holdName by remember { mutableStateOf("") }
     var reviewed by remember { mutableStateOf<SellPaymentReview?>(null) }
     var acknowledged by remember { mutableStateOf(false) }
@@ -332,6 +333,7 @@ fun AndroidSellScreen(
     if (heldOpen) AlertDialog(onDismissRequest = { heldOpen = false }, title = { Text("Saved sales") }, text = {
         Column(Modifier.heightIn(max = 450.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             held.exceptionOrNull()?.let { Text(it.message.orEmpty(), color = MaterialTheme.colorScheme.error) }
+            Text("These are unfinished sales on this device. Removing one does not change a saved receipt, refund a payment or move stock.")
             if (held.getOrDefault(emptyList()).isEmpty()) Text("No sales have been put aside.")
             if (draft.cart.isNotEmpty()) Text("Put this sale aside before resuming another.")
             held.getOrDefault(emptyList()).forEach { saved ->
@@ -342,10 +344,23 @@ fun AndroidSellScreen(
                         acknowledged = false; approvalId = null; approvalFingerprint = null; approvalRefresh++ }
                     catch (failure: Exception) { error = failure.message }
                 }, enabled = draft.cart.isEmpty())
+                OutlinedButton(onClick = { removingHeld = saved; error = null }) { Text("Remove unfinished sale") }
             }
             error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
         }
     }, confirmButton = { TextButton({ heldOpen = false }) { Text("Close") } })
+    removingHeld?.let { selected ->
+        OperationsDialog("Remove this unfinished sale?", { removingHeld = null }, "Remove unfinished sale", action = {
+            withContext(Dispatchers.IO) {
+                repo.featureRead(tenantId, StaffPermission.SELL) { storeResult.getOrThrow().discardHeld(selected.id) }
+            }
+            removingHeld = null; revision++; notice = "Unfinished sale removed. Saved receipts and current stock are unchanged."
+        }) {
+            Text(selected.name, style = MaterialTheme.typography.titleMedium)
+            Text("This removes only the selected saved draft. Your current basket and other saved drafts are kept. It does not refund payments or reverse a completed sale.")
+        }
+    }
+
     }
 }
 
