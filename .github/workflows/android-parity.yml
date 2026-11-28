@@ -25,6 +25,11 @@ concurrency:
   cancel-in-progress: true
 jobs:
   android:
+    name: Android API ${{ matrix.api }}
+    strategy:
+      fail-fast: false
+      matrix:
+        api: [30, 32, 35]
     runs-on: ubuntu-24.04
     timeout-minutes: 40
     steps:
@@ -41,7 +46,7 @@ jobs:
           :desktopApp:jvmTest --tests 'pos.output.*' --tests 'pos.security.MinimumPriceApprovalSecurityTest' --tests 'pos.security.CashHandoverSecurityTest' --tests 'pos.security.StaffAuditTest'
           :androidApp:testAcceptanceUnitTest
           :androidApp:assembleAcceptance :androidApp:assembleAcceptanceAndroidTest
-      - name: Prepare isolated API 35 emulator
+      - name: Prepare isolated API ${{ matrix.api }} emulator
         id: emulator
         run: |
           export PATH="$ANDROID_HOME/platform-tools:$PATH"
@@ -50,10 +55,10 @@ jobs:
           echo "ANDROID_AVD_HOME=$ANDROID_AVD_HOME" >> "$GITHUB_ENV"
           mkdir -p "$ANDROID_AVD_HOME"
           sudo chmod a+rw /dev/kvm
-          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" 'platform-tools' 'emulator' 'system-images;android-35;google_apis;x86_64'
-          printf 'no\n' | "$ANDROID_HOME/cmdline-tools/latest/bin/avdmanager" create avd -n RetailPOS_Parity_CI -p "$ANDROID_AVD_HOME/RetailPOS_Parity_CI.avd" -k 'system-images;android-35;google_apis;x86_64' --device pixel_4
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" 'platform-tools' 'emulator' 'system-images;android-${{ matrix.api }};google_apis;x86_64'
+          printf 'no\n' | "$ANDROID_HOME/cmdline-tools/latest/bin/avdmanager" create avd -n RetailPOS_Parity_CI -p "$ANDROID_AVD_HOME/RetailPOS_Parity_CI.avd" -k 'system-images;android-${{ matrix.api }};google_apis;x86_64' --device pixel_4
           test -f "$ANDROID_AVD_HOME/RetailPOS_Parity_CI.avd/config.ini"
-          printf 'avd.ini.encoding=UTF-8\npath=%s/RetailPOS_Parity_CI.avd\ntarget=android-35\n' "$ANDROID_AVD_HOME" > "$ANDROID_AVD_HOME/RetailPOS_Parity_CI.ini"
+          printf 'avd.ini.encoding=UTF-8\npath=%s/RetailPOS_Parity_CI.avd\ntarget=android-${{ matrix.api }}\n' "$ANDROID_AVD_HOME" > "$ANDROID_AVD_HOME/RetailPOS_Parity_CI.ini"
           "$ANDROID_HOME/emulator/emulator" -list-avds
           "$ANDROID_HOME/emulator/emulator" -avd RetailPOS_Parity_CI -port 5580 -no-window -no-snapshot -no-boot-anim -no-audio -gpu swiftshader_indirect -feature -Vulkan -memory 1536 -cores 2 > emulator.log 2>&1 &
           timeout 180 adb -s emulator-5580 wait-for-device
@@ -64,20 +69,21 @@ jobs:
           adb -s emulator-5580 shell wm density 280
       - name: Run all native cases against actual hosted cloud
         env:
-          QA_RUN_ID: github-${{ github.run_id }}-${{ github.run_attempt }}
+          QA_RUN_ID: github-${{ github.run_id }}-${{ github.run_attempt }}-api-${{ matrix.api }}
+          QA_ANDROID_API: ${{ matrix.api }}
         run: |
           adb -s emulator-5580 install --user 0 -r androidApp/build/outputs/apk/acceptance/androidApp-acceptance.apk
           adb -s emulator-5580 install --user 0 -r androidApp/build/outputs/apk/androidTest/acceptance/androidApp-acceptance-androidTest.apk
           adb -s emulator-5580 shell am instrument --user 0 -w -e listener pos.android.qa.PersistentQaResults -e qaRunId "$QA_RUN_ID" -e cloudUrl https://nigerian-retail-pos-cloud-a03da41beea8.herokuapp.com ng.retailpos.android.acceptance.test/androidx.test.runner.AndroidJUnitRunner > native-results.log
           adb -s emulator-5580 shell run-as ng.retailpos.android.acceptance cat files/qa-results/last-run.json > native-results.json
-          python3 -c 'import json,os; r=json.load(open("native-results.json")); assert r["runId"]==os.environ["QA_RUN_ID"] and r["status"]=="finished" and r["tests"]==46 and r["failures"]==r["ignored"]==r["assumptions"]==0, r; print("All 46 native cases passed")'
+          python3 -c 'import json,os; r=json.load(open("native-results.json")); assert r["runId"]==os.environ["QA_RUN_ID"] and r["status"]=="finished" and r["androidApi"]==int(os.environ["QA_ANDROID_API"]) and r["tests"]==46 and r["failures"]==r["ignored"]==r["assumptions"]==0, r; print("All 46 native cases passed")'
       - name: Inspect actual Android screens while offline
-        if: ${{ always() && !cancelled() && steps.emulator.conclusion == 'success' }}
+        if: ${{ always() && !cancelled() && matrix.api == 35 && steps.emulator.conclusion == 'success' }}
         run: python3 androidApp/qa/capture_parity.py emulator-5580 parity-screens
       - uses: actions/upload-artifact@v7
         if: always()
         with:
-          name: Android-parity-evidence
+          name: Android-parity-evidence-api-${{ matrix.api }}
           path: |
             native-results.json
             native-results.log

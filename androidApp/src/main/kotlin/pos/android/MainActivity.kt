@@ -148,9 +148,9 @@ private fun AndroidApp(repo:PosRepository,access:StaffAccess,installLock:((()->U
             if(receipt!=null) AndroidReceiptScreen(repo,current.id,requireNotNull(receipt),onBack={receipt=null})
             else when(route) {
                 "Sell" -> AndroidSellScreen(repo,current.id,{changed()},{receipt=it},
-                    onRequestApproval=if(android.os.Build.VERSION.SDK_INT>=33) ({lines,operation,response ->
+                    onRequestApproval={lines,operation,response ->
                         approvalRequest=repo.minimumPriceApprovalRequest(current.id,operation,lines);approvalResponse=response
-                    }) else null, allowDiscounts=allowed(StaffPermission.DISCOUNT))
+                    }, allowDiscounts=allowed(StaffPermission.DISCOUNT))
                 "Sales" -> if(allowed(StaffPermission.VIEW_SALES)) AndroidSalesScreen(repo,current.id) {receipt=it} else Text("Your role cannot view sales.")
                 "Stock" -> if(allowed(StaffPermission.MANAGE_STOCK)) AndroidStockScreen(repo,current.id) {changed()} else Text("Your role cannot manage stock.")
                 "Customers" -> if(allowed(StaffPermission.MANAGE_CUSTOMERS)) AndroidCustomersScreen(repo,current.id) {changed()} else Text("Your role cannot manage customers.")

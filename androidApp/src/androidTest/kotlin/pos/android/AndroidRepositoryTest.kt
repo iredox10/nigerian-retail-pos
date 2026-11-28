@@ -76,7 +76,6 @@ class AndroidRepositoryTest {
         }
     }
     @Test fun actualAndroidManagerSignatureAuthorizesOnlyTheReviewedCashierSale()=fixture {dir ->
-        org.junit.Assume.assumeTrue(android.os.Build.VERSION.SDK_INT>=33)
         PosRepository(dir.resolve("pos.db").path).use {repo ->
             val shop=repo.createTenant("Approval shop")
             val product=repo.addProduct(shop.id,"Rice","bag",1000,10.0)

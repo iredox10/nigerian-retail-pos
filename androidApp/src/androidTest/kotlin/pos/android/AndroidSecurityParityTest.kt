@@ -1,11 +1,9 @@
 package pos.android
 
 import android.content.Context
-import android.os.Build
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import org.junit.Assert.*
-import org.junit.Assume.assumeTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 import pos.android.platform.AndroidPrivateFiles
@@ -130,7 +128,6 @@ class AndroidSecurityParityTest {
     }
 
     @Test fun recipientFullPasswordHandoverRetainsShortageAndSignedHistoryAcrossRestore() = fixture { directory ->
-        assumeTrue(Build.VERSION.SDK_INT >= 33)
         PosRepository(File(directory, "pos.db").path).use { repo ->
             val shop = repo.createTenant("Handover shop")
             WorkspaceAccess(directory.toPath()).register(shop.id, "owner full password")
