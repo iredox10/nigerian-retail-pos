@@ -1,6 +1,6 @@
 # Nigerian Retail POS
 
-An offline-first Kotlin desktop retail POS for Nigerian merchants, with an Android app sharing the domain, design system and local transaction repositories. The working local app covers the scope below. The full specification remains tracked in IMPLEMENTATION_TODO.md; wider platform support and production rollout acceptance remain unfinished.
+An offline-first Kotlin desktop retail POS for Nigerian merchants, with an Android app sharing the domain, design system and local transaction repositories. The working local app covers the scope below. The full remaining scope is tracked in [REMAINING_FEATURES_TODO.md](REMAINING_FEATURES_TODO.md); wider platform support and production rollout acceptance remain unfinished.
 
 ## Cloud connection
 
@@ -43,7 +43,7 @@ Desktop distributions are built for the host operating system. Build and test th
 
 ## Android development build
 
-Requires JDK 17 and Android SDK platform 35/build tools, configured through Android Studio or an untracked `local.properties`. The initial minimum is Android 11 (API 30). Manager price-approval signing and authenticated cash handover are currently available on API 33+ only. The APK is signed with the development debug key; it is not a production release or physical-hardware compatibility claim.
+Requires JDK 17 and Android SDK platform 35/build tools, configured through Android Studio or an untracked `local.properties`. The initial minimum is Android 11 (API 30). Portable manager price-approval signing and authenticated cash handover are exposed on API 30+; older-device execution is tracked separately in BUILD_STATUS.md. The APK is signed with the development debug key; it is not a production release or physical-hardware compatibility claim.
 
 ```sh
 ./gradlew :androidApp:testDebugUnitTest :androidApp:assembleDebug :androidApp:assembleDebugAndroidTest
@@ -54,7 +54,7 @@ adb shell am instrument -w ng.retailpos.android.test/androidx.test.runner.Androi
 
 Android now also includes catalogue/metadata/package editing, owner recovery and staff PIN access, authenticated shared-drawer handover, editable quotations/orders/dispatch, and guarded CSV previews/exports. Additional native workflows remain tracked in the Android coverage matrix.
 
-The APK is at `androidApp/build/outputs/apk/debug/androidApp-debug.apk`. Records stay in Android app-private storage; they do not synchronize with desktop. The app declares no internet permission and disables Android automatic app-data backup. Explicit encrypted document export/restore is available to the owner. Working records are not encrypted. See [Android plan](ANDROID_IMPLEMENTATION_PLAN.md), [coverage](ANDROID_FEATURE_PARITY.md) and [build evidence](BUILD_STATUS.md) for implementation and acceptance limits.
+The APK is at `androidApp/build/outputs/apk/debug/androidApp-debug.apk`. Records stay in Android app-private storage. Owner-approved Connected devices can share records with desktop through HTTPS; ordinary offline work does not need the server. The app declares Internet permission and disables Android automatic app-data backup. Explicit encrypted document export/restore is available to the owner. Working records are not encrypted. See [Android plan](ANDROID_IMPLEMENTATION_PLAN.md), [coverage](ANDROID_FEATURE_PARITY.md) and [build evidence](BUILD_STATUS.md) for implementation and acceptance limits.
 
 ## Implemented
 

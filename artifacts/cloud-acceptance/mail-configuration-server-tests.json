@@ -1,0 +1,40 @@
+{
+  "date": "2026-11-28",
+  "source": "19e7e73",
+  "database": "disposable PostgreSQL 17 Alpine, loopback-only random port",
+  "realHttpAndPostgres": true,
+  "testMailboxOnly": true,
+  "actualProviderEmailSent": false,
+  "productionConfigurationChanged": false,
+  "tests": 20,
+  "failures": 0,
+  "errors": 0,
+  "skipped": 0,
+  "gradleElapsedSeconds": 72,
+  "suites": [
+    {
+      "name": "pos.cloud.server.CloudServerIntegrationTest",
+      "tests": "14",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "22.836"
+    },
+    {
+      "name": "pos.cloud.server.CloudSecurityTest",
+      "tests": "3",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "1.159"
+    },
+    {
+      "name": "pos.cloud.server.SmtpConfigurationTest",
+      "tests": "3",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "0.038"
+    }
+  ]
+}

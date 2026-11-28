@@ -2,6 +2,12 @@
 
 23 November 2026 · Orders, stock holds, promotions and purchasing
 
+## Deferred email setup and native report work — 28 November 2026
+
+The user will configure the verified Resend sender/private credentials later. The integration and private configuration helper remain ready; no placeholder sender or real email was installed/sent. SMTP readiness now rejects missing credentials, malformed host/port, invalid sender lists and header injection instead of advertising partially configured recovery. All **20 local server cases passed**, with zero failures/errors/skips, against a new loopback-only disposable PostgreSQL 17 database and real HTTP: 14 integration, three security and three SMTP-configuration cases. This uses a test-only mailbox and does not establish inbox delivery. The database container was removed afterward. [Actual test summary](artifacts/cloud-acceptance/mail-configuration-server-tests.json). These readiness changes have not yet been deployed over hosted v9.
+
+Android report PDF export now prepares a local dated snapshot, reviews its text explicitly, rechecks shop/report authority before document output, and renders bounded paginated A4 PDFs. The report retains original sales/cash/credit, unconfirmed external amounts, current-debt timing, product/category/staff activity and completeness/profit limitations. The new three-API CI matrix expects **48 native cases**, adding selected held-draft isolation and native PDF pagination/export-authority checks. Compilation and native execution of this batch are being verified; document-picker output, merchant acceptance and physical printing are not yet claimed.
+
 ## Android staff and saved-sale follow-up — 28 November 2026
 
 Run [46137740261](https://github.com/iredox10/nigerian-retail-pos/actions/runs/46137740261), source `e589a3f`, completed **45 API 35 native cases with zero failures, ignored tests or assumptions**, in **159.737 seconds**. [Actual native report](artifacts/cloud-acceptance/staff-ui-review/native-results.json). This includes the reviewed staff name/role/active editor, exact-retry/stale-edit guards, PIN/session revocation and retained owner-only security history. Selected desktop output/security tests and the Android JVM checks also passed in that job.
