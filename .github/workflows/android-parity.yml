@@ -37,7 +37,7 @@ jobs:
           ./gradlew --no-daemon -PandroidAcceptance=true --max-workers=2
           -Dorg.gradle.jvmargs='-Xmx2300m -XX:ActiveProcessorCount=2 -Dfile.encoding=UTF-8'
           -Pkotlin.compiler.execution.strategy=in-process
-          :desktopApp:jvmTest --tests 'pos.output.*'
+          :desktopApp:jvmTest --tests 'pos.output.*' --tests 'pos.security.MinimumPriceApprovalSecurityTest' --tests 'pos.security.CashHandoverSecurityTest'
           :androidApp:testAcceptanceUnitTest
           :androidApp:assembleAcceptance :androidApp:assembleAcceptanceAndroidTest
       - name: Prepare isolated API 35 emulator
