@@ -2,6 +2,16 @@
 
 23 November 2026 · Orders, stock holds, promotions and purchasing
 
+## Android receipt design and signing correction — 28 November 2026
+
+The Android receipt editor now has separate shop/design views, Classic/Modern/Compact looks, frames, preset/custom accents, left/centre headings, logo visibility, retained artwork and settings history. Its paged preview is rendered from the actual native PDF and explicitly marks sample items/amounts as **DESIGN PREVIEW — Not a sale**; sample previews create no products or financial events. Settings/artwork save together under the existing version/permission guards. Logo changes retain unsaved receipt-detail entries. Saved receipt wording distinguishes debt at sale from today's debt and prevents a printed copy from implying another payment.
+
+The earlier API 35 run [46009704772](https://github.com/iredox10/nigerian-retail-pos/actions/runs/46009704772) finished **43 native cases: 41 passed, two failed, zero ignored/assumptions**, in 106.677 seconds. Both failures were existing manager-approval/cash-handover signing paths selecting an uninitialized Android keystore generator. [Original failed native report](artifacts/cloud-acceptance/parity-43-native-results.json). The correction uses an explicit Android software Ed25519 provider without changing global TLS/JCA provider order, historical key encoding or proof format. This preserves current app-private signing-key storage; it does not implement hardware key migration or working-database encryption.
+
+**10 QA JVM tests pass**, including Android-provider↔desktop-JDK key/signature interoperability and changed-payload rejection. The provider/designer code and all **44 native test sources compile**. Both QA APKs packaged successfully in **48 seconds** after excluding duplicate OSGi metadata; these remain development builds. [Local build and APK hashes](artifacts/cloud-acceptance/receipt-design-local-build.json). Subsequent canonical wording and an offline UI save/restart check are running in CI. The local desktop security test attempt was interrupted when its daemon disappeared; no passing result is claimed for it. CI includes those desktop security regressions as well as the portable output tests.
+
+The newest **44-case native execution, actual receipt rendering and offline design persistence checks remain pending**. Merchant research, full keyboard/TalkBack checks, physical printer/paper negotiation and API 30–32 approval/handover UI acceptance remain open. Payment-provider work stays deferred; Resend delivery still needs an actual verified sender and private credentials.
+
 ## Android parity implementation — 27 November 2026
 
 The active delivery checklist is [REMAINING_FEATURES_TODO.md](REMAINING_FEATURES_TODO.md). Live payment-provider integration is deferred by the user. Resend recovery remains unavailable until a verified sender and private credentials are configured; the response “yes” did not supply a sender address.

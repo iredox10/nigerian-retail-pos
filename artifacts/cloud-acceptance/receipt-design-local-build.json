@@ -1,0 +1,23 @@
+{
+  "sourceCommit": "5b54a8e",
+  "build": "QA application and instrumentation APKs",
+  "status": "passed",
+  "durationSeconds": 48,
+  "jvmTests": {
+    "tests": 10,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "nativeExecutionForThisBuild": "pending",
+  "artifacts": {
+    "androidApp/build/outputs/apk/acceptance/androidApp-acceptance.apk": {
+      "bytes": 50194936,
+      "sha256": "364ca55796bad18dbf3e38e49c832cd4f9a230da46e7ea360891534ea09b4df9"
+    },
+    "androidApp/build/outputs/apk/androidTest/acceptance/androidApp-acceptance-androidTest.apk": {
+      "bytes": 1219812,
+      "sha256": "b7f490ee389a5be5f95e0a205f947eae812830ae57d15f56a8092fbc4adb0178"
+    }
+  }
+}
