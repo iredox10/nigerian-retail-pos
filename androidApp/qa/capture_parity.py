@@ -29,7 +29,14 @@ def tap(node):
     x1,y1,x2,y2=values
     assert x2>x1 and y2>y1
     own_foreground();call('shell','input','tap',str((x1+x2)//2),str((y1+y2)//2))
+def hide_keyboard():
+    own_foreground()
+    state=call('shell','dumpsys','input_method')
+    if re.search(r'\bm(?:InputShown|IsInputViewShown)\s*=\s*true\b',state):
+        call('shell','input','keyevent','KEYCODE_BACK')
+
 def tap_text(text, scroll=False):
+    hide_keyboard()
     for attempt in range(8 if scroll else 4):
         for node in nodes():
             if node.attrib.get('text')==text or node.attrib.get('content-desc')==text:
