@@ -46,6 +46,11 @@ def tap_text(text, scroll=False):
         if scroll:call('shell','input','swipe','360','1000','360','350','400')
         time.sleep(.5)
     raise AssertionError('Could not find visible QA action: '+text)
+def scroll_to_top():
+    for _ in range(8):
+        own_foreground()
+        call('shell','input','swipe','360','350','360','1000','300')
+
 def screenshot(name, expected):
     assert any(n.attrib.get('text')==expected or n.attrib.get('content-desc')==expected for n in nodes()), 'Expected screen not shown: '+expected
     own_foreground()
@@ -102,6 +107,8 @@ for action, title, filename in [
     ('Reorder suggestions','Reorder suggestions','reorder'),
     ('Shop & receipt details','Shop & receipt details','shop-receipt-settings'),
 ]:
+    # More retains its previous position; each tool search starts above that position.
+    scroll_to_top()
     tap_text(action,scroll=True)
     screenshot(filename,title)
     if action=='Shop & receipt details':
@@ -114,8 +121,7 @@ for action, title, filename in [
         tap_text('Review receipt details',scroll=True)
         tap_text('Save receipt details',scroll=True)
         time.sleep(1)
-        for attempt in range(8):
-            own_foreground();call('shell','input','swipe','360','350','360','1000','300')
+        scroll_to_top()
         screenshot('receipt-design-saved','Receipt details and design saved for new sales.')
         call('shell','am','force-stop',package)
         call('shell','am','start','--user','0','-W','-n',package+'/pos.android.MainActivity')
@@ -127,6 +133,7 @@ for action, title, filename in [
         tap_text('Open shop',scroll=True)
         time.sleep(1)
         tap_text('More')
+        scroll_to_top()
         tap_text('Shop & receipt details',scroll=True)
         tap_text('Receipt design')
         for attempt in range(8):
