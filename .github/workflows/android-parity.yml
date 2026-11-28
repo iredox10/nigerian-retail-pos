@@ -41,6 +41,7 @@ jobs:
           :androidApp:testAcceptanceUnitTest
           :androidApp:assembleAcceptance :androidApp:assembleAcceptanceAndroidTest
       - name: Prepare isolated API 35 emulator
+        id: emulator
         run: |
           export PATH="$ANDROID_HOME/platform-tools:$PATH"
           echo "$ANDROID_HOME/platform-tools" >> "$GITHUB_PATH"
@@ -68,8 +69,9 @@ jobs:
           adb -s emulator-5580 install --user 0 -r androidApp/build/outputs/apk/androidTest/acceptance/androidApp-acceptance-androidTest.apk
           adb -s emulator-5580 shell am instrument --user 0 -w -e listener pos.android.qa.PersistentQaResults -e qaRunId "$QA_RUN_ID" -e cloudUrl https://nigerian-retail-pos-cloud-a03da41beea8.herokuapp.com ng.retailpos.android.acceptance.test/androidx.test.runner.AndroidJUnitRunner > native-results.log
           adb -s emulator-5580 shell run-as ng.retailpos.android.acceptance cat files/qa-results/last-run.json > native-results.json
-          python3 -c 'import json,os; r=json.load(open("native-results.json")); assert r["runId"]==os.environ["QA_RUN_ID"] and r["status"]=="finished" and r["tests"]==43 and r["failures"]==r["ignored"]==r["assumptions"]==0, r; print("All 43 native cases passed")'
+          python3 -c 'import json,os; r=json.load(open("native-results.json")); assert r["runId"]==os.environ["QA_RUN_ID"] and r["status"]=="finished" and r["tests"]==44 and r["failures"]==r["ignored"]==r["assumptions"]==0, r; print("All 44 native cases passed")'
       - name: Inspect actual Android screens while offline
+        if: ${{ always() && !cancelled() && steps.emulator.conclusion == 'success' }}
         run: python3 androidApp/qa/capture_parity.py emulator-5580 parity-screens
       - uses: actions/upload-artifact@v7
         if: always()

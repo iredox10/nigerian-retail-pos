@@ -40,7 +40,7 @@ def tap_text(text, scroll=False):
         time.sleep(.5)
     raise AssertionError('Could not find visible QA action: '+text)
 def screenshot(name, expected):
-    assert any(n.attrib.get('text')==expected for n in nodes()), 'Expected screen not shown: '+expected
+    assert any(n.attrib.get('text')==expected or n.attrib.get('content-desc')==expected for n in nodes()), 'Expected screen not shown: '+expected
     own_foreground()
     image=subprocess.run(adb+['exec-out','screencap','-p'],capture_output=True,check=True,timeout=20).stdout
     own_foreground()
@@ -81,9 +81,16 @@ for action, title, filename in [
     ('Stock counts','Stock counts','stock-counts'),
     ('Supplier credit notes','Supplier credit notes','supplier-credits'),
     ('Reports','Reports','reports'),
+    ('Reorder suggestions','Reorder suggestions','reorder'),
+    ('Shop & receipt details','Shop & receipt details','shop-receipt-settings'),
 ]:
     tap_text(action,scroll=True)
     screenshot(filename,title)
+    if action=='Shop & receipt details':
+        tap_text('Receipt design')
+        screenshot('receipt-design-controls','Choose a look')
+        tap_text('Rendered receipt design preview, page 1',scroll=True)
+        screenshot('receipt-design-pdf-preview','Rendered receipt design preview, page 1')
     tap_text('Back to shop tools')
-(out/'review.json').write_text(json.dumps({'device':serial,'qaPackage':package,'sampleShopOnly':True,'offlineScreensCaptured':6,'fullMerchantUsabilityResearch':False,'csvPickerImportJourneyVerified':False},indent=2)+'\n')
-print('Captured six real QA screens offline; merchant research and full picker journeys remain separate.')
+(out/'review.json').write_text(json.dumps({'device':serial,'qaPackage':package,'sampleShopOnly':True,'offlineScreensCaptured':10,'receiptDesignPdfPreviewCaptured':True,'fullMerchantUsabilityResearch':False,'csvPickerImportJourneyVerified':False},indent=2)+'\n')
+print('Captured ten real QA screens offline; merchant research and full picker journeys remain separate.')
