@@ -7,10 +7,7 @@ import java.nio.file.Path
 import java.nio.file.StandardCopyOption
 import java.nio.file.StandardOpenOption
 import java.nio.file.attribute.PosixFilePermissions
-import java.security.KeyFactory
 import java.security.KeyPair
-import java.security.KeyPairGenerator
-import java.security.Signature
 import java.security.spec.PKCS8EncodedKeySpec
 import java.security.spec.X509EncodedKeySpec
 import java.time.Instant
@@ -55,8 +52,8 @@ object MinimumPriceApprovalProof {
         val keyBytes = Base64.getDecoder().decode(value.issuerPublicKey)
         val signature = Base64.getDecoder().decode(value.signature)
         require(keyBytes.size in 32..128 && signature.size == 64) { "Price approval signature is invalid." }
-        val key = KeyFactory.getInstance("Ed25519").generatePublic(X509EncodedKeySpec(keyBytes))
-        val verifier = Signature.getInstance("Ed25519")
+        val key = ApprovalCryptography.factory().generatePublic(X509EncodedKeySpec(keyBytes))
+        val verifier = ApprovalCryptography.signature()
         verifier.initVerify(key)
         verifier.update(unsignedBytes(value))
         require(verifier.verify(signature)) { "Price approval evidence was changed or is invalid." }
@@ -103,13 +100,13 @@ internal class MinimumPriceApprovalSigner(directory: Path) {
     private val pair: KeyPair = loadOrCreate(directory.resolve("approval-signing"))
     val publicKey: String get() = Base64.getEncoder().encodeToString(pair.public.encoded)
     internal fun signPayload(payload:ByteArray):String {
-        val signer=Signature.getInstance("Ed25519")
+        val signer=ApprovalCryptography.signature()
         signer.initSign(pair.private);signer.update(payload)
         return Base64.getEncoder().encodeToString(signer.sign())
     }
     fun sign(witness: MinimumPriceApprovalWitness): MinimumPriceApprovalWitness {
         require(witness.issuerPublicKey == publicKey)
-        val signer = Signature.getInstance("Ed25519")
+        val signer = ApprovalCryptography.signature()
         signer.initSign(pair.private)
         signer.update(MinimumPriceApprovalProof.unsignedBytes(witness))
         return witness.copy(signature = Base64.getEncoder().encodeToString(signer.sign())).also(MinimumPriceApprovalProof::verify)
@@ -124,7 +121,7 @@ internal class MinimumPriceApprovalSigner(directory: Path) {
                 channel.lock().use {
                     val file = directory.resolve("minimum-price.key")
                     if (!Files.exists(file)) {
-                        val created = KeyPairGenerator.getInstance("Ed25519").generateKeyPair()
+                        val created = ApprovalCryptography.generator().generateKeyPair()
                         val record = "1:${Base64.getEncoder().encodeToString(created.public.encoded)}:${Base64.getEncoder().encodeToString(created.private.encoded)}"
                         val temp = Files.createTempFile(directory, ".approval-key-", ".tmp")
                         try {
@@ -140,7 +137,7 @@ internal class MinimumPriceApprovalSigner(directory: Path) {
                     require(Files.isRegularFile(file) && Files.size(file) <= 1024) { "Local approval signing key is unavailable." }
                     val parts = String(Files.readAllBytes(file), Charsets.US_ASCII).split(':')
                     require(parts.size == 3 && parts[0] == "1") { "Local approval signing key is invalid." }
-                    val factory = KeyFactory.getInstance("Ed25519")
+                    val factory = ApprovalCryptography.factory()
                     val privateBytes = Base64.getDecoder().decode(parts[2])
                     try {
                         KeyPair(factory.generatePublic(X509EncodedKeySpec(Base64.getDecoder().decode(parts[1]))),

@@ -1,8 +1,6 @@
 package pos.security
 
 import java.io.*
-import java.security.KeyFactory
-import java.security.Signature
 import java.security.spec.X509EncodedKeySpec
 import java.time.Instant
 import java.util.Base64
@@ -28,8 +26,8 @@ object CashHandoverProof {
         require(end>start && end<=start.plusSeconds(300)) {"Cash handover consent dates are invalid."}
         val key=Base64.getDecoder().decode(value.issuerPublicKey);val signature=Base64.getDecoder().decode(value.signature)
         require(key.size in 32..128 && signature.size==64)
-        val verifier=Signature.getInstance("Ed25519")
-        verifier.initVerify(KeyFactory.getInstance("Ed25519").generatePublic(X509EncodedKeySpec(key)))
+        val verifier=ApprovalCryptography.signature()
+        verifier.initVerify(ApprovalCryptography.factory().generatePublic(X509EncodedKeySpec(key)))
         verifier.update(unsignedBytes(value));require(verifier.verify(signature)) {"Cash handover consent was changed."}
     }
     private fun writeUnsigned(out:DataOutputStream,value:CashHandoverWitness) {
