@@ -18,7 +18,7 @@ android {
     kotlinOptions { jvmTarget = "17" }
     buildFeatures { compose = true }
     sourceSets["main"].java.setSrcDirs(listOf("src/main/kotlin", layout.buildDirectory.dir("generated/localCore")))
-    packaging { resources.excludes += setOf("META-INF/AL2.0", "META-INF/LGPL2.1") }
+    packaging { resources.excludes += setOf("META-INF/AL2.0", "META-INF/LGPL2.1", "META-INF/versions/9/OSGI-INF/MANIFEST.MF") }
 }
 dependencies {
     implementation(project(":shared"))
