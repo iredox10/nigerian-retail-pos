@@ -1,5 +1,6 @@
 package pos.cloud.server
 
+import jakarta.mail.internet.InternetAddress
 import org.springframework.stereotype.Service
 import org.springframework.core.env.Environment
 import org.springframework.mail.SimpleMailMessage
@@ -20,7 +21,18 @@ interface CloudEmailDelivery {
 
 @Service
 class SmtpCloudEmailDelivery(private val environment:Environment):CloudEmailDelivery {
-    override fun available()=!environment.getProperty("CLOUD_MAIL_HOST").isNullOrBlank() && !environment.getProperty("CLOUD_MAIL_FROM").isNullOrBlank()
+    override fun available(): Boolean = runCatching {
+        val host = environment.getProperty("CLOUD_MAIL_HOST").orEmpty()
+        val sender = environment.getProperty("CLOUD_MAIL_FROM").orEmpty()
+        val port = environment.getProperty("CLOUD_MAIL_PORT", "587").toIntOrNull()
+        host.isNotBlank() && host.length <= 253 && host.split('.').all { label ->
+            label.length in 1..63 && label.matches(Regex("[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?"))
+        } && port != null && port in 1..65535 &&
+            !environment.getProperty("CLOUD_MAIL_USERNAME").isNullOrBlank() &&
+            !environment.getProperty("CLOUD_MAIL_PASSWORD").isNullOrBlank() &&
+            sender.isNotBlank() && sender.none { it == '\r' || it == '\n' } &&
+            InternetAddress.parse(sender, true).singleOrNull()?.let { it.validate(); true } == true
+    }.getOrDefault(false)
     override fun send(address:String,purpose:String,code:String) {
         check(available())
         val mail=JavaMailSenderImpl().apply {
