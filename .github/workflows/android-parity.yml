@@ -43,7 +43,7 @@ jobs:
           ./gradlew --no-daemon -PandroidAcceptance=true --max-workers=2
           -Dorg.gradle.jvmargs='-Xmx2300m -XX:ActiveProcessorCount=2 -Dfile.encoding=UTF-8'
           -Pkotlin.compiler.execution.strategy=in-process
-          :desktopApp:jvmTest --tests 'pos.output.*' --tests 'pos.security.MinimumPriceApprovalSecurityTest' --tests 'pos.security.CashHandoverSecurityTest' --tests 'pos.security.StaffAuditTest'
+          :desktopApp:jvmTest --tests 'pos.output.*' --tests 'pos.data.*' --tests 'pos.security.MinimumPriceApprovalSecurityTest' --tests 'pos.security.CashHandoverSecurityTest' --tests 'pos.security.StaffAuditTest'
           :androidApp:testAcceptanceUnitTest
           :androidApp:assembleAcceptance :androidApp:assembleAcceptanceAndroidTest
       - name: Prepare isolated API ${{ matrix.api }} emulator
@@ -55,6 +55,10 @@ jobs:
           echo "ANDROID_AVD_HOME=$ANDROID_AVD_HOME" >> "$GITHUB_ENV"
           mkdir -p "$ANDROID_AVD_HOME"
           sudo chmod a+rw /dev/kvm
+          python3 - <<'PYLICENSE'
+          import os, subprocess
+          subprocess.run([os.environ['ANDROID_HOME']+'/cmdline-tools/latest/bin/sdkmanager', '--licenses'], input='y\n'*100, text=True, stdout=subprocess.DEVNULL, check=True)
+          PYLICENSE
           "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" 'platform-tools' 'emulator' 'system-images;android-${{ matrix.api }};google_apis;x86_64'
           printf 'no\n' | "$ANDROID_HOME/cmdline-tools/latest/bin/avdmanager" create avd -n RetailPOS_Parity_CI -p "$ANDROID_AVD_HOME/RetailPOS_Parity_CI.avd" -k 'system-images;android-${{ matrix.api }};google_apis;x86_64' --device pixel_4
           test -f "$ANDROID_AVD_HOME/RetailPOS_Parity_CI.avd/config.ini"
@@ -76,7 +80,7 @@ jobs:
           adb -s emulator-5580 install --user 0 -r androidApp/build/outputs/apk/androidTest/acceptance/androidApp-acceptance-androidTest.apk
           adb -s emulator-5580 shell am instrument --user 0 -w -e listener pos.android.qa.PersistentQaResults -e qaRunId "$QA_RUN_ID" -e cloudUrl https://nigerian-retail-pos-cloud-a03da41beea8.herokuapp.com ng.retailpos.android.acceptance.test/androidx.test.runner.AndroidJUnitRunner > native-results.log
           adb -s emulator-5580 shell run-as ng.retailpos.android.acceptance cat files/qa-results/last-run.json > native-results.json
-          python3 -c 'import json,os; r=json.load(open("native-results.json")); assert r["runId"]==os.environ["QA_RUN_ID"] and r["status"]=="finished" and r["androidApi"]==int(os.environ["QA_ANDROID_API"]) and r["tests"]==48 and r["failures"]==r["ignored"]==r["assumptions"]==0, r; print("All 48 native cases passed")'
+          python3 -c 'import json,os; r=json.load(open("native-results.json")); assert r["runId"]==os.environ["QA_RUN_ID"] and r["status"]=="finished" and r["androidApi"]==int(os.environ["QA_ANDROID_API"]) and r["tests"]==49 and r["failures"]==r["ignored"]==r["assumptions"]==0, r; print("All 49 native cases passed")'
       - name: Inspect actual Android screens while offline
         if: ${{ always() && !cancelled() && matrix.api == 35 && steps.emulator.conclusion == 'success' }}
         run: python3 androidApp/qa/capture_parity.py emulator-5580 parity-screens

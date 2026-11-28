@@ -39,7 +39,7 @@ class AndroidReportDocumentTest {
             assertTrue(report.text.contains("Original sales total: ${money(24690)}"))
             assertTrue(report.text.contains("Cash applied at sale: ${money(20000)}"))
             assertTrue(report.text.contains("Current customer debt · all dates: ${money(4690)}"))
-            assertTrue(report.text.contains("not confirmed")); assertTrue(report.text.contains("not profit"))
+            assertTrue(report.text.contains("not confirmed")); assertTrue(report.text.contains("Profit is unavailable"))
             assertTrue(report.text.contains("not debt as of")); assertTrue(report.text.contains("Other devices may have unshared work"))
             assertFalse(report.text.contains("Foreign goods")); assertFalse(report.text.contains("Foreign shop"))
             val empty = repo.prepareAndroidReportDocument(shop, ReportDateRange(today.minusDays(2), today.minusDays(1)))

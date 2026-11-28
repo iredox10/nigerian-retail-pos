@@ -31,9 +31,16 @@ def tap(node):
     own_foreground();call('shell','input','tap',str((x1+x2)//2),str((y1+y2)//2))
 def hide_keyboard():
     own_foreground()
-    state=call('shell','dumpsys','input_method')
+    for attempt in range(3):
+        try:
+            state=call('shell','dumpsys','input_method')
+            break
+        except subprocess.CalledProcessError:
+            if attempt==2: raise
+            time.sleep(1)
     current=re.search(r'\bmInputShown\s*=\s*(true|false)\b',state)
     if current and current.group(1)=='true':
+        own_foreground()
         call('shell','input','keyevent','KEYCODE_BACK')
 
 def tap_text(text, scroll=False):
