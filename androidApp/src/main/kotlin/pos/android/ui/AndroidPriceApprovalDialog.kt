@@ -1,5 +1,7 @@
 package pos.android.ui
 
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -30,7 +32,7 @@ fun AndroidPriceApprovalDialog(access:StaffAccess,requester:StaffSession,request
             if(requester.role!=StaffRole.OWNER) FilterChip(selected==null,{selected=null;password=""},label={Text("Owner")})
             members.getOrNull().orEmpty().forEach {m ->FilterChip(selected==m.id,{selected=m.id;password=""},label={Text("${m.name} · ${m.role}")})}
             members.exceptionOrNull()?.let {Text("Approvers could not be loaded.")}
-            OutlinedTextField(password,{password=it},label={Text("Approver's full password")},visualTransformation=PasswordVisualTransformation(),singleLine=true,modifier=Modifier.fillMaxWidth())
+            OutlinedTextField(password,{password=it},label={Text("Approver's full password")},visualTransformation=PasswordVisualTransformation(), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, autoCorrectEnabled = false),singleLine=true,modifier=Modifier.fillMaxWidth())
             PosTextField(reason,{reason=it},"Reason for approving these prices")
             request.checks.filter {check -> request.lines.single { it.key == check.lineKey }.totalMinor < check.requiredMinor}.forEach {check ->Text("Minimum-price exception · ${check.productId.takeLast(8)}")}
             error?.let {InlineNotice("Price not approved",it,NoticeTone.Danger)}

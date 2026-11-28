@@ -1,5 +1,7 @@
 package pos.android
 
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.foundation.text.KeyboardOptions
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -212,7 +214,7 @@ private fun AndroidSignIn(repo:PosRepository,access:StaffAccess,onExistingShop:(
             }
             Text("PIN access must first be authorized using this staff member's full password and expires under the shop's security policy.",style=MaterialTheme.typography.bodySmall)
         }
-        OutlinedTextField(password,{password=it},label={Text(if(create)"Owner password (at least 8 characters)" else if(usePin && memberId!=null) "Staff PIN" else "Password")},visualTransformation=PasswordVisualTransformation(),modifier=Modifier.fillMaxWidth(),singleLine=true)
+        OutlinedTextField(password,{password=it},label={Text(if(create)"Owner password (at least 8 characters)" else if(usePin && memberId!=null) "Staff PIN" else "Password")},visualTransformation=PasswordVisualTransformation(), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, autoCorrectEnabled = false),modifier=Modifier.fillMaxWidth(),singleLine=true)
         notice?.let {InlineNotice(it,tone=NoticeTone.Info)}
         error?.let {InlineNotice("Could not sign in",it,NoticeTone.Danger)}
         Button(onClick={

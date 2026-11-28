@@ -1,5 +1,7 @@
 package pos.android.ui
 
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -28,9 +30,9 @@ fun AndroidRecoveryDialog(access: StaffAccess, tenantId: String, onDismiss: () -
             if (recovered) InlineNotice("Owner password changed", "Sign in with your new password. Create a fresh recovery code after signing in.", NoticeTone.Success)
             else {
                 Text("Use the recovery code previously enrolled for this shop. It is consumed when the password changes, and existing sessions and PIN authorizations are revoked.")
-                OutlinedTextField(code, { code = it; error = null }, label = { Text("Recovery code") }, visualTransformation = PasswordVisualTransformation(), enabled = !busy, modifier = Modifier.fillMaxWidth())
-                OutlinedTextField(password, { password = it; error = null }, label = { Text("New owner password") }, visualTransformation = PasswordVisualTransformation(), singleLine = true, enabled = !busy, modifier = Modifier.fillMaxWidth())
-                OutlinedTextField(repeated, { repeated = it; error = null }, label = { Text("Enter new password again") }, visualTransformation = PasswordVisualTransformation(), singleLine = true, enabled = !busy, modifier = Modifier.fillMaxWidth())
+                OutlinedTextField(code, { code = it; error = null }, label = { Text("Recovery code") }, visualTransformation = PasswordVisualTransformation(), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, autoCorrectEnabled = false), enabled = !busy, modifier = Modifier.fillMaxWidth())
+                OutlinedTextField(password, { password = it; error = null }, label = { Text("New owner password") }, visualTransformation = PasswordVisualTransformation(), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, autoCorrectEnabled = false), singleLine = true, enabled = !busy, modifier = Modifier.fillMaxWidth())
+                OutlinedTextField(repeated, { repeated = it; error = null }, label = { Text("Enter new password again") }, visualTransformation = PasswordVisualTransformation(), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, autoCorrectEnabled = false), singleLine = true, enabled = !busy, modifier = Modifier.fillMaxWidth())
                 Text("Use 8 to 1024 characters.", style = MaterialTheme.typography.bodySmall)
                 error?.let { InlineNotice("Access not recovered", it, NoticeTone.Danger) }
             }

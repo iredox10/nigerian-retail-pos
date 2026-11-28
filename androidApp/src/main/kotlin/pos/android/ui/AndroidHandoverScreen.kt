@@ -1,5 +1,7 @@
 package pos.android.ui
 
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.foundation.text.KeyboardOptions
 import android.os.Build
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -78,7 +80,7 @@ fun AndroidHandoverScreen(repo: PosRepository, tenantId: String, access: StaffAc
                     Checkbox(consent, { consent = it }, enabled = !busy && counted != null && candidates.isNotEmpty())
                     Text("Recipient: I counted and accept ${counted?.let(::money) ?: "the cash shown above"}.", Modifier.padding(top = 12.dp))
                 }
-                OutlinedTextField(password, { password = it }, label = { Text("Recipient's full password") }, visualTransformation = PasswordVisualTransformation(), singleLine = true, enabled = !busy, modifier = Modifier.fillMaxWidth())
+                OutlinedTextField(password, { password = it }, label = { Text("Recipient's full password") }, visualTransformation = PasswordVisualTransformation(), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, autoCorrectEnabled = false), singleLine = true, enabled = !busy, modifier = Modifier.fillMaxWidth())
                 Text("The recipient must personally enter their password. Their consent is limited to this count and shift and expires after five minutes.", style = MaterialTheme.typography.bodySmall)
                 error?.let { InlineNotice("Cash not handed over", it, NoticeTone.Danger) }
                 PosButton(if (busy) "Checking recipient & saving…" else "Accept cash & hand over", {

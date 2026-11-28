@@ -1,5 +1,7 @@
 package pos.android.ui
 
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.selection.SelectionContainer
@@ -43,7 +45,7 @@ fun AndroidOwnerRecoveryScreen(access: StaffAccess, session: StaffSession) = key
             StatusPill(if (status.getOrThrow()) "Recovery code enrolled" else "Recovery code not enrolled")
             Text("Recover owner access on the sign-in screen uses this code once. Resetting the password signs out existing sessions and removes PIN authorization.")
             OutlinedTextField(password, { password = it; error = null }, label = { Text("Current owner password") },
-                visualTransformation = PasswordVisualTransformation(), singleLine = true, enabled = !busy, modifier = Modifier.fillMaxWidth())
+                visualTransformation = PasswordVisualTransformation(), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, autoCorrectEnabled = false), singleLine = true, enabled = !busy, modifier = Modifier.fillMaxWidth())
             error?.let { InlineNotice("Recovery code not changed", it, NoticeTone.Danger) }
             PosButton(if (busy) "Confirming owner access…" else if (status.getOrThrow()) "Create replacement recovery code" else "Create recovery code", {
                 busy = true; error = null
@@ -74,10 +76,10 @@ fun AndroidPinSetupDialog(access: StaffAccess, tenantId: String, staffId: String
         Column(Modifier.heightIn(max = 460.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text("The staff member must enter their own full password. A six-digit PIN is a temporary convenience for this device; full-password access must be refreshed regularly. It does not encrypt shop records.")
             Row { Checkbox(removing, { removing = it; pin = ""; repeated = ""; error = null }, enabled = !busy); Text("Remove my saved PIN", Modifier.padding(top = 12.dp)) }
-            OutlinedTextField(password, { password = it; error = null }, label = { Text("Staff member's full password") }, visualTransformation = PasswordVisualTransformation(), singleLine = true, enabled = !busy, modifier = Modifier.fillMaxWidth())
+            OutlinedTextField(password, { password = it; error = null }, label = { Text("Staff member's full password") }, visualTransformation = PasswordVisualTransformation(), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, autoCorrectEnabled = false), singleLine = true, enabled = !busy, modifier = Modifier.fillMaxWidth())
             if (!removing) {
-                OutlinedTextField(pin, { pin = it; error = null }, label = { Text("New six-digit PIN") }, visualTransformation = PasswordVisualTransformation(), singleLine = true, enabled = !busy, modifier = Modifier.fillMaxWidth())
-                OutlinedTextField(repeated, { repeated = it; error = null }, label = { Text("Enter PIN again") }, visualTransformation = PasswordVisualTransformation(), singleLine = true, enabled = !busy, modifier = Modifier.fillMaxWidth())
+                OutlinedTextField(pin, { pin = it; error = null }, label = { Text("New six-digit PIN") }, visualTransformation = PasswordVisualTransformation(), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, autoCorrectEnabled = false), singleLine = true, enabled = !busy, modifier = Modifier.fillMaxWidth())
+                OutlinedTextField(repeated, { repeated = it; error = null }, label = { Text("Enter PIN again") }, visualTransformation = PasswordVisualTransformation(), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, autoCorrectEnabled = false), singleLine = true, enabled = !busy, modifier = Modifier.fillMaxWidth())
             }
             error?.let { InlineNotice("PIN not changed", it, NoticeTone.Danger) }
         }

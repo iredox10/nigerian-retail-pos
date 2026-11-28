@@ -1,5 +1,7 @@
 package pos.android.ui
 
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
@@ -69,8 +71,8 @@ fun AndroidBackupScreen(repo:PosRepository,tenantId:String,access:WorkspaceAcces
         Text("Backup files contain this shop's saved records and managed images. They do not include owner/staff passwords or recovery codes. Cloud backup is not connected.")
         error?.let {InlineNotice("Backup action unavailable",it,NoticeTone.Danger)}
         notice?.let {InlineNotice(it,tone=NoticeTone.Info)}
-        OutlinedTextField(password,{password=it},label={Text("Backup password (8–1024 characters)")},visualTransformation=PasswordVisualTransformation(),singleLine=true,modifier=Modifier.fillMaxWidth(),enabled=!busy)
-        OutlinedTextField(repeat,{repeat=it},label={Text("Repeat backup password for export")},visualTransformation=PasswordVisualTransformation(),singleLine=true,modifier=Modifier.fillMaxWidth(),enabled=!busy)
+        OutlinedTextField(password,{password=it},label={Text("Backup password (8–1024 characters)")},visualTransformation=PasswordVisualTransformation(), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, autoCorrectEnabled = false),singleLine=true,modifier=Modifier.fillMaxWidth(),enabled=!busy)
+        OutlinedTextField(repeat,{repeat=it},label={Text("Repeat backup password for export")},visualTransformation=PasswordVisualTransformation(), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, autoCorrectEnabled = false),singleLine=true,modifier=Modifier.fillMaxWidth(),enabled=!busy)
         Button({
             scope.launch {busy=true;error=null;notice=null
                 try {val file=withContext(Dispatchers.IO){
@@ -84,7 +86,7 @@ fun AndroidBackupScreen(repo:PosRepository,tenantId:String,access:WorkspaceAcces
         Text("Restore as a new shop",style=MaterialTheme.typography.titleMedium)
         Text("Existing shops stay unchanged. Importing a desktop file does not create synchronization. Restored cash counts are historical: verify the actual drawer.")
         PosTextField(newName,{newName=it},"Name for restored shop")
-        OutlinedTextField(ownerPassword,{ownerPassword=it},label={Text("New owner password")},visualTransformation=PasswordVisualTransformation(),singleLine=true,modifier=Modifier.fillMaxWidth(),enabled=!busy)
+        OutlinedTextField(ownerPassword,{ownerPassword=it},label={Text("New owner password")},visualTransformation=PasswordVisualTransformation(), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, autoCorrectEnabled = false),singleLine=true,modifier=Modifier.fillMaxWidth(),enabled=!busy)
         OutlinedButton({
             error=null;notice=null
             runCatching {repo.featureRead(tenantId,StaffPermission.BACKUP){Unit};require(password.length in 8..1024);require(newName.isNotBlank() && ownerPassword.length in 8..1024);busy=true;restore.launch(arrayOf("application/octet-stream","*/*"))}

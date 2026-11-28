@@ -1,5 +1,7 @@
 package pos.android.ui
 
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -311,7 +313,7 @@ private fun AndroidStaffPasswordDialog(access: StaffAccess, session: StaffSessio
                 FilterChip(role == StaffRole.MANAGER, { role = StaffRole.MANAGER }, label = { Text("Manager") })
             }
         } else Text("Previous password/PIN sessions are invalidated. Give the new password directly to this person.")
-        OutlinedTextField(password, { password = it }, label = { Text("New full password") }, visualTransformation = PasswordVisualTransformation(), singleLine = true, modifier = Modifier.fillMaxWidth())
-        OutlinedTextField(confirmation, { confirmation = it }, label = { Text("Repeat password") }, visualTransformation = PasswordVisualTransformation(), singleLine = true, modifier = Modifier.fillMaxWidth())
+        OutlinedTextField(password, { password = it }, label = { Text("New full password") }, visualTransformation = PasswordVisualTransformation(), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, autoCorrectEnabled = false), singleLine = true, modifier = Modifier.fillMaxWidth())
+        OutlinedTextField(confirmation, { confirmation = it }, label = { Text("Repeat password") }, visualTransformation = PasswordVisualTransformation(), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, autoCorrectEnabled = false), singleLine = true, modifier = Modifier.fillMaxWidth())
     }
 }
