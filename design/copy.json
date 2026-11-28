@@ -194,7 +194,9 @@
     "customerStatement": "Dated statement",
     "supplierStatement": "Dated supplier statement",
     "supplierInvoices": "Supplier invoices and evidence",
-    "buyingRules": "Manage buying rules"
+    "buyingRules": "Manage buying rules",
+    "manageStaff": "Manage staff account",
+    "securityHistory": "Security history"
   },
   "cloudConnection": {
     "title": "Connected devices",

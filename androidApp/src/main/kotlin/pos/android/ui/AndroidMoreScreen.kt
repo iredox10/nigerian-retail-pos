@@ -270,23 +270,29 @@ private fun AndroidStaffTools(access: StaffAccess, session: StaffSession, onChan
     var revision by remember { mutableIntStateOf(0) }
     var adding by remember { mutableStateOf(false) }
     var resetting by remember { mutableStateOf<StaffMember?>(null) }
+    var editing by remember { mutableStateOf<StaffMember?>(null) }
+    var securityHistory by remember { mutableStateOf(false) }
     var notice by remember { mutableStateOf<String?>(null) }
     var loaded by remember(session.token, revision) { mutableStateOf<Result<List<StaffMember>>?>(null) }
     LaunchedEffect(session.token, revision) { loaded = withContext(Dispatchers.IO) { runCatching { access.members(session) } } }
     if (adding) AndroidStaffPasswordDialog(access, session, null, { adding = false }) { adding = false; revision++; notice = "Staff account saved"; onChanged() }
     resetting?.let { member -> AndroidStaffPasswordDialog(access, session, member, { resetting = null }) { resetting = null; revision++; notice = "Password reset; prior access revoked"; onChanged() } }
+    editing?.let { member -> AndroidStaffAccountEditor(access, session, member, { editing = null }) { editing = null; revision++; notice = "Staff details saved; previous sessions and PIN authorization revoked"; onChanged() } }
+    if (securityHistory) AndroidStaffSecurityHistory(access, session, { securityHistory = false })
     LazyColumn(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         item { SectionHeader("Staff", "Local accounts for this shop on this device") }
         item { PosButton("Add staff account", { adding = true }, Modifier.fillMaxWidth()) }
+        item { OutlinedButton(onClick = { securityHistory = true }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text("Security history") } }
         notice?.let { item { InlineNotice(it, tone = NoticeTone.Success) } }
         item { OperationsLoadState(loaded, "staff", { revision++ }) }
         if (loaded?.isSuccess == true && loaded?.getOrNull().isNullOrEmpty()) item { EmptyState("No staff accounts yet", "The owner account remains separate.") }
         items(loaded?.getOrNull().orEmpty(), key = { it.id }) { member -> OperationsCard {
             Text(member.name, style = MaterialTheme.typography.titleMedium)
             Text("${member.role.name.lowercase().replaceFirstChar { it.uppercase() }} · ${if (member.active) "Active" else "Inactive"}")
+            OutlinedButton({ editing = member }, Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text("Manage staff account") }
             OutlinedButton({ resetting = member }, Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text("Reset password") }
         } }
-        item { Text("Owner recovery enrollment, staff role/active changes, PIN setup and full security history editing are not available in this Android screen yet.", style = MaterialTheme.typography.bodySmall) }
+        item { Text("Manage names, roles and active status here. PIN and owner recovery tools remain under their separate sign-in/security flows. Security history is read-only.", style = MaterialTheme.typography.bodySmall) }
     }
 }
 

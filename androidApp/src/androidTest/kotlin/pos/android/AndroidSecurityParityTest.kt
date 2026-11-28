@@ -34,6 +34,42 @@ class AndroidSecurityParityTest {
         try { block(); fail("Expected rejected access") } catch (_: IllegalArgumentException) { }
     }
 
+    @Test fun reviewedRoleAndActiveChangesRevokeAccessRejectStaleEditsAndRetainAudit() = fixture { directory ->
+        WorkspaceAccess(directory.toPath()).register("shop", "owner full password")
+        StaffAccess(directory.toPath()).use { access ->
+            val owner = requireNotNull(access.unlockOwner("shop", "owner full password"))
+            val person = access.addMember(owner, "Amina", StaffRole.CASHIER, "staff full password")
+            assertTrue(access.configureStaffPin("shop", person.id, "staff full password", "123456"))
+            val pinSession = requireNotNull(access.unlockStaffPin("shop", person.id, "123456"))
+            val initialEvents = access.auditEvents(owner)
+            val manager = access.updateMember(owner, person.id, person.name, StaffRole.MANAGER, true, expected = person)
+            denied { access.requireSession(pinSession, StaffPermission.SELL) }
+            assertNull(access.unlockStaffPin("shop", person.id, "123456"))
+            val managerSession = requireNotNull(access.unlockStaff("shop", person.id, "staff full password"))
+            access.requireSession(managerSession, StaffPermission.VIEW_REPORTS)
+            denied { access.auditEvents(managerSession) }
+            denied { access.requireSession(managerSession, StaffPermission.BACKUP) }
+            denied { access.updateMember(owner, person.id, "Stale name", StaffRole.CASHIER, true, expected = person) }
+            assertEquals(manager, access.updateMember(owner, person.id, manager.name, manager.role, true, expected = person))
+            assertEquals(initialEvents.size + 1, access.auditEvents(owner).size)
+            denied { access.updateMember(owner, person.id, manager.name, manager.role, true, expected = person.copy(tenantId = "other")) }
+            val inactive = access.updateMember(owner, person.id, manager.name, manager.role, false, expected = manager)
+            denied { access.requireSession(managerSession, StaffPermission.VIEW_REPORTS) }
+            assertNull(access.unlockStaff("shop", person.id, "staff full password"))
+            val restored = access.updateMember(owner, person.id, "Amina restored", StaffRole.CASHIER, true, expected = inactive)
+            assertEquals(restored.id, requireNotNull(access.unlockStaff("shop", person.id, "staff full password")).staffId)
+            assertNull(access.unlockStaffPin("shop", person.id, "123456"))
+            val events = access.auditEvents(owner)
+            assertEquals(initialEvents.size + 3, events.size)
+            assertEquals(3, events.count { it.kind == "staff.updated" })
+            assertTrue(events.all { it.tenantId == "shop" })
+            assertTrue(events.filter { it.kind == "staff.updated" }.all { it.actor?.role == StaffRole.OWNER })
+            assertTrue(initialEvents.all { it in events })
+            assertFalse(events.toString().contains("staff full password"))
+            assertFalse(events.toString().contains(owner.token))
+        }
+    }
+
     @Test fun staffPinRequiresFullPasswordExpiresAndIsRevokedByPasswordReset() = fixture { directory ->
         var now = 1_000_000L
         WorkspaceAccess(directory.toPath()).register("shop", "owner full password")
