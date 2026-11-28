@@ -54,7 +54,7 @@ internal fun AndroidReceiptDesignPreview(details: ShopDetails, logo: ByteArray?,
     }
     val exact = preview?.getOrNull()?.takeIf { it.source == source && it.page == pageIndex }
     LaunchedEffect(source, preview, pageIndex) { onReady(details, logo, artwork, exact != null) }
-    Text("Design preview", style = MaterialTheme.typography.titleMedium)
+    Text("Receipt preview", style = MaterialTheme.typography.titleMedium)
     Text("Sample items and amounts for layout only. The preview is not a sale.", style = MaterialTheme.typography.bodySmall)
     when {
         preview == null || (preview?.isSuccess == true && exact == null) -> LinearProgressIndicator(Modifier.fillMaxWidth())

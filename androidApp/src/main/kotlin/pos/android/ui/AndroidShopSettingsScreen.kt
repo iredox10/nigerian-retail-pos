@@ -166,9 +166,9 @@ private fun AndroidShopDesignEditor(repo: PosRepository, tenantId: String, data:
         Text("Heading alignment", style = MaterialTheme.typography.titleMedium)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) { listOf("left" to "Left", "center" to "Centre").forEach { (value, label) -> FilterChip(alignment == value, { alignment = value; edited() }, label = { Text(label) }) } }
         OperationsCheck(showLogo, { showLogo = it; edited() }, "Show the saved shop logo on receipts")
-        PosTextField(tagline, { tagline = it; edited() }, "Tagline (optional)")
-        PosTextField(policy, { policy = it; edited() }, "Returns policy (optional)")
-        Text("Receipt image", style = MaterialTheme.typography.titleMedium)
+        PosTextField(tagline, { tagline = it; edited() }, "Tagline below the heading (optional)")
+        PosTextField(policy, { policy = it; edited() }, "Returns policy or receipt note (optional)")
+        Text("Additional receipt image", style = MaterialTheme.typography.titleMedium)
         Text("Add a banner, stamp or other artwork. Keep important receipt details in text.")
         OutlinedButton(enabled = !busy && pickerTarget == null, onClick = { pickerTarget = "artwork"; runCatching { choose.launch(arrayOf("image/png", "image/jpeg")) }.onFailure { pickerTarget = null; error = it.message } }) { Text(if (artworkBytes == null) "Choose receipt image" else "Replace receipt image") }
         if (artworkBytes != null) TextButton(enabled = !busy, onClick = { artworkId = null; artworkUpload = null; edited() }) { Text("Remove receipt image") }
@@ -188,7 +188,7 @@ private fun AndroidShopDesignEditor(repo: PosRepository, tenantId: String, data:
             withContext(Dispatchers.IO) { repo.saveReviewedAndroidReceiptDesign(tenantId, details, upload, original?.version ?: 0, why, requestId) }
             saved()
         }
-    } }) { Text(if (busy) "Working…" else if (reviewed) "Save receipt details and design" else "Review receipt details") }
+    } }) { Text(if (busy) "Working…" else if (reviewed) "Save receipt details" else "Review receipt details") }
     TextButton(enabled = !busy, onClick = reload) { Text("Reload saved settings · replaces unsaved entries") }
     TextButton(onClick = { showHistory = !showHistory }) { Text(if (showHistory) "Hide settings history" else "View settings history") }
     if (showHistory) {
