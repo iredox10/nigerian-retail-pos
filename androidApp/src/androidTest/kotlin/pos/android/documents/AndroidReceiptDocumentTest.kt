@@ -26,8 +26,9 @@ class AndroidReceiptDocumentTest {
             val source=loadAndroidReceipt(repo,shop.id,sale.id)
             val text=androidReceiptText(source)
             assertTrue(text.contains("Captured shop"));assertTrue(text.contains("Transfer not confirmed"))
-            assertTrue(text.contains("This app has not confirmed that the money arrived."));assertTrue(text.contains("Customer owes"))
+            assertTrue(text.contains("This app has not confirmed that the money arrived."));assertTrue(text.contains("Customer owed at sale"))
             repo.saveShopProfile(shop.id,details.copy(displayName="Changed shop"),1,"Change later identity")
+            assertTrue(text.contains("This is not the customer’s current debt."))
             assertEquals("Captured shop",loadAndroidReceipt(repo,shop.id,sale.id).details?.displayName)
             val other=repo.createTenant("Other")
             try {loadAndroidReceipt(repo,other.id,sale.id);fail("Cross-shop receipt accepted")}catch(_:IllegalArgumentException){}
