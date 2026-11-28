@@ -32,11 +32,11 @@ def tap(node):
 def hide_keyboard():
     own_foreground()
     state=call('shell','dumpsys','input_method')
-    if re.search(r'\bm(?:InputShown|IsInputViewShown)\s*=\s*true\b',state):
+    current=re.search(r'\bmInputShown\s*=\s*(true|false)\b',state)
+    if current and current.group(1)=='true':
         call('shell','input','keyevent','KEYCODE_BACK')
 
 def tap_text(text, scroll=False):
-    hide_keyboard()
     for attempt in range(8 if scroll else 4):
         for node in nodes():
             if node.attrib.get('text')==text or node.attrib.get('content-desc')==text:
@@ -71,6 +71,10 @@ def retain_failure(kind, error, traceback):
         (out/'failure-screen.png').write_bytes(result.stdout)
     except Exception:
         pass
+    try:
+        (out/'failure-runtime.log').write_text(call('shell','logcat','-d','-s','AndroidRuntime:E'))
+    except Exception:
+        pass
     sys.__excepthook__(kind, error, traceback)
 sys.excepthook=retain_failure
 
@@ -81,6 +85,7 @@ assert len(fields)==2, 'Expected a new isolated installation with two onboarding
 tap(fields[0]);call('shell','input','text','CIParityShop')
 fields=[n for n in nodes() if n.attrib.get('class')=='android.widget.EditText']
 tap(fields[1]);call('shell','input','text','CI-only-owner-2026')
+hide_keyboard()
 tap_text('Create shop',scroll=True)
 time.sleep(2)
 # The emulator belongs to this test job; disabling its connectivity proves local screens remain usable.
@@ -118,6 +123,7 @@ for action, title, filename in [
         unlock=[n for n in nodes() if n.attrib.get('class')=='android.widget.EditText']
         assert len(unlock)==1, 'Expected one owner password field after restart'
         tap(unlock[0]);call('shell','input','text','CI-only-owner-2026')
+        hide_keyboard()
         tap_text('Open shop',scroll=True)
         time.sleep(1)
         tap_text('More')
